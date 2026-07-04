@@ -89,7 +89,10 @@ model is `openai/gpt-oss-120b`).
 ## Usage (CLI)
 
 ```bash
-# Heal a failing test. With no --log, the tool runs the test itself to capture the failure.
+# Heal the WHOLE suite — run every test, then repair each failing file (aggregate summary):
+uv run e2e-healer
+
+# Heal a single failing test (with no --log, the tool runs it to capture the failure):
 uv run e2e-healer tests/example.spec.ts
 
 # Preview only — run the loop but write nothing:

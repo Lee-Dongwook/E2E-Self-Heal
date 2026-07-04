@@ -89,7 +89,10 @@ cp .env.example .env    # 이후 E2E_HEALER_NVIDIA_API_KEY 설정
 ## 사용법 (CLI)
 
 ```bash
-# 실패한 테스트를 치유. --log 없이 실행하면 도구가 직접 테스트를 돌려 실패 로그를 수집.
+# 스위트 전체 치유 — 모든 테스트를 돌린 뒤 실패한 파일마다 복구(통합 요약):
+uv run e2e-healer
+
+# 단일 실패 테스트 치유(--log 없이 실행하면 도구가 직접 테스트를 돌려 실패 로그 수집):
 uv run e2e-healer tests/example.spec.ts
 
 # 미리보기 전용 — 루프는 돌리되 파일에는 아무것도 쓰지 않음:

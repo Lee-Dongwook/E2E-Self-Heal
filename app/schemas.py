@@ -44,3 +44,12 @@ class RepairSummary(BaseModel):
     is_success: bool
     loop_count: int
     instructions: list[PatchInstruction] = Field(default_factory=list)
+
+
+class SuiteSummary(BaseModel):
+    """Aggregate result when healing a whole suite (multiple failing tests)."""
+
+    total_failed: int
+    healed: int
+    is_success: bool  # every failing test was healed
+    results: list[RepairSummary] = Field(default_factory=list)

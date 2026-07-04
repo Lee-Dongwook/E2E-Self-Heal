@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     node_cmd: str = Field(
         default="node", description="Node.js executable for the selector verifier"
     )
+    test_results_dir: str = Field(
+        default="test-results",
+        description="Playwright output dir holding error-context.md failure snapshots",
+    )
     log_level: str = Field(default="INFO")
 
 

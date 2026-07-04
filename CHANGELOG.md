@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- Suite mode: `e2e-healer` with no path (or a directory) runs the whole Playwright suite,
+  then heals every failing test file and emits an aggregate `SuiteSummary` (exit 0 only if
+  all are healed). Single-file usage is unchanged.
+
 ## [0.1.0] - 2026-07-04
 
 ### Added

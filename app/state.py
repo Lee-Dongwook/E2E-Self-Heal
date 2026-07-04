@@ -13,6 +13,7 @@ class AgentState(TypedDict):
     current_code: str  # test script as modified in the current loop
     error_log: str  # latest Playwright error log (abstracted)
     dom_diff_context: list[dict]  # DOM changes from AST parsing
+    dom_snapshot: str  # ARIA snapshot of the failing page (from error-context.md)
     analysis_report: str  # Diagnoser's failure-cause report
     patch_instructions: dict  # Patch Generator's fix guide (line, code)
     verification_report: dict  # Selector Verifier's live-DOM match result
