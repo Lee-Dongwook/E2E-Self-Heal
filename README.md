@@ -48,19 +48,19 @@
 
 핵심 복구 루프가 처음부터 끝까지 동작하는 상태입니다.
 
-| 계층 / 구성요소                                  | 상태                                                   | 위치                                       |
-| ------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------ |
-| CLI 코어(`heal` 명령, 종료 코드 + `--json` 요약) | ✅ 구현 완료                                           | `app/cli.py`                               |
-| 에러 로그 파서                                   | ✅ 구현 완료                                           | `app/preprocess/error_log_parser.py`       |
-| Diff-JSX AST 분석기(정규식 휴리스틱)             | ✅ 구현 완료                                           | `app/preprocess/diff_ast_analyzer.py`      |
-| LangGraph 상태 / 그래프 조립                     | ✅ 구현 완료                                           | `app/state.py`, `app/graph.py`             |
-| Diagnoser 노드                                   | ✅ 구현 완료                                           | `app/nodes/diagnoser.py`                   |
-| Patch Generator 노드(Structured Outputs)         | ✅ 구현 완료                                           | `app/nodes/patch_generator.py`             |
+| 계층 / 구성요소                                  | 상태                                                   | 위치                                            |
+| ------------------------------------------------ | ------------------------------------------------------ | ----------------------------------------------- |
+| CLI 코어(`heal` 명령, 종료 코드 + `--json` 요약) | ✅ 구현 완료                                           | `app/cli.py`                                    |
+| 에러 로그 파서                                   | ✅ 구현 완료                                           | `app/preprocess/error_log_parser.py`            |
+| Diff-JSX AST 분석기(정규식 휴리스틱)             | ✅ 구현 완료                                           | `app/preprocess/diff_ast_analyzer.py`           |
+| LangGraph 상태 / 그래프 조립                     | ✅ 구현 완료                                           | `app/state.py`, `app/graph.py`                  |
+| Diagnoser 노드                                   | ✅ 구현 완료                                           | `app/nodes/diagnoser.py`                        |
+| Patch Generator 노드(Structured Outputs)         | ✅ 구현 완료                                           | `app/nodes/patch_generator.py`                  |
 | **Selector Verifier 노드(실제 DOM 대조 검증)**   | ✅ **구현 완료**                                       | `app/nodes/selector_verifier.py`, `app/verify/` |
-| Test Runner 노드 + Router 조건부 엣지            | ✅ 구현 완료                                           | `app/nodes/test_runner.py`, `app/graph.py` |
-| LLM 클라이언트                                   | ✅ **NVIDIA NIM(`openai/gpt-oss-120b`)으로 전환 완료** | `app/llm.py`                               |
-| GitHub Action 래퍼 + 셀프 데모 워크플로          | ✅ 구현 완료                                           | `action.yml`, `ci/`                        |
-| 테스트 스위트(pytest)                            | ✅ 대부분 통과(아래 참고)                              | `tests/`                                   |
+| Test Runner 노드 + Router 조건부 엣지            | ✅ 구현 완료                                           | `app/nodes/test_runner.py`, `app/graph.py`      |
+| LLM 클라이언트                                   | ✅ **NVIDIA NIM(`openai/gpt-oss-120b`)으로 전환 완료** | `app/llm.py`                                    |
+| GitHub Action 래퍼 + 셀프 데모 워크플로          | ✅ 구현 완료                                           | `action.yml`, `ci/`                             |
+| 테스트 스위트(pytest)                            | ✅ 대부분 통과(아래 참고)                              | `tests/`                                        |
 
 > **참고 — LLM 제공자:** 초기 OpenAI 구현에서 **NVIDIA NIM의 OpenAI 호환 엔드포인트**로
 > 마이그레이션했습니다. OpenAI SDK를 그대로 쓰되 `base_url`만 NVIDIA로 지정합니다. 기본
@@ -112,7 +112,7 @@ uv run e2e-healer tests/example.spec.ts --app-url http://localhost:4173
 ```yaml
 - name: E2E self-heal
   id: heal
-  uses: Lee-Dongwook/ai-driven-e2e@v0.2
+  uses: Lee-Dongwook/AI_Anything@v0.1.0
   with:
     test-path: tests/example.spec.ts
     nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
@@ -136,17 +136,17 @@ uv run e2e-healer tests/example.spec.ts --app-url http://localhost:4173
 
 모든 설정은 `E2E_HEALER_` 접두사를 사용합니다([`.env.example`](.env.example) 참고).
 
-| 변수                           | 기본값                                | 용도                             |
-| ------------------------------ | ------------------------------------- | -------------------------------- |
-| `E2E_HEALER_NVIDIA_API_KEY`    | —                                     | NVIDIA NIM API 키                |
-| `E2E_HEALER_NVIDIA_BASE_URL`   | `https://integrate.api.nvidia.com/v1` | OpenAI 호환 엔드포인트           |
-| `E2E_HEALER_NVIDIA_MODEL`      | `openai/gpt-oss-120b`                 | Structured Outputs 지원 모델     |
-| `E2E_HEALER_NVIDIA_MAX_TOKENS` | `4096`                                | 응답 토큰 한도(추론 모델 여유분) |
-| `E2E_HEALER_MAX_LOOPS`         | `3`                                   | 복구 루프 한도                   |
-| `E2E_HEALER_PLAYWRIGHT_CMD`    | `npx playwright test`                 | Playwright 실행 명령             |
-| `E2E_HEALER_VERIFY_SELECTORS`  | `true`                                | 패치 셀렉터의 실제 DOM 검증 on/off |
+| 변수                           | 기본값                                | 용도                                                |
+| ------------------------------ | ------------------------------------- | --------------------------------------------------- |
+| `E2E_HEALER_NVIDIA_API_KEY`    | —                                     | NVIDIA NIM API 키                                   |
+| `E2E_HEALER_NVIDIA_BASE_URL`   | `https://integrate.api.nvidia.com/v1` | OpenAI 호환 엔드포인트                              |
+| `E2E_HEALER_NVIDIA_MODEL`      | `openai/gpt-oss-120b`                 | Structured Outputs 지원 모델                        |
+| `E2E_HEALER_NVIDIA_MAX_TOKENS` | `4096`                                | 응답 토큰 한도(추론 모델 여유분)                    |
+| `E2E_HEALER_MAX_LOOPS`         | `3`                                   | 복구 루프 한도                                      |
+| `E2E_HEALER_PLAYWRIGHT_CMD`    | `npx playwright test`                 | Playwright 실행 명령                                |
+| `E2E_HEALER_VERIFY_SELECTORS`  | `true`                                | 패치 셀렉터의 실제 DOM 검증 on/off                  |
 | `E2E_HEALER_APP_URL`           | —                                     | Selector Verifier가 로드할 앱 URL(비면 검증 건너뜀) |
-| `E2E_HEALER_NODE_CMD`          | `node`                                | 검증기 실행에 쓰는 Node 실행 파일 |
+| `E2E_HEALER_NODE_CMD`          | `node`                                | 검증기 실행에 쓰는 Node 실행 파일                   |
 
 > `--app-url` CLI 플래그로 `E2E_HEALER_APP_URL`을 덮어쓸 수 있습니다. 로컬에서 셀렉터 검증을
 > 실제로 돌리려면 Playwright 프로젝트에 브라우저가 설치돼 있어야 합니다

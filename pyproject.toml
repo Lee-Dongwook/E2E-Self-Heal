@@ -28,9 +28,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Lee-Dongwook/ai-driven-e2e"
-Repository = "https://github.com/Lee-Dongwook/ai-driven-e2e"
-Issues = "https://github.com/Lee-Dongwook/ai-driven-e2e/issues"
+Homepage = "https://github.com/Lee-Dongwook/AI_Anything"
+Repository = "https://github.com/Lee-Dongwook/AI_Anything"
+Issues = "https://github.com/Lee-Dongwook/AI_Anything/issues"
 
 [project.scripts]
 e2e-healer = "app.cli:app"
