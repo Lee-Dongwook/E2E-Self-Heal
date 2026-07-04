@@ -6,13 +6,13 @@ test still targets the old `#submit-btn` — so it times out until healed.
 
 ## Files
 
-| File | Role |
-| --- | --- |
-| `index.html` | The page under test (button id already renamed to `submit`) |
-| `example.spec.ts` | The failing test (still clicks `#submit-btn`) |
-| `components/SubmitButton.tsx` | The source component the rename came from |
-| `selector-rename.diff` | The change that broke the test — fed to the healer as `--diff` |
-| `playwright.config.ts` | Serves this folder statically (Python) and runs the spec |
+| File                          | Role                                                           |
+| ----------------------------- | -------------------------------------------------------------- |
+| `index.html`                  | The page under test (button id already renamed to `submit`)    |
+| `example.spec.ts`             | The failing test (still clicks `#submit-btn`)                  |
+| `components/SubmitButton.tsx` | The source component the rename came from                      |
+| `selector-rename.diff`        | The change that broke the test — fed to the healer as `--diff` |
+| `playwright.config.ts`        | Serves this folder statically (Python) and runs the spec       |
 
 ## 1. See the failure
 
@@ -29,7 +29,7 @@ The test fails with a Timeout on `#submit-btn`, and the log is saved to `playwri
 
 ## 2. Heal it
 
-With the healer installed (`uv sync` at the repo root) and `E2E_HEALER_OPENAI_API_KEY`
+With the healer installed (`uv sync` at the repo root) and `E2E_HEALER_NVIDIA_API_KEY`
 set, run from this folder:
 
 ```bash
