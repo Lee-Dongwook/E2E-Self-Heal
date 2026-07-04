@@ -165,7 +165,7 @@ uv run e2e-healer tests/example.spec.ts --app-url http://localhost:4173
 ```yaml
 - name: E2E self-heal
   id: heal
-  uses: Lee-Dongwook/E2E-Self-Heal@v0.1.0
+  uses: Lee-Dongwook/E2E-Self-Heal@v0.2.0
   with:
     test-path: tests/example.spec.ts
     nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}

@@ -166,7 +166,7 @@ Run the suite and auto-heal on failure, opening a patch PR for review:
 ```yaml
 - name: E2E self-heal
   id: heal
-  uses: Lee-Dongwook/E2E-Self-Heal@v0.1.0
+  uses: Lee-Dongwook/E2E-Self-Heal@v0.2.0
   with:
     test-path: tests/example.spec.ts
     nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
