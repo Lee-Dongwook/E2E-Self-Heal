@@ -30,6 +30,23 @@ PyPI token/secret is stored. Configure it on PyPI:
 `publish.yml` runs in `environment: pypi`. Create it under
 **Settings → Environments → New environment → `pypi`** (add reviewers/protection if desired).
 
+### 2b. TestPyPI rehearsal (recommended)
+
+[`publish-testpypi.yml`](../.github/workflows/publish-testpypi.yml) publishes to
+[TestPyPI](https://test.pypi.org/) on manual dispatch, so the real run is never the first.
+Set it up once:
+
+- Add a **trusted publisher** on [test.pypi.org](https://test.pypi.org/) for repo
+  `Lee-Dongwook/E2E-Self-Heal`, workflow `publish-testpypi.yml`, environment `testpypi`.
+- Create a GitHub environment named `testpypi`.
+
+Then run it from **Actions → publish-testpypi → Run workflow** and verify:
+
+```bash
+pip install --index-url https://test.pypi.org/simple/ \
+  --extra-index-url https://pypi.org/simple/ ai-driven-e2e
+```
+
 ### 3. Marketplace (Action)
 
 - Repo must be **public**, `action.yml` at root with `name`/`description`/`branding` (all set).
@@ -39,6 +56,7 @@ PyPI token/secret is stored. Configure it on PyPI:
 ## Per-release checklist
 
 1. `make check && make test` green locally, and CI green on `main`.
+   Optionally rehearse first via **Actions → publish-testpypi** (see 2b above).
 2. Bump `version` in `pyproject.toml`; move the `## [Unreleased]` section in
    [`CHANGELOG.md`](../CHANGELOG.md) to the new version with today's date.
 3. Commit, then tag: `git tag -a vX.Y.Z -m "..."` and `git push origin main --follow-tags`.

@@ -65,7 +65,7 @@ LangGraph는 3개의 노드와 1개의 조건부 분기(Conditional Edge)로 제
 
 - Input: analysis_report, current_code
 
-- Logic: OpenAI Structured Outputs를 강제하여 타겟 라인과 수정할 코드를 엄격한 JSON 형태로 반환받습니다. 임의의 코드 재작성을 방지합니다.
+- Logic: Structured Outputs(NVIDIA NIM, OpenAI 호환)를 강제하여 타겟 라인과 수정할 코드를 엄격한 JSON 형태로 반환받습니다. 임의의 코드 재작성을 방지합니다.
 
 - Output: current_code 수정 및 patch_instructions 기록.
 

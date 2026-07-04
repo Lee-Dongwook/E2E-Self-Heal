@@ -1,7 +1,7 @@
 # Live self-demo — runs THIS repo's own examples/ project through the action.
 # The example test targets a renamed selector, so the suite fails and the engine
 # heals it, then a patch PR is opened. To activate, copy this into
-# .github/workflows/ and set the OPENAI_API_KEY secret.
+# .github/workflows/ and set the NVIDIA_API_KEY secret.
 
 name: e2e-self-heal-demo
 
@@ -39,7 +39,7 @@ jobs:
           working-directory: examples
           test-path: example.spec.ts
           diff-file: selector-rename.diff
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
 
       # If the core healed the test, open a PR with the patch for review.
       - name: Open patch PR
