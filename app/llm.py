@@ -13,6 +13,23 @@ _client = OpenAI(api_key=settings.openai_api_key)
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+def generate_diagnosis(system_prompt: str, user_prompt: str) -> str:
+    """Call the LLM for a free-text failure diagnosis (the Diagnoser node)."""
+    completion = _client.chat.completions.create(
+        model=settings.openai_model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    )
+    content = completion.choices[0].message.content
+    if not content:
+        logger.warning("llm_returned_empty_diagnosis")
+        raise ValueError("llm_returned_empty_diagnosis")
+    return content
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def generate_patch(system_prompt: str, user_prompt: str) -> PatchOutput:
     """Call the LLM with an enforced PatchOutput schema and return the parsed result.
 
