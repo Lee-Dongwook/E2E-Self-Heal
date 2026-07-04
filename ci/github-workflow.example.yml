@@ -1,55 +1,60 @@
-# Example CI wrapper — thin orchestration only; no repair logic lives here.
-# It runs E2E tests, and on failure invokes the CLI core to self-heal, then
-# opens a PR with the patch. Copy into .github/workflows/ and adjust as needed.
+# Live self-demo — runs THIS repo's own examples/ project through the action.
+# The example test targets a renamed selector, so the suite fails and the engine
+# heals it, then a patch PR is opened. To activate, copy this into
+# .github/workflows/ and set the OPENAI_API_KEY secret.
 
-name: e2e-self-heal
+name: e2e-self-heal-demo
 
 on:
+  workflow_dispatch:
   pull_request:
+    paths:
+      - "examples/**"
+      - "action.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
-  e2e:
+  self-heal:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Install Node + Playwright
+      - name: Install example Playwright project
+        working-directory: examples
         run: |
-          npm ci
-          npx playwright install --with-deps
+          npm install
+          npx playwright install --with-deps chromium
 
-      - name: Install the healer (Python)
-        run: |
-          pipx install uv
-          uv sync
-
-      # Run E2E; capture the log. Do not fail the job yet — we may self-heal.
-      - name: Run E2E tests
-        id: e2e
-        continue-on-error: true
-        run: npx playwright test 2>&1 | tee playwright.log
-
-      # Only when tests failed: hand the failing test + log + diff to the CLI core.
-      - name: Self-heal failing test
-        if: steps.e2e.outcome == 'failure'
+      # Runs examples/example.spec.ts (fails on the renamed selector) and heals it
+      # using the shipped selector-rename.diff.
+      - name: E2E self-heal
         id: heal
-        run: |
-          uv run e2e-healer tests/example.spec.ts \
-            --log playwright.log \
-            --json > repair-summary.json
-        continue-on-error: true
+        uses: ./
+        with:
+          working-directory: examples
+          test-path: example.spec.ts
+          diff-file: selector-rename.diff
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
 
-      # If the core fixed it (exit 0), open a PR with the patch.
+      # If the core healed the test, open a PR with the patch for review.
       - name: Open patch PR
-        if: steps.heal.outcome == 'success'
+        if: steps.heal.outputs.outcome == 'healed'
         uses: peter-evans/create-pull-request@v6
         with:
-          commit-message: "fix(e2e): auto-heal broken selectors"
-          title: "Auto-healed E2E test"
-          body-path: repair-summary.json
+          commit-message: "fix(e2e): auto-heal broken selector (self-demo)"
+          title: "Auto-healed E2E test (self-demo)"
+          body-path: ${{ steps.heal.outputs.summary-path }}
           branch: e2e-self-heal/${{ github.run_id }}
+          add-paths: examples/example.spec.ts
 
-      # If it could not be healed, fail the job so humans look.
+      # If it failed and could not be healed, fail the job so humans look.
       - name: Fail if unhealed
-        if: steps.e2e.outcome == 'failure' && steps.heal.outcome != 'success'
-        run: exit 1
+        if: steps.heal.outputs.outcome == 'unhealed'
+        run: |
+          echo "E2E failed and could not be auto-healed"
+          exit 1

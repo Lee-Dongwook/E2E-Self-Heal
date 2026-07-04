@@ -18,17 +18,23 @@ from app.preprocess.error_log_parser import parse_error_log
 from app.runner import run_playwright
 from app.schemas import PatchInstruction, RepairSummary
 from app.state import AgentState
+from app.utils.files import atomic_write
 
 app = typer.Typer(help="AI-driven E2E test self-healing engine")
 console = Console(stderr=True)  # human output on stderr; JSON summary on stdout
 logger = structlog.get_logger(__name__)
 
 
-def _read_diff(diff_file: Optional[Path]) -> str:
-    """Return the git diff from a file, or fall back to `git diff`."""
+def _read_diff(diff_file: Optional[Path], diff_base: Optional[str]) -> str:
+    """Return the git diff from a file, else `git diff [base...HEAD]`.
+
+    ``diff_base`` (e.g. a PR base ref) scopes the diff to `base...HEAD`, which is what
+    the CI/PR path needs; without it we fall back to the working-tree `git diff`.
+    """
     if diff_file is not None:
         return diff_file.read_text()
-    result = subprocess.run(["git", "diff"], capture_output=True, text=True, check=True)
+    cmd = ["git", "diff", f"{diff_base}...HEAD"] if diff_base else ["git", "diff"]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     return result.stdout
 
 
@@ -54,6 +60,9 @@ def heal(
     diff_file: Optional[Path] = typer.Option(
         None, "--diff", help="git diff file; defaults to `git diff`"
     ),
+    diff_base: Optional[str] = typer.Option(
+        None, "--diff-base", help="git ref to diff against as base...HEAD (e.g. a PR base)"
+    ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="run the loop but restore the original file; write nothing"
     ),
@@ -77,7 +86,9 @@ def heal(
         "original_code": original_code,
         "current_code": original_code,
         "error_log": parse_error_log(raw_log),
-        "dom_diff_context": [d.model_dump() for d in analyze_diff(_read_diff(diff_file))],
+        "dom_diff_context": [
+            d.model_dump() for d in analyze_diff(_read_diff(diff_file, diff_base))
+        ],
         "analysis_report": "",
         "patch_instructions": {},
         "loop_count": 0,
@@ -89,7 +100,7 @@ def heal(
 
     # 2. Persist policy: restore the original on failure or in dry-run mode.
     if dry_run or not final_state["is_success"]:
-        test_path.write_text(original_code)
+        atomic_write(test_path, original_code)
 
     _render_diff(original_code, final_state["current_code"], str(test_path))
 

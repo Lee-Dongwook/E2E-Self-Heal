@@ -1,0 +1,85 @@
+name: "E2E Self-Heal"
+description: "Run Playwright E2E tests and auto-heal broken selectors with an LLM. Produces a patch + summary; PR creation is left to the caller."
+branding:
+  icon: "activity"
+  color: "green"
+
+inputs:
+  test-path:
+    description: "Path to the Playwright test to heal when the suite fails"
+    required: true
+  openai-api-key:
+    description: "API key for the LLM provider (E2E_HEALER_OPENAI_API_KEY)"
+    required: true
+  diff-base:
+    description: "Base git ref to diff against as base...HEAD (e.g. the PR base sha)"
+    required: false
+    default: ""
+  diff-file:
+    description: "Path to a diff file (relative to working-directory); takes precedence over diff-base"
+    required: false
+    default: ""
+  working-directory:
+    description: "Directory to run Playwright and the healer from (where the Playwright project lives)"
+    required: false
+    default: "."
+  playwright-cmd:
+    description: "Command used to run Playwright"
+    required: false
+    default: "npx playwright test"
+
+outputs:
+  outcome:
+    description: "One of: passed | healed | unhealed"
+    value: ${{ steps.heal.outputs.outcome }}
+  summary-path:
+    description: "Path to the RepairSummary JSON (empty if the suite passed)"
+    value: ${{ steps.heal.outputs.summary-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+
+    - name: Install healer
+      shell: bash
+      run: |
+        uv python install 3.13
+        uv sync
+
+    - name: Run E2E and heal on failure
+      id: heal
+      shell: bash
+      env:
+        E2E_HEALER_OPENAI_API_KEY: ${{ inputs.openai-api-key }}
+        E2E_HEALER_PLAYWRIGHT_CMD: ${{ inputs.playwright-cmd }}
+      run: |
+        set +e
+        cd "${{ inputs.working-directory }}"
+        summary="$GITHUB_WORKSPACE/repair-summary.json"
+
+        ${{ inputs.playwright-cmd }} 2>&1 | tee playwright.log
+        status=${PIPESTATUS[0]}
+        if [ "$status" -eq 0 ]; then
+          echo "e2e passed — nothing to heal"
+          echo "outcome=passed" >> "$GITHUB_OUTPUT"
+          echo "summary-path=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        diff_flag=""
+        if [ -n "${{ inputs.diff-file }}" ]; then
+          diff_flag="--diff ${{ inputs.diff-file }}"
+        elif [ -n "${{ inputs.diff-base }}" ]; then
+          diff_flag="--diff-base ${{ inputs.diff-base }}"
+        fi
+
+        uv run e2e-healer "${{ inputs.test-path }}" --log playwright.log $diff_flag --json > "$summary"
+        healed_rc=$?
+        echo "summary-path=repair-summary.json" >> "$GITHUB_OUTPUT"
+        if [ "$healed_rc" -eq 0 ]; then
+          echo "outcome=healed" >> "$GITHUB_OUTPUT"
+        else
+          echo "outcome=unhealed" >> "$GITHUB_OUTPUT"
+        fi

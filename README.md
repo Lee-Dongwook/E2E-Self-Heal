@@ -1,92 +1,117 @@
 # AI-Driven E2E Test Self-Healing Engine
 
-## 1. 시스템 아키텍처 및 데이터 흐름
+Automatically repair broken Playwright E2E tests. When a UI change renames or restructures
+an element, the engine diagnoses the failure, patches the broken selector/wait, re-runs the
+test until it passes (or a retry cap is hit), and writes the fix back — as a local CLI or a
+CI GitHub Action that opens a patch PR.
 
-전체 시스템은 CLI 인터페이스(사용자 실행), AST 분석기(데이터 정제), LangGraph 에이전트(판단 및 루프), Test Runner(검증 도구)의 4가지 레이어로 구성됩니다.
+> **Scope guardrail:** the engine only fixes **failing locators and wait conditions**. It
+> never touches assertions or test logic. Patches are always human-reviewable.
 
-## 2. 세부 컴포넌트 설계
+## How it works
 
-### 2.1. 전처리 모듈 (Data Preprocessor)
+Four layers drive a LangGraph repair loop:
 
-LLM의 컨텍스트 윈도우 최적화 및 환각 방지를 위해 입력 데이터를 추상화합니다.
+1. **CLI core** — the single entry point (`e2e-healer`); everything, including CI, calls it.
+2. **Data Preprocessor** — abstracts the raw Playwright log and the `git diff` into compact,
+   hallucination-resistant context (the failing selector + the DOM attribute that changed).
+3. **LangGraph agent** — `Diagnoser → Patch Generator → Test Runner`, looping via a
+   conditional Router until the test passes or `max_loops` is reached.
+4. **Test Runner** — runs `npx playwright test` via subprocess to validate each attempt.
 
-- Error Log Parser: Playwright의 전체 로그 중 Error: 키워드와 실패한 라인 넘버, 스택 트레이스 상단의 핵심 실패 사유(예: locator.click: Timeout 5000ms waiting for selector...)만 추출합니다.
-
-- Diff-JSX AST Analyzer: 프론트엔드 코드의 변경 사항(git diff) 중 JSX/TSX 영역을 파싱하여, 변경 전후의 DOM 노드 트리 상태를 가벼운 JSON 객체로 변환합니다.
-
-```json
-{
-  "file": "components/SubmitButton.tsx",
-  "previous": {
-    "tag": "button",
-    "attributes": { "id": "old-id", "className": "btn" }
-  },
-  "current": {
-    "tag": "button",
-    "attributes": { "id": "new-id", "className": "btn" }
-  }
-}
+```
+        ┌──────────┐      ┌─────────────────┐      ┌─────────────┐
+  ──▶   │ Diagnoser │ ──▶ │ Patch Generator │ ──▶  │ Test Runner │ ──┐
+        └──────────┘      └─────────────────┘      └─────────────┘   │
+             ▲                                                        │
+             │        fail & loop_count < max                        │
+             └───────────────────  Router  ◀──────────────────────────┘
+                                     │ pass or loop cap
+                                     ▼
+                                   [End]
 ```
 
-### 2.2. LangGraph 상태 정의 (State Definition)
+See [`docs/design.md`](docs/design.md) for the full design.
 
-에이전트 간 공유되는 State는 불변성을 유지하며 상태 추적이 가능하도록 설계합니다. Python의 TypedDict를 활용합니다.
+## Install
 
-```python
-from typing import TypedDict, List, Dict
+Requires Python 3.13+ and a Playwright project (Node) in your repo.
 
-class AgentState(TypedDict):
-    test_script_path: str         # 수정 대상 테스트 파일 경로
-    original_code: str            # 최초 테스트 스크립트 코드
-    current_code: str             # 현재 루프에서 수정된 테스트 스크립트 코드
-    error_log: str                # Playwright 최신 에러 로그
-    dom_diff_context: List[Dict]  # AST 파싱을 거친 DOM 변경점 정보
-    analysis_report: str          # Diagnoser가 작성한 실패 원인 리포트
-    patch_instructions: Dict      # Patch Generator가 생성한 수정 가이드 (라인, 코드)
-    loop_count: int               # 무한 루프 방지용 카운터 (Max: 3)
-    is_success: bool              # 테스트 통과 여부
+```bash
+uv sync                 # or: pipx install ai-driven-e2e  (once published)
+cp .env.example .env    # then set E2E_HEALER_OPENAI_API_KEY
 ```
 
-### 2.3. 에이전트 노드 및 흐름 제어 (Nodes & Conditional Edges)
+## Usage (CLI)
 
-LangGraph는 3개의 노드와 1개의 조건부 분기(Conditional Edge)로 제어 흐름을 관리합니다.
+```bash
+# Heal a failing test. With no --log, the tool runs the test itself to capture the failure.
+uv run e2e-healer tests/example.spec.ts
 
-#### Node 1: Diagnoser (분석 노드)
+# Preview only — run the loop but write nothing:
+uv run e2e-healer tests/example.spec.ts --dry-run
 
-- Input: error_log, dom_diff_context, current_code
+# Feed a pre-captured log and a PR-scoped diff (the CI path):
+uv run e2e-healer tests/example.spec.ts --log playwright.log --diff-base origin/main --json
+```
 
-- Logic: 에러 로그의 셀렉터 실패 지점과 실제 DOM 변경 정보를 매핑하여 깨진 원인을 논리적으로 추론합니다.
+Exit code is `0` when the test is healed, non-zero otherwise. `--json` prints a machine-
+readable `RepairSummary` to stdout (human output goes to stderr) so CI can branch on it.
 
-- Output: analysis_report 업데이트.
+## Usage (CI / GitHub Action)
 
-#### Node 2: Patch Generator (수정 노드)
+Run the suite and auto-heal on failure, opening a patch PR for review. A generic wiring:
 
-- Input: analysis_report, current_code
+```yaml
+- name: E2E self-heal
+  id: heal
+  uses: Lee-Dongwook/ai-driven-e2e@v0.2
+  with:
+    test-path: tests/example.spec.ts
+    openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+    diff-base: ${{ github.event.pull_request.base.sha }}
 
-- Logic: OpenAI Structured Outputs를 강제하여 타겟 라인과 수정할 코드를 엄격한 JSON 형태로 반환받습니다. 임의의 코드 재작성을 방지합니다.
+- name: Open patch PR
+  if: steps.heal.outputs.outcome == 'healed'
+  uses: peter-evans/create-pull-request@v6
+  with:
+    body-path: ${{ steps.heal.outputs.summary-path }}
+    branch: e2e-self-heal/${{ github.run_id }}
+```
 
-- Output: current_code 수정 및 patch_instructions 기록.
+The action's `outcome` output is `passed` \| `healed` \| `unhealed`. For a project whose
+Playwright suite lives in a subdirectory, pass `working-directory:`. A **runnable self-demo**
+that heals this repo's own `examples/` project is in
+[`ci/github-workflow.example.yml`](ci/github-workflow.example.yml) — copy it into
+`.github/workflows/` and set `OPENAI_API_KEY` to activate.
 
-#### Node 3: Test Runner (실행 노드)
+## Configuration
 
-- Input: current_code
+All settings use the `E2E_HEALER_` prefix (see [`.env.example`](.env.example)):
 
-- Logic: 수정된 코드를 파일 시스템에 물리적으로 쓰고, subprocess를 통해 npx playwright test <path>를 실행합니다.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `E2E_HEALER_OPENAI_API_KEY` | — | LLM provider API key |
+| `E2E_HEALER_OPENAI_MODEL` | `gpt-4o-2024-08-06` | Structured-Outputs-capable model |
+| `E2E_HEALER_MAX_LOOPS` | `3` | Repair loop cap |
+| `E2E_HEALER_PLAYWRIGHT_CMD` | `npx playwright test` | Playwright invocation |
 
-- Output: 성공 시 is_success = True, 실패 시 error_log 갱신 및 loop_count += 1.
+## Development
 
-#### Conditional Edge: Router (분기 로직)
+```bash
+make install    # uv sync --extra dev
+make check      # ruff + pyright
+make test       # pytest
+```
 
-- Condition: is_success == True이거나 loop_count >= 3이면 [End]로 분기합니다.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-- Condition: is_success == False이고 loop_count < 3이면 [Diagnoser]로 재진입시킵니다.
+## Limitations
 
-## 3. 핵심 한계 및 제어 대책
+- Fixes selectors and waits only — never assertions or control flow.
+- The JSX/TSX diff analyzer is a regex heuristic in v0.1 (tree-sitter upgrade planned).
+- Healing quality depends on the LLM and the clarity of the `git diff`.
 
-### 코드 왜곡 가드레일 (Code Integrity):
+## License
 
-LLM이 스크립트의 전체 테스트 비즈니스 로직(Assertion 등)을 임의로 바꾸지 못하도록, Patch Generator 노드에는 오직 "실패한 Locator(셀렉터) 수정 및 대기 조건(Wait) 최적화" 임무만 프롬프트와 스키마 수준에서 명확히 제한해야 합니다.
-
-### 비결정적 출력 통제:
-
-LLM의 API 응답 지연 및 예외 처리를 위해 파이썬 백엔드 단에서 try-except 블록을 설계하여, JSON 파싱 실패 시 Patch Generator로 즉시 되먹임(Feedback) 처리를 수행하는 내부 예외 루프를 병행합니다.
+[MIT](LICENSE)

@@ -7,6 +7,7 @@ import structlog
 from app.preprocess.error_log_parser import parse_error_log
 from app.runner import run_playwright
 from app.state import AgentState
+from app.utils.files import atomic_write
 
 logger = structlog.get_logger(__name__)
 
@@ -19,7 +20,7 @@ def test_runner(state: AgentState) -> dict:
     """
     path = state["test_script_path"]
     logger.info("test_runner_started", test_script_path=path)
-    Path(path).write_text(state["current_code"])
+    atomic_write(Path(path), state["current_code"])
 
     passed, log = run_playwright(path)
     if passed:

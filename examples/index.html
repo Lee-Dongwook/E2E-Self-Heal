@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>E2E Healer Demo</title>
+  </head>
+  <body>
+    <!-- The button id was renamed from "submit-btn" to "submit".
+         example.spec.ts still clicks "#submit-btn", so it times out until healed. -->
+    <button id="submit" class="btn">Submit</button>
+    <p id="result" hidden>Thanks!</p>
+
+    <script>
+      document.getElementById("submit").addEventListener("click", () => {
+        document.getElementById("result").hidden = false;
+      });
+    </script>
+  </body>
+</html>

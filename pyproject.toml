@@ -4,6 +4,18 @@ version = "0.1.0"
 description = "LangGraph-based AI-driven E2E test self-healing engine (CLI core + CI integration)"
 readme = "README.md"
 requires-python = ">=3.13"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Lee-Dongwook", email = "devgroup2@futureworklab.co.kr" }]
+keywords = ["playwright", "e2e", "self-healing", "langgraph", "testing", "llm", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = [
     "langgraph>=0.2",
     "openai>=1.40",
@@ -14,6 +26,11 @@ dependencies = [
     "rich>=13.7",
     "typer>=0.12",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Lee-Dongwook/ai-driven-e2e"
+Repository = "https://github.com/Lee-Dongwook/ai-driven-e2e"
+Issues = "https://github.com/Lee-Dongwook/ai-driven-e2e/issues"
 
 [project.scripts]
 e2e-healer = "app.cli:app"

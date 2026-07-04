@@ -1,0 +1,12 @@
+{
+  "name": "e2e-healer-example",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Runnable Playwright demo for the AI-driven E2E self-healing engine",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
