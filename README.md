@@ -251,6 +251,7 @@ All settings use the `E2E_HEALER_` prefix (see [`.env.example`](.env.example)):
 > verification locally, the Playwright project needs browsers installed
 > (`npm install && npx playwright install`).
 
+
 ## Development
 
 ```bash
@@ -261,7 +262,24 @@ make test       # pytest
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+## Documentation site
+
+The `docs-site/` directory contains our [Docusaurus](https://docusaurus.io/) documentation site — this is where frontend contributors can help.
+
+To run it locally:
+
+```bash
+cd docs-site
+npm install
+npm run start      # dev server with hot reload
+npm run build       # production build
+```
+
+Picking up a docs-site component issue? Read [`docs-site/DESIGN.md`](docs-site/DESIGN.md) first — it's the locked design spec (tokens, layout, dark-mode rules) all components must follow.
+
 ## Contributing
+
+
 
 Contributions of every size are welcome — bug reports, docs, tests, or code. Start with
 [`CONTRIBUTING.md`](CONTRIBUTING.md), then browse
