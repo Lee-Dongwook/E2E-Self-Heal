@@ -136,13 +136,15 @@ git clone https://github.com/<your-username>/E2E-Self-Heal.git
 cd E2E-Self-Heal
 
 # 2. Install dependencies (incl. dev extras) and set up your env
-make install          # → uv sync --extra dev
+make install          # → uv sync --extra dev + enables the git pre-commit hook
 cp .env.example .env  # add your OPENAI_API_KEY (never commit this file)
 
 # 3. Sanity-check that everything works
 make check            # ruff (lint) + pyright (types)
 make test             # pytest
 ```
+
+`make install` also enables a native git pre-commit hook (`.githooks/pre-commit`) that runs `ruff format` on your staged Python files, so you never fail CI on formatting. No husky/npm needed. If you set up without `make install`, enable it manually with `git config core.hooksPath .githooks`.
 
 Run `make help` to see every available task. Handy ones:
 
