@@ -40,6 +40,7 @@ dev = [
     "ruff>=0.5",
     "pyright>=1.1",
     "pytest>=8.2",
+    "pytest-cov>=5.0",
 ]
 
 [build-system]
@@ -61,3 +62,11 @@ typeCheckingMode = "standard"
 # Collect only the test suite; app/nodes/test_runner.py defines a node fn named
 # `test_runner` that pytest would otherwise mis-collect as a test.
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
