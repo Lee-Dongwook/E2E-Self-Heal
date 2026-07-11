@@ -9,7 +9,7 @@ class ShadowWorkspace(IShadowWorkspace):
     for the Shadow Runtime, conforming to the IShadowWorkspace interface.
     """
 
-    def __init__(self, base_dir: str|Path = ".shadow_workspace"):
+    def __init__(self, base_dir: str | Path = ".shadow_workspace"):
         # Ensure we work with absolute paths
         self.base_dir = Path(base_dir).resolve()
 
@@ -23,11 +23,11 @@ class ShadowWorkspace(IShadowWorkspace):
 
     def setup_dirs(self) -> None:
         """Creates the directory structure safely."""
-        
-        for directory in [self.base_dir, self.cache_dir, self.snapshots_dir, self.tmp_dir]:
-            directory.mkdir(parents = True, exist_ok = True)
 
-    def resolve_path(self, relative_path: str|Path) -> Path:
+        for directory in [self.base_dir, self.cache_dir, self.snapshots_dir, self.tmp_dir]:
+            directory.mkdir(parents=True, exist_ok=True)
+
+    def resolve_path(self, relative_path: str | Path) -> Path:
         """Safely resolves paths relative to the workspace base."""
 
         return (self.base_dir / relative_path).resolve()

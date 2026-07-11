@@ -11,12 +11,13 @@ class IShadowWorkspace(ABC):
         pass
 
     @abstractmethod
-    def resolve_path(self, relative_path: str|Path) -> Path:
+    def resolve_path(self, relative_path: str | Path) -> Path:
         pass
 
     @abstractmethod
     def cleanup(self) -> None:
         pass
+
 
 class ITraceParser(ABC):
     """Blueprint for reading and parsing execution trace files later."""
@@ -24,6 +25,7 @@ class ITraceParser(ABC):
     @abstractmethod
     def parse(self, trace_path: Path) -> Any:
         pass
+
 
 class ISnapshotStore(ABC):
     """Blueprint for saving and loading state snapshots later."""
@@ -36,9 +38,10 @@ class ISnapshotStore(ABC):
     def get_snapshot(self, snapshot_id: str) -> Any:
         pass
 
+
 class IMockInjector(ABC):
     """Blueprint for mocking network responses later."""
-    
+
     @abstractmethod
     def inject_mock(self, target: str, mock_data: Any) -> None:
         pass
