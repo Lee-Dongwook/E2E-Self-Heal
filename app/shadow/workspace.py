@@ -1,6 +1,6 @@
 import shutil
 from pathlib import Path
-from shadow.interfaces import IShadowWorkspace
+from app.shadow.interfaces import IShadowWorkspace
 
 
 class ShadowWorkspace(IShadowWorkspace):
