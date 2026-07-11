@@ -12,7 +12,7 @@ from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import settings
-from app.schemas import PatchOutput
+from app.schemas import PatchOutput, ReviewOutput
 
 logger = structlog.get_logger(__name__)
 
@@ -68,4 +68,27 @@ def generate_patch(system_prompt: str, user_prompt: str) -> PatchOutput:
     if parsed is None:
         logger.warning("llm_returned_no_parsed_output")
         raise ValueError("llm_returned_no_parsed_output")
+    return parsed
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+def generate_review(system_prompt: str, user_prompt: str) -> ReviewOutput:
+    """Call the LLM with an enforced ReviewOutput schema for source-level suggestions.
+
+    Mirrors ``generate_patch``: Structured Outputs keep the Reviewer to advisory findings
+    (never free-form rewrites). Raises on a missing parse so tenacity retries.
+    """
+    completion = _get_client().beta.chat.completions.parse(
+        model=settings.nvidia_model,
+        max_tokens=settings.nvidia_max_tokens,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        response_format=ReviewOutput,
+    )
+    parsed = completion.choices[0].message.parsed
+    if parsed is None:
+        logger.warning("llm_returned_no_parsed_review")
+        raise ValueError("llm_returned_no_parsed_review")
     return parsed

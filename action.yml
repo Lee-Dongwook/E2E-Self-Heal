@@ -5,8 +5,12 @@ branding:
   color: "green"
 
 inputs:
+  mode:
+    description: "Operating mode: heal (patch the test) or review (comment source-level fixes)"
+    required: false
+    default: "heal"
   test-path:
-    description: "Path to the Playwright test to heal when the suite fails"
+    description: "Path to the Playwright test to heal/review when the suite fails"
     required: true
   nvidia-api-key:
     description: "API key for the NVIDIA NIM LLM provider (E2E_HEALER_NVIDIA_API_KEY)"
@@ -34,11 +38,14 @@ inputs:
 
 outputs:
   outcome:
-    description: "One of: passed | healed | unhealed"
+    description: "One of: passed | healed | unhealed | reviewed"
     value: ${{ steps.heal.outputs.outcome }}
   summary-path:
-    description: "Path to the RepairSummary JSON (empty if the suite passed)"
+    description: "Path to the RepairSummary JSON (heal mode; empty otherwise)"
     value: ${{ steps.heal.outputs.summary-path }}
+  review-path:
+    description: "Path to the ReviewReport JSON (review mode; empty otherwise)"
+    value: ${{ steps.heal.outputs.review-path }}
 
 runs:
   using: composite
@@ -64,12 +71,15 @@ runs:
         cd "${{ inputs.working-directory }}"
         summary="$GITHUB_WORKSPACE/repair-summary.json"
 
+        review="$GITHUB_WORKSPACE/review.json"
+
         ${{ inputs.playwright-cmd }} 2>&1 | tee playwright.log
         status=${PIPESTATUS[0]}
         if [ "$status" -eq 0 ]; then
-          echo "e2e passed — nothing to heal"
+          echo "e2e passed — nothing to do"
           echo "outcome=passed" >> "$GITHUB_OUTPUT"
           echo "summary-path=" >> "$GITHUB_OUTPUT"
+          echo "review-path=" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
@@ -80,14 +90,25 @@ runs:
           diff_flag="--diff-base ${{ inputs.diff-base }}"
         fi
 
+        # Review mode: diagnose + comment source-level fixes; never patch the test.
+        if [ "${{ inputs.mode }}" = "review" ]; then
+          uv run e2e-healer review "${{ inputs.test-path }}" --log playwright.log $diff_flag --json > "$review"
+          echo "review-path=review.json" >> "$GITHUB_OUTPUT"
+          echo "summary-path=" >> "$GITHUB_OUTPUT"
+          echo "outcome=reviewed" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
         url_flag=""
         if [ -n "${{ inputs.app-url }}" ]; then
           url_flag="--app-url ${{ inputs.app-url }}"
         fi
 
+        # Heal mode (default): patch the test in place.
         uv run e2e-healer "${{ inputs.test-path }}" --log playwright.log $diff_flag $url_flag --json > "$summary"
         healed_rc=$?
         echo "summary-path=repair-summary.json" >> "$GITHUB_OUTPUT"
+        echo "review-path=" >> "$GITHUB_OUTPUT"
         if [ "$healed_rc" -eq 0 ]; then
           echo "outcome=healed" >> "$GITHUB_OUTPUT"
         else

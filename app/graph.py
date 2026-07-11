@@ -5,6 +5,7 @@ from langgraph.graph import END, START, StateGraph
 from app.config import settings
 from app.nodes.diagnoser import diagnoser
 from app.nodes.patch_generator import patch_generator
+from app.nodes.reviewer import reviewer
 from app.nodes.selector_verifier import selector_verifier
 from app.nodes.test_runner import test_runner
 from app.state import AgentState
@@ -47,5 +48,22 @@ def build_graph():
         {"test_runner": "test_runner", "patch_generator": "patch_generator", END: END},
     )
     graph.add_conditional_edges("test_runner", route, {"diagnoser": "diagnoser", END: END})
+
+    return graph.compile()
+
+
+def build_review_graph():
+    """Build the review-mode graph: Diagnoser → Reviewer → END.
+
+    Reuses the Diagnoser to infer the root cause, then advises a source-level fix. No patch,
+    verify, test-run, or loop — review mode is strictly read-only and advisory.
+    """
+    graph = StateGraph(AgentState)
+    graph.add_node("diagnoser", diagnoser)
+    graph.add_node("reviewer", reviewer)
+
+    graph.add_edge(START, "diagnoser")
+    graph.add_edge("diagnoser", "reviewer")
+    graph.add_edge("reviewer", END)
 
     return graph.compile()

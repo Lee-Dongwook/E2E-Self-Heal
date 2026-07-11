@@ -1,0 +1,58 @@
+name: Architecture
+description: Design or architecture related task
+title: "[Core/Architecture] "
+labels:
+  - architecture
+
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe what this issue should accomplish.
+    validations:
+      required: true
+
+  - type: textarea
+    id: where
+    attributes:
+      label: Where to look
+      description: |
+        Specify which files/directories should be modified.
+
+        Modify:
+        Create:
+        Avoid touching:
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: verify
+    attributes:
+      label: How to verify
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      value: |
+        This issue is intentionally small.
+
+        A successful implementation should be completable by an AI coding agent (e.g. Claude Code) in approximately one hour.
+
+  - type: dropdown
+    id: difficulty
+    attributes:
+      label: Difficulty
+      options:
+        - Easy
+        - Easy-Medium
+        - Medium
+        - Hard

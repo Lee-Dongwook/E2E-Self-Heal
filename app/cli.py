@@ -9,9 +9,11 @@ import structlog
 import typer
 from rich.console import Console
 from rich.syntax import Syntax
+from rich.table import Table
+from typer.core import TyperGroup
 
 from app.config import settings
-from app.graph import build_graph
+from app.graph import build_graph, build_review_graph
 from app.logging import configure_logging
 from app.preprocess.aria_snapshot import read_failure_snapshot
 from app.preprocess.diff_ast_analyzer import analyze_diff
@@ -24,11 +26,38 @@ from app.sandbox import (
     assert_read_allowed,
     assert_write_allowed,
 )
-from app.schemas import PatchInstruction, RepairSummary, SuiteSummary
+from app.schemas import (
+    PatchInstruction,
+    RepairSummary,
+    ReviewFinding,
+    ReviewReport,
+    SuiteSummary,
+)
 from app.state import AgentState
 from app.utils.files import atomic_write
 
-app = typer.Typer(help="AI-driven E2E test self-healing engine")
+
+class _DefaultCommandGroup(TyperGroup):
+    """Route a bare invocation to ``heal`` so ``e2e-healer <path>`` keeps working.
+
+    Adding the ``review`` subcommand would otherwise force every caller (and the shipped
+    action.yml) to spell out ``heal``; instead we inject ``heal`` whenever the first token
+    is not a known command or option. Explicit ``heal``/``review`` still route normally.
+    """
+
+    default_command = "heal"
+
+    def parse_args(self, ctx, args):  # types inherited from TyperGroup
+        # Inject "heal" for a bare run or a leading non-command token (a test path), so
+        # `e2e-healer` and `e2e-healer <path>` still work; leave explicit commands/options.
+        if not args or (args[0] not in self.commands and not args[0].startswith("-")):
+            args = [self.default_command, *args]
+        return super().parse_args(ctx, args)
+
+
+app = typer.Typer(
+    help="AI-driven E2E test self-healing engine", cls=_DefaultCommandGroup, no_args_is_help=False
+)
 console = Console(stderr=True)  # human output on stderr; JSON summary on stdout
 logger = structlog.get_logger(__name__)
 
@@ -81,6 +110,7 @@ def _heal_file(
         "analysis_report": "",
         "patch_instructions": {},
         "verification_report": {},
+        "review_report": {},
         "loop_count": 0,
         "is_success": False,
     }
@@ -139,6 +169,56 @@ def _heal_suite(suite_target: str, dom_diff_context: list[dict], dry_run: bool) 
         is_success=len(results) > 0 and healed == len(results),
         results=results,
     )
+
+
+def _review_file(test_path: Path, raw_log: str, dom_diff_context: list[dict]) -> ReviewReport:
+    """Run the review graph on one test file and return its findings. Never writes the file."""
+    assert_read_allowed(test_path)
+    current_code = test_path.read_text()
+    initial_state: AgentState = {
+        "test_script_path": str(test_path),
+        "original_code": current_code,
+        "current_code": current_code,
+        "error_log": parse_error_log(raw_log),
+        "dom_diff_context": dom_diff_context,
+        "dom_snapshot": read_failure_snapshot(Path(settings.test_results_dir)),
+        "analysis_report": "",
+        "patch_instructions": {},
+        "verification_report": {},
+        "review_report": {},
+        "loop_count": 0,
+        "is_success": False,
+    }
+
+    logger.info("review_run_started", test_script_path=str(test_path))
+    final_state = build_review_graph().invoke(initial_state)
+
+    findings = [ReviewFinding(**f) for f in final_state["review_report"].get("findings", [])]
+    report = ReviewReport(
+        test_script_path=str(test_path), findings=findings, has_findings=len(findings) > 0
+    )
+    logger.info("review_run_finished", finding_count=len(findings))
+    return report
+
+
+def _render_findings(report: ReviewReport) -> None:
+    """Print the review findings as a rich table to the console (stderr)."""
+    if not report.findings:
+        console.print("[dim]no findings[/dim]")
+        return
+    table = Table(title="Source-level review findings", show_lines=True)
+    table.add_column("File:Line", style="cyan", no_wrap=True)
+    table.add_column("Root cause")
+    table.add_column("Suggestion")
+    table.add_column("Recommended selector", style="green")
+    for finding in report.findings:
+        table.add_row(
+            f"{finding.file}:{finding.line}",
+            finding.root_cause,
+            finding.suggestion,
+            finding.recommended_selector,
+        )
+    console.print(table)
 
 
 @app.command()
@@ -208,6 +288,57 @@ def heal(
             typer.echo(suite.model_dump_json())
         console.print(f"[bold]{suite.healed}/{suite.total_failed}[/bold] test(s) healed")
         raise typer.Exit(code=0 if suite.is_success else 1)
+    except SandboxViolation as exc:
+        console.print(f"[red]sandbox denied:[/red] {exc}")
+        raise typer.Exit(code=2) from exc
+
+
+@app.command()
+def review(
+    test_path: Path = typer.Argument(..., help="failing test file to review (never modified)"),
+    log_file: Optional[Path] = typer.Option(
+        None, "--log", help="raw Playwright failure log; else the test is run to produce one"
+    ),
+    diff_file: Optional[Path] = typer.Option(
+        None, "--diff", help="git diff file; defaults to `git diff`"
+    ),
+    diff_base: Optional[str] = typer.Option(
+        None, "--diff-base", help="git ref to diff against as base...HEAD (e.g. a PR base)"
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", help="emit the ReviewReport JSON to stdout for the CI wrapper"
+    ),
+) -> None:
+    """Review a failing test and suggest source-level fixes as PR comments — never edits it.
+
+    Unlike ``heal``, this diagnoses the root cause and advises how to fix the *source*
+    (prefer accessible roles / a stable data-testid). Always exits 0 on a completed review;
+    the CI wrapper branches on ``has_findings`` in the JSON.
+    """
+    configure_logging(settings.log_level)
+    try:
+        assert_read_allowed(test_path)
+        if not test_path.exists():
+            console.print(f"[red]path not found:[/red] {test_path}")
+            raise typer.Exit(code=2)
+
+        dom_diff_context = [d.model_dump() for d in analyze_diff(_read_diff(diff_file, diff_base))]
+
+        if log_file is not None:
+            assert_read_allowed(log_file)
+            raw_log = log_file.read_text()
+        else:
+            passed, raw_log = run_playwright(str(test_path))
+            if passed:
+                console.print("[green]test passes[/green] — nothing to review")
+                raise typer.Exit(code=0)
+
+        report = _review_file(test_path, raw_log, dom_diff_context)
+        if json_output:
+            typer.echo(report.model_dump_json())
+        _render_findings(report)
+        console.print(f"[bold]{len(report.findings)}[/bold] source-level suggestion(s)")
+        raise typer.Exit(code=0)
     except SandboxViolation as exc:
         console.print(f"[red]sandbox denied:[/red] {exc}")
         raise typer.Exit(code=2) from exc

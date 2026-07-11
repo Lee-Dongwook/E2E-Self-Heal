@@ -29,3 +29,61 @@ def test_extracts_call_log_locators():
 def test_falls_back_to_tail_when_no_match():
     result = parse_error_log("some unstructured output with no markers")
     assert result  # never returns empty
+
+
+def test_returns_empty_on_none():
+    assert parse_error_log(None) == ""
+
+
+def test_returns_empty_on_empty_string():
+    assert parse_error_log("") == ""
+
+
+STRICT_MODE_LOG = """
+Error: locator.click: Error: strict mode violation: locator('button') resolved to 2 elements
+Call log:
+  - waiting for locator('button')
+  - waiting for element to be visible
+at tests/checkout.spec.ts:44:7
+"""
+
+
+def test_strict_mode_violation():
+    result = parse_error_log(STRICT_MODE_LOG)
+    assert "strict mode violation" in result
+    assert "at tests/checkout.spec.ts:44" in result
+    assert "locator('button')" in result
+
+
+ASSERTION_LOG = """
+Error: expect(locator).toBeVisible() failed
+Locator: getByRole('heading', { name: 'Dashboard' })
+Expected: visible
+Received: hidden
+Call log:
+  - waiting for getByRole('heading', { name: 'Dashboard' })
+at e2e/dashboard.spec.ts:18:5
+"""
+
+
+def test_assertion_failure_with_get_by_role():
+    result = parse_error_log(ASSERTION_LOG)
+    assert "expect(locator).toBeVisible()" in result
+    assert "at e2e/dashboard.spec.ts:18" in result
+    assert "getByRole('heading'" in result
+
+
+GET_BY_TEXT_LOG = """
+Error: locator.fill: Timeout 30000ms exceeded.
+Call log:
+  - waiting for getByText('Sign in')
+  - waiting for element to be enabled
+at tests/auth/login.spec.ts:9:11
+"""
+
+
+def test_get_by_text_locator():
+    result = parse_error_log(GET_BY_TEXT_LOG)
+    assert "Timeout 30000ms exceeded" in result
+    assert "getByText('Sign in')" in result
+    assert "at tests/auth/login.spec.ts:9" in result

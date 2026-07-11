@@ -1,0 +1,112 @@
+/**
+ * E2E-Healer — Global design tokens (SINGLE SOURCE OF TRUTH)
+ * ----------------------------------------------------------------------------
+ * Contributors: do NOT hardcode colors, spacing, radii, or fonts in components.
+ * Use the CSS variables defined here. If a value you need is missing, propose
+ * adding a token in your PR — don't inline a raw value. See docs-site/DESIGN.md.
+ *
+ * Naming:
+ *   --ifm-*  → Infima framework overrides (Docusaurus theme).
+ *   --eeh-*  → E2E-Healer custom tokens. Prefer these in custom components.
+ *
+ * The site is DARK-MODE-FIRST. Light mode must remain readable, but design and
+ * review against dark mode first.
+ */
+
+/* ==========================================================================
+   Shared tokens (theme-independent): typography, spacing, radius, motion
+   ========================================================================== */
+:root {
+  /* Fonts */
+  --eeh-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --eeh-font-mono: "SFMono-Regular", "JetBrains Mono", "Fira Code", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  --ifm-font-family-base: var(--eeh-font-sans);
+  --ifm-font-family-monospace: var(--eeh-font-mono);
+  --ifm-code-font-size: 92%;
+
+  /* Spacing scale (4px base) — use these, not arbitrary px */
+  --eeh-space-1: 0.25rem; /* 4  */
+  --eeh-space-2: 0.5rem;  /* 8  */
+  --eeh-space-3: 0.75rem; /* 12 */
+  --eeh-space-4: 1rem;    /* 16 */
+  --eeh-space-5: 1.5rem;  /* 24 */
+  --eeh-space-6: 2rem;    /* 32 */
+  --eeh-space-8: 3rem;    /* 48 */
+  --eeh-space-10: 4rem;   /* 64 */
+
+  /* Radius */
+  --eeh-radius-sm: 4px;
+  --eeh-radius-md: 8px;
+  --eeh-radius-lg: 12px;
+  --eeh-radius-pill: 999px;
+
+  /* Motion */
+  --eeh-transition: 160ms ease;
+
+  /* Elevation */
+  --eeh-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.12);
+
+  /* Semantic healing colors (used by HealingDiff, ArchitectureFlow, badges).
+     Defined once here so "broken" and "healed" look identical everywhere. */
+  --eeh-broken: #f2555a;   /* the failing / old selector */
+  --eeh-healed: #2ec7a6;   /* the repaired / new selector */
+  --eeh-warn: #e0a13a;     /* in-progress / needs-attention */
+
+  /* Difficulty badges (HelpWantedBoard) */
+  --eeh-diff-easy: #2ec7a6;
+  --eeh-diff-medium: #e0a13a;
+  --eeh-diff-hard: #f2555a;
+}
+
+/* ==========================================================================
+   LIGHT theme
+   ========================================================================== */
+:root {
+  --ifm-color-primary: #0f9d76;
+  --ifm-color-primary-dark: #0e8d6a;
+  --ifm-color-primary-darker: #0d8564;
+  --ifm-color-primary-darkest: #0a6e52;
+  --ifm-color-primary-light: #10ad82;
+  --ifm-color-primary-lighter: #11b588;
+  --ifm-color-primary-lightest: #17cf9c;
+
+  --ifm-background-color: #ffffff;
+  --ifm-background-surface-color: #f6f8fa;
+
+  /* Surfaces for --eeh- components */
+  --eeh-bg: #ffffff;
+  --eeh-surface: #f6f8fa;
+  --eeh-surface-raised: #ffffff;
+  --eeh-border: #d9dee3;
+  --eeh-text: #1c2128;
+  --eeh-text-muted: #5b6570;
+
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.08);
+}
+
+/* ==========================================================================
+   DARK theme (primary target)
+   ========================================================================== */
+[data-theme="dark"] {
+  --ifm-color-primary: #2ec7a6;
+  --ifm-color-primary-dark: #29b494;
+  --ifm-color-primary-darker: #27aa8b;
+  --ifm-color-primary-darkest: #208c73;
+  --ifm-color-primary-light: #43cfb1;
+  --ifm-color-primary-lighter: #4fd3b7;
+  --ifm-color-primary-lightest: #71dcc6;
+
+  --ifm-background-color: #0d1117;
+  --ifm-background-surface-color: #161b22;
+
+  --eeh-bg: #0d1117;
+  --eeh-surface: #161b22;
+  --eeh-surface-raised: #1c2333;
+  --eeh-border: #2a313c;
+  --eeh-text: #e6edf3;
+  --eeh-text-muted: #8b949e;
+
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.35);
+}

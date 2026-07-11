@@ -48,3 +48,11 @@ The engine parses the Timeout, correlates it with the `id` change in the diff, a
 
 > In a real repo you don't need `--diff` — the tool defaults to `git diff`, and omitting
 > `--log` makes it run the test itself to capture the failure.
+
+---
+
+## Second scenario: renamed className
+
+[`classname-scenario/`](classname-scenario/) mirrors the id-rename walkthrough above, but the
+breakage is a **CSS class change** (`cta-button` → `cta-primary`) instead of an element id.
+See [`classname-scenario/README.md`](classname-scenario/README.md) for reproduce + heal steps.

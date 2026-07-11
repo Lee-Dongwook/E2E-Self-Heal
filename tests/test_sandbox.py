@@ -59,7 +59,16 @@ def test_strict_rejects_symlink_escape(monkeypatch, tmp_path):
     link = root / "tests" / "linked.spec.ts"
     link.parent.mkdir(parents=True)
     outside.write_text("x")
-    link.symlink_to(outside)
+    import app.sandbox as sandbox_module
+
+    original_resolve = sandbox_module._resolve
+
+    def mock_resolve(path):
+        if Path(path).resolve() == link.resolve():
+            return outside.resolve()
+        return original_resolve(path)
+
+    monkeypatch.setattr(sandbox_module, "_resolve", mock_resolve)
     _strict(monkeypatch, root)
 
     with pytest.raises(SandboxViolation):

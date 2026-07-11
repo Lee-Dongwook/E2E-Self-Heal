@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+# Format staged Python files with ruff before committing.
+# Enable once with: git config core.hooksPath .githooks
+set -e
+
+# Staged Python files (added/copied/modified), NUL-separated for safe paths.
+staged=$(git diff --cached --name-only --diff-filter=ACM -z -- '*.py')
+[ -z "$staged" ] && exit 0
+
+# Format only the staged files, then re-stage what ruff changed.
+printf '%s' "$staged" | xargs -0 uv run ruff format --
+printf '%s' "$staged" | xargs -0 git add --

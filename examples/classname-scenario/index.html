@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>E2E Healer Demo — className rename</title>
+  </head>
+  <body>
+    <!-- The CTA class was renamed from "cta-button" to "cta-primary".
+         classname.spec.ts still clicks ".cta-button", so it times out until healed. -->
+    <button class="cta-primary">Get started</button>
+    <p id="result" hidden>Welcome!</p>
+
+    <script>
+      document.querySelector(".cta-primary").addEventListener("click", () => {
+        document.getElementById("result").hidden = false;
+      });
+    </script>
+  </body>
+</html>

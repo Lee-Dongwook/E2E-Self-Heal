@@ -17,13 +17,16 @@ _AT_LOCATION_RE = re.compile(r"\bat\s+([\w./-]+\.(?:spec|test)\.[jt]sx?):(\d+):(
 _WAITING_RE = re.compile(r"waiting for (.+)")
 
 
-def parse_error_log(raw_log: str) -> str:
+def parse_error_log(raw_log: str | None) -> str:
     """Extract only the essentials from a raw Playwright failure log.
 
     Keeps the ``Error:`` reason, the failing source location, and up to three call-log
     ``waiting for ...`` lines. Falls back to the trimmed tail of the log if nothing
     matches, so the Diagnoser always gets *something* to work with.
     """
+    if not raw_log:
+        return ""
+
     parts: list[str] = []
 
     error_match = _ERROR_RE.search(raw_log)

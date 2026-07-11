@@ -1,0 +1,90 @@
+# PR Review Bot mode — comment source-level fixes instead of patching the test.
+#
+# When the E2E suite fails on a PR, the healer runs in `review` mode: it diagnoses WHY the
+# selector broke and emits a ReviewReport JSON. This workflow posts each finding as an
+# inline PR review comment on the changed source line (e.g. "this className rename broke
+# selector X — add a data-testid or use getByRole"). It never edits the test.
+#
+# The core does all diagnosis; this wrapper only posts comments (no repair logic here).
+# To activate, copy this into .github/workflows/ and set the NVIDIA_API_KEY secret.
+
+name: e2e-review-bot
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "examples/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install example Playwright project
+        working-directory: examples
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      # Run the suite and, on failure, produce a ReviewReport with source-level suggestions.
+      # Use diff-base so finding paths are repo-root relative and line up with the PR diff.
+      - name: E2E review
+        id: review
+        uses: ./
+        with:
+          mode: review
+          working-directory: examples
+          test-path: classname-scenario/classname.spec.ts
+          diff-base: ${{ github.event.pull_request.base.sha }}
+          nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
+
+      # Post each finding as an inline review comment anchored to the changed source line.
+      - name: Post review comments
+        if: steps.review.outputs.outcome == 'reviewed'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = process.env.REVIEW_PATH;
+            if (!path || !fs.existsSync(path)) {
+              core.info('no review report — nothing to post');
+              return;
+            }
+            const report = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const findings = report.findings || [];
+            if (findings.length === 0) {
+              core.info('no findings to post');
+              return;
+            }
+            const comments = findings.map((f) => ({
+              path: f.file,
+              line: f.line,
+              side: 'RIGHT',
+              body: [
+                `**E2E selector risk (${f.severity})** — \`${f.broken_selector}\``,
+                '',
+                `**Root cause:** ${f.root_cause}`,
+                `**Suggestion:** ${f.suggestion}`,
+                f.recommended_selector
+                  ? `**Recommended locator:** \`${f.recommended_selector}\``
+                  : '',
+              ].filter(Boolean).join('\n'),
+            }));
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: 'COMMENT',
+              comments,
+            });
+            core.info(`posted ${comments.length} inline review comment(s)`);
+        env:
+          REVIEW_PATH: ${{ steps.review.outputs.review-path }}

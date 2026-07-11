@@ -1,0 +1,13 @@
+diff --git a/examples/classname-scenario/components/CTAButton.tsx b/examples/classname-scenario/components/CTAButton.tsx
+index 1111111..2222222 100644
+--- a/examples/classname-scenario/components/CTAButton.tsx
++++ b/examples/classname-scenario/components/CTAButton.tsx
+@@ -1,7 +1,7 @@
+ export function CTAButton() {
+   return (
+-    <button className="cta-button">
++    <button className="cta-primary">
+       Get started
+     </button>
+   );
+ }

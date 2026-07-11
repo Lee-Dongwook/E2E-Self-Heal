@@ -4,7 +4,7 @@ import { defineConfig } from "@playwright/test";
 // A short timeout keeps the "broken selector" failure fast to reproduce.
 export default defineConfig({
   testDir: ".",
-  testMatch: "*.spec.ts",
+  testMatch: "**/*.spec.ts",
   timeout: 15_000,
   expect: { timeout: 3_000 },
   use: {
