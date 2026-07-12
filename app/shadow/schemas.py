@@ -28,6 +28,20 @@ class NetworkSnapshot(BaseModel):
 
     request: CapturedRequest
     response: CapturedResponse
+    sequence: int | None = None  # ordering index within the trace
+    started_at: float | None = None  # request start, epoch seconds
+    duration_ms: float | None = None  # request→response duration in ms
+
+
+class SnapshotMetadata(BaseModel):
+    """Optional typed view of ShadowSnapshot.metadata; the field itself stays a
+    permissive dict, so arbitrary keys still round-trip untouched."""
+
+    model_config = {"extra": "allow"}
+
+    source_url: str | None = None  # page URL the trace was captured from
+    captured_at: float | None = None  # capture time, epoch seconds
+    event_count: int | None = None  # number of network events in the trace
 
 
 class ShadowSnapshot(BaseModel):
