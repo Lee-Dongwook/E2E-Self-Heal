@@ -3,6 +3,7 @@
 Provides workspaces, snapshots, matching, and playwright mock injection.
 """
 
+from app.shadow.config import CleanupPolicy, ShadowConfig
 from app.shadow.injector import MockInjector
 from app.shadow.interfaces import (
     IMockInjector,
@@ -12,6 +13,7 @@ from app.shadow.interfaces import (
     ITraceParser,
 )
 from app.shadow.matcher import NoMatchError, SnapshotMatcher
+from app.shadow.normalizer import RequestNormalizer
 from app.shadow.runtime import ShadowRuntime
 from app.shadow.schemas import CapturedRequest, CapturedResponse, NetworkSnapshot, ShadowSnapshot
 from app.shadow.scoring import MatchScorer, ScoringWeights
@@ -29,7 +31,9 @@ __all__ = [
     "IShadowWorkspace",
     "ISnapshotStore",
     "ITraceParser",
+    "CleanupPolicy",
     "MockInjector",
+    "ShadowConfig",
     "ShadowRuntime",
     "SnapshotMatcher",
     "NoMatchError",

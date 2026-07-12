@@ -2,6 +2,7 @@ import pytest
 
 from app.shadow import (
     IShadowRuntime,
+    ShadowConfig,
     ShadowRuntime,
     ShadowWorkspace,
 )
@@ -10,7 +11,7 @@ from app.shadow.snapshot_store import SnapshotStore
 
 
 def _make_runtime(tmp_path) -> ShadowRuntime:
-    ws = ShadowWorkspace(tmp_path)
+    ws = ShadowWorkspace(ShadowConfig(workspace_dir=str(tmp_path)))
     store = SnapshotStore(ws)
     injector = MockInjector()
     return ShadowRuntime(workspace=ws, snapshot_store=store, injector=injector)

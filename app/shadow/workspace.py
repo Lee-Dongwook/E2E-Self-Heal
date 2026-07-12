@@ -1,22 +1,38 @@
+"""Filesystem workspace for the Shadow Runtime.
+
+Owns the on-disk directory layout (cache, snapshots, tmp) and its lifecycle
+(creation and policy-aware cleanup). All directory names are derived from the
+shared :class:`ShadowConfig` so they live in exactly one place.
+"""
+
 import shutil
 from pathlib import Path
+
+import structlog
+
+from app.shadow.config import CleanupPolicy, ShadowConfig
 from app.shadow.interfaces import IShadowWorkspace
+
+logger = structlog.get_logger(__name__)
 
 
 class ShadowWorkspace(IShadowWorkspace):
     """
-    Manages temporary runtime resources, cached artifacts, and future snapshots
-    for the Shadow Runtime, conforming to the IShadowWorkspace interface.
+    Manages temporary runtime resources, cached artifacts, and snapshots for the
+    Shadow Runtime, conforming to the IShadowWorkspace interface.
+
+    Every path is resolved from the shared :class:`ShadowConfig`, so the workspace
+    layout is defined in a single place rather than hardcoded here.
     """
 
-    def __init__(self, base_dir: str | Path = ".shadow_workspace"):
-        # Ensure we work with absolute paths
-        self.base_dir = Path(base_dir).resolve()
+    def __init__(self, config: ShadowConfig | None = None):
+        self.config = config or ShadowConfig()
 
-        # Define subdirectories required for future features
-        self.cache_dir = self.base_dir / "cache"
-        self.snapshots_dir = self.base_dir / "snapshots"
-        self.tmp_dir = self.base_dir / "tmp"
+        # Resolve the workspace root and subdirectories from the shared config.
+        self.base_dir = Path(self.config.workspace_dir).resolve()
+        self.cache_dir = self.base_dir / self.config.cache_dir
+        self.snapshots_dir = self.base_dir / self.config.snapshots_dir
+        self.tmp_dir = self.base_dir / self.config.tmp_dir
 
         # Automatically build the folders when initialized
         self.setup_dirs()
@@ -32,8 +48,36 @@ class ShadowWorkspace(IShadowWorkspace):
 
         return (self.base_dir / relative_path).resolve()
 
-    def cleanup(self) -> None:
-        """Safely removes the workspace directory and all its contents."""
+    def cleanup(self, is_success: bool = False) -> None:
+        """Removes the workspace directory according to the configured cleanup policy.
 
-        if self.base_dir.exists():
-            shutil.rmtree(self.base_dir)
+        - ``NEVER``: always keep artifacts.
+        - ``ON_SUCCESS``: remove only when the shadow run succeeded.
+        - ``ALWAYS``: remove regardless of outcome.
+        """
+
+        policy = self.config.cleanup_policy
+
+        if policy is CleanupPolicy.NEVER:
+            logger.info("workspace_cleanup_skipped", policy=policy.value, path=str(self.base_dir))
+            return
+
+        if policy is CleanupPolicy.ON_SUCCESS and not is_success:
+            logger.info(
+                "workspace_cleanup_skipped",
+                policy=policy.value,
+                is_success=is_success,
+                path=str(self.base_dir),
+            )
+            return
+
+        if not self.base_dir.exists():
+            return
+
+        shutil.rmtree(self.base_dir)
+        logger.info(
+            "workspace_cleaned",
+            policy=policy.value,
+            is_success=is_success,
+            path=str(self.base_dir),
+        )
