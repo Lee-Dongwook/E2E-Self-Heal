@@ -15,7 +15,7 @@ class IShadowWorkspace(ABC):
         pass
 
     @abstractmethod
-    def cleanup(self) -> None:
+    def cleanup(self, is_success: bool = False) -> None:
         pass
 
 

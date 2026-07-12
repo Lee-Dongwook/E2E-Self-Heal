@@ -1,5 +1,6 @@
 import json
 import pytest
+from app.shadow.config import ShadowConfig
 from app.shadow.workspace import ShadowWorkspace
 from app.shadow.schemas import CapturedRequest, CapturedResponse, NetworkSnapshot, ShadowSnapshot
 from app.shadow.snapshot_store import (
@@ -11,7 +12,7 @@ from app.shadow.snapshot_store import (
 
 
 def test_save_and_load_shadow_snapshot(tmp_path):
-    ws = ShadowWorkspace(tmp_path)
+    ws = ShadowWorkspace(ShadowConfig(workspace_dir=str(tmp_path)))
     store = SnapshotStore(ws)
 
     req = CapturedRequest(
@@ -43,7 +44,7 @@ def test_save_and_load_shadow_snapshot(tmp_path):
 
 
 def test_save_dict_and_load(tmp_path):
-    ws = ShadowWorkspace(tmp_path)
+    ws = ShadowWorkspace(ShadowConfig(workspace_dir=str(tmp_path)))
     store = SnapshotStore(ws)
 
     dict_data = {
@@ -72,7 +73,7 @@ def test_save_dict_and_load(tmp_path):
 
 
 def test_save_invalid_dict_raises_error(tmp_path):
-    ws = ShadowWorkspace(tmp_path)
+    ws = ShadowWorkspace(ShadowConfig(workspace_dir=str(tmp_path)))
     store = SnapshotStore(ws)
 
     invalid_dict = {
@@ -86,7 +87,7 @@ def test_save_invalid_dict_raises_error(tmp_path):
 
 
 def test_save_unsupported_type_raises_error(tmp_path):
-    ws = ShadowWorkspace(tmp_path)
+    ws = ShadowWorkspace(ShadowConfig(workspace_dir=str(tmp_path)))
     store = SnapshotStore(ws)
 
     with pytest.raises(SnapshotStoreError) as exc_info:
@@ -95,7 +96,7 @@ def test_save_unsupported_type_raises_error(tmp_path):
 
 
 def test_get_snapshot_not_found(tmp_path):
-    ws = ShadowWorkspace(tmp_path)
+    ws = ShadowWorkspace(ShadowConfig(workspace_dir=str(tmp_path)))
     store = SnapshotStore(ws)
 
     with pytest.raises(SnapshotNotFoundError) as exc_info:
@@ -104,7 +105,7 @@ def test_get_snapshot_not_found(tmp_path):
 
 
 def test_get_snapshot_corrupted_json(tmp_path):
-    ws = ShadowWorkspace(tmp_path)
+    ws = ShadowWorkspace(ShadowConfig(workspace_dir=str(tmp_path)))
     store = SnapshotStore(ws)
 
     # Write invalid JSON content manually
@@ -117,7 +118,7 @@ def test_get_snapshot_corrupted_json(tmp_path):
 
 
 def test_get_snapshot_invalid_schema(tmp_path):
-    ws = ShadowWorkspace(tmp_path)
+    ws = ShadowWorkspace(ShadowConfig(workspace_dir=str(tmp_path)))
     store = SnapshotStore(ws)
 
     # Write a valid JSON file but with incorrect fields that mismatch the Pydantic schema
