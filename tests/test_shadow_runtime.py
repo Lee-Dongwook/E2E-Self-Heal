@@ -67,6 +67,7 @@ def test_context_carries_injected_collaborators(tmp_path):
     injector = MockInjector()
     runtime = ShadowRuntime(workspace=ws, snapshot_store=store, injector=injector)
     runtime.initialize()
+    assert runtime.context is not None
     assert runtime.context.workspace is ws
     assert runtime.context.snapshot_store is store
     assert runtime.context.injector is injector
