@@ -14,6 +14,7 @@ from app.shadow.interfaces import (
 from app.shadow.matcher import NoMatchError, SnapshotMatcher
 from app.shadow.runtime import ShadowRuntime
 from app.shadow.schemas import CapturedRequest, CapturedResponse, NetworkSnapshot, ShadowSnapshot
+from app.shadow.scoring import MatchScorer, ScoringWeights
 from app.shadow.snapshot_store import (
     SnapshotCorruptionError,
     SnapshotNotFoundError,
@@ -32,6 +33,9 @@ __all__ = [
     "ShadowRuntime",
     "SnapshotMatcher",
     "NoMatchError",
+    "RequestNormalizer",
+    "MatchScorer",
+    "ScoringWeights",
     "CapturedRequest",
     "CapturedResponse",
     "NetworkSnapshot",
