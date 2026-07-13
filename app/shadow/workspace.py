@@ -48,6 +48,21 @@ class ShadowWorkspace(IShadowWorkspace):
 
         return (self.base_dir / relative_path).resolve()
 
+    def cache_path(self, name: str | Path) -> Path:
+        """Returns a path inside the workspace cache directory."""
+
+        return self._resolve_under(self.cache_dir, name)
+
+    def snapshot_path(self, name: str | Path) -> Path:
+        """Returns a path inside the workspace snapshots directory."""
+
+        return self._resolve_under(self.snapshots_dir, name)
+
+    def tmp_path(self, name: str | Path) -> Path:
+        """Returns a path inside the workspace temporary directory."""
+
+        return self._resolve_under(self.tmp_dir, name)
+
     def cleanup(self, is_success: bool = False) -> None:
         """Removes the workspace directory according to the configured cleanup policy.
 
@@ -81,3 +96,9 @@ class ShadowWorkspace(IShadowWorkspace):
             is_success=is_success,
             path=str(self.base_dir),
         )
+
+    @staticmethod
+    def _resolve_under(root: Path, name: str | Path) -> Path:
+        path = (root / name).resolve()
+        path.relative_to(root)
+        return path
