@@ -20,17 +20,6 @@ from app.utils.files import atomic_write
 logger = structlog.get_logger(__name__)
 
 
-def _revert(code: str, instructions: list) -> str:
-    """Undo an applied patch by restoring each instruction's original line."""
-    lines = code.splitlines(keepends=True)
-    for instruction in instructions:
-        index = instruction.get("line", 1) - 1
-        if 0 <= index < len(lines):
-            newline = "\n" if lines[index].endswith("\n") else ""
-            lines[index] = instruction.get("original", "") + newline
-    return "".join(lines)
-
-
 def _shadow_feedback(result: ShadowRunResult) -> str:
     """Build a diagnosis addendum naming the shadow replay failure details."""
     detail = (
@@ -65,9 +54,12 @@ def shadow_verifier(state: AgentState) -> dict:
         logger.info("shadow_verify_skipped_no_snapshot", snapshot_id=snapshot_id)
         return {"shadow_report": {"ok": True, "skipped": True}}
 
-    # Write the current candidate code to disk so run_shadow can execute it
+    # Memoize original and candidate code
     original_code = test_path.read_text(encoding="utf-8")
-    atomic_write(test_path, state["current_code"])
+    candidate_code = state["current_code"]
+
+    # Write the current candidate code to disk so run_shadow can execute it
+    atomic_write(test_path, candidate_code)
 
     try:
         result = run_shadow(test_path=test_path, snapshot_id=snapshot_id, config=cfg)
@@ -75,21 +67,23 @@ def shadow_verifier(state: AgentState) -> dict:
         if not isinstance(result, ShadowRunResult):
             # Fallback if run_shadow returned placeholder string
             logger.info("shadow_verify_skipped_placeholder")
+            atomic_write(test_path, original_code)
             return {"shadow_report": {"ok": True, "skipped": True}}
 
         if result.is_success:
             logger.info("shadow_verify_passed", score=result.score)
-            return {"shadow_report": {"ok": True, "score": result.score}}
+            return {
+                "current_code": candidate_code,
+                "shadow_report": {"ok": True, "score": result.score},
+            }
 
-        # Replay failed: revert files and increment loop count
+        # Replay failed: rollback both disk and state to original_code
         logger.info("shadow_verify_failed", score=result.score)
-        instructions = state["patch_instructions"].get("instructions", [])
-        reverted_code = _revert(state["current_code"], instructions)
-        atomic_write(test_path, reverted_code)
+        atomic_write(test_path, original_code)
 
         next_count = state["loop_count"] + 1
         return {
-            "current_code": reverted_code,
+            "current_code": original_code,
             "analysis_report": state["analysis_report"] + _shadow_feedback(result),
             "loop_count": next_count,
             "shadow_report": {"ok": False, "score": result.score},

@@ -1,3 +1,5 @@
+
+
 from langgraph.graph import END
 from app.graph import route_after_shadow
 from app.nodes.shadow_verifier import shadow_verifier
@@ -18,7 +20,6 @@ def test_shadow_verifier_skips_when_no_snapshot(tmp_path, monkeypatch):
     test_file = tmp_path / "login.spec.ts"
     test_file.write_text("console.log('original');", encoding="utf-8")
 
-    # Point workspace to our tmp_path to control snapshots_dir
     ws_dir = tmp_path / "shadow"
     monkeypatch.setattr(
         "app.nodes.shadow_verifier.ShadowConfig",
@@ -100,7 +101,10 @@ def test_shadow_verifier_passes_on_successful_replay(tmp_path, monkeypatch):
 
     result = shadow_verifier(state)
 
-    assert result == {"shadow_report": {"ok": True, "score": 100.0}}
+    assert result == {
+        "current_code": "console.log('patched');",
+        "shadow_report": {"ok": True, "score": 100.0},
+    }
     # The patched code is kept on disk for further stages
     assert test_file.read_text(encoding="utf-8") == "console.log('patched');"
 
@@ -145,16 +149,7 @@ def test_shadow_verifier_fails_and_reverts_on_failed_replay(tmp_path, monkeypatc
         "dom_diff_context": [],
         "dom_snapshot": "",
         "analysis_report": "Original analysis report",
-        "patch_instructions": {
-            "instructions": [
-                {
-                    "line": 1,
-                    "original": "console.log('original');",
-                    "replacement": "console.log('patched');",
-                    "explanation": "change line 1",
-                }
-            ]
-        },
+        "patch_instructions": {},
         "verification_report": {},
         "loop_count": 1,
         "is_success": False,
@@ -165,13 +160,61 @@ def test_shadow_verifier_fails_and_reverts_on_failed_replay(tmp_path, monkeypatc
     assert result["shadow_report"] == {"ok": False, "score": 0.0}
     assert result["loop_count"] == 2
     assert "[SHADOW VERIFICATION FEEDBACK]" in result["analysis_report"]
-    # Reverted in current_code state
+    # Reverted in current_code state to original_code
     assert result["current_code"] == "console.log('original');\nconsole.log('second-line');"
     # Reverted on disk
     assert (
         test_file.read_text(encoding="utf-8")
         == "console.log('original');\nconsole.log('second-line');"
     )
+
+
+def test_shadow_verifier_reverts_on_placeholder_result(tmp_path, monkeypatch):
+    test_file = tmp_path / "login.spec.ts"
+    test_file.write_text("console.log('original');", encoding="utf-8")
+
+    ws_dir = tmp_path / "shadow"
+    config = ShadowConfig(workspace_dir=str(ws_dir))
+    ws = ShadowWorkspace(config)
+    store = SnapshotStore(ws)
+
+    # Save a fake snapshot so the file check passes
+    snapshot = ShadowSnapshot(
+        snapshot_id="login.spec",
+        network_snapshots=[],
+    )
+    store.save_snapshot("login.spec", snapshot)
+
+    monkeypatch.setattr(
+        "app.nodes.shadow_verifier.ShadowConfig",
+        lambda: config,
+    )
+
+    # Mock run_shadow to return a placeholder string
+    monkeypatch.setattr(
+        "app.nodes.shadow_verifier.run_shadow",
+        lambda *args, **kwargs: "Shadow Testing runtime is under development",
+    )
+
+    state: AgentState = {
+        "test_script_path": str(test_file),
+        "original_code": "console.log('original');",
+        "current_code": "console.log('patched');",
+        "error_log": "",
+        "dom_diff_context": [],
+        "dom_snapshot": "",
+        "analysis_report": "Original analysis report",
+        "patch_instructions": {},
+        "verification_report": {},
+        "loop_count": 0,
+        "is_success": False,
+    }
+
+    result = shadow_verifier(state)
+
+    assert result == {"shadow_report": {"ok": True, "skipped": True}}
+    # Check that disk is reverted to original_code
+    assert test_file.read_text(encoding="utf-8") == "console.log('original');"
 
 
 def test_route_after_shadow():
