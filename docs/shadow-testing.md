@@ -161,7 +161,7 @@ returns_, not _how the test is executed_.
 
 | Pipeline stage      | Interface (`interfaces.py`) | Concrete component                                  | Status            |
 | ------------------- | --------------------------- | --------------------------------------------------- | ----------------- |
-| Trace Parser        | `ITraceParser`              | _(future)_                                          | interface only    |
+| Trace Parser        | `ITraceParser`              | ✅ Implemented (v0.4)                                        | `app/shadow/trace_parser.py`     |
 | Snapshot Store      | `ISnapshotStore`            | `SnapshotStore` (`snapshot_store.py`)               | implemented (#48) |
 | Mock Injector       | `IMockInjector`             | `MockInjector` + `SnapshotMatcher`                  | implemented (#43) |
 | Shadow Runtime      | `IShadowWorkspace`          | `ShadowWorkspace` (`workspace.py`); orchestration TBD | partial         |
