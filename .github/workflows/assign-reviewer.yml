@@ -10,19 +10,28 @@ permissions:
 jobs:
   assign:
     runs-on: ubuntu-latest
-    # Skip drafts and PRs opened by the maintainer (you can't review your own PR).
-    if: >-
-      github.event.pull_request.draft == false &&
-      github.event.pull_request.user.login != 'Lee-Dongwook'
+    # Skip drafts. Author exclusion is handled in the script so a maintainer's
+    # own PR still triggers the job and gets the *other* maintainer as reviewer.
+    if: github.event.pull_request.draft == false
     steps:
-      - name: Request review from maintainer
+      - name: Request review from maintainers
         uses: actions/github-script@v7
         with:
           script: |
+            const MAINTAINERS = ['Lee-Dongwook', 'Avaneesh635'];
+            const author = context.payload.pull_request.user.login;
+
+            // Never ask someone to review their own PR.
+            const reviewers = MAINTAINERS.filter((login) => login !== author);
+            if (reviewers.length === 0) {
+              core.info(`No reviewers to request (author "${author}" is the only maintainer).`);
+              return;
+            }
+
             await github.rest.pulls.requestReviewers({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.payload.pull_request.number,
-              reviewers: ['Lee-Dongwook'],
+              reviewers,
             });
-            core.info('Requested review from Lee-Dongwook');
+            core.info(`Requested review from ${reviewers.join(', ')}`);
