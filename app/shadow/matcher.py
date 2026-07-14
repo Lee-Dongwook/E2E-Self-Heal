@@ -92,4 +92,3 @@ class SnapshotMatcher:
         best_candidate = candidates[0]
 
         return best_candidate[2].response, best_candidate[0]
-

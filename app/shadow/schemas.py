@@ -60,4 +60,3 @@ class ShadowRunResult(BaseModel):
     missed_count: int = 0
     missed_requests: list[CapturedRequest] = Field(default_factory=list)
     score: float = 0.0
-

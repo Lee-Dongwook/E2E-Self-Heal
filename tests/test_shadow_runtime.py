@@ -116,8 +116,12 @@ def test_run_shadow_with_mock_playwright_and_snapshots(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
 
     # Turn off sandbox so the tmp config write is allowed during the test
-    monkeypatch.setattr("app.shadow.runtime.assert_write_allowed", lambda path, reason="write": None)
-    monkeypatch.setattr("app.shadow.runtime.assert_command_allowed", lambda cmd, reason="subprocess": None)
+    monkeypatch.setattr(
+        "app.shadow.runtime.assert_write_allowed", lambda path, reason="write": None
+    )
+    monkeypatch.setattr(
+        "app.shadow.runtime.assert_command_allowed", lambda cmd, reason="subprocess": None
+    )
 
     # Mock _get_free_port and _fetch_ws_endpoint
     monkeypatch.setattr("app.shadow.runtime._get_free_port", lambda: 19999)
