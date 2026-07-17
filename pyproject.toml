@@ -28,6 +28,8 @@ dependencies = [
     "tree-sitter>=0.26.0",
     "tree-sitter-typescript>=0.23.2",
     "playwright>=1.40",
+    "langchain-openai>=1.0",
+    "langchain-anthropic>=1.0",
 ]
 
 [project.urls]
