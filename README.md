@@ -75,7 +75,7 @@ The flagship workflow: run your suite and auto-heal on failure, opening a patch 
 ```yaml
 - name: E2E self-heal
   id: heal
-  uses: Lee-Dongwook/E2E-Self-Heal@v0.2.0
+  uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0
   with:
       test-path: tests/example.spec.ts
       nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
@@ -102,7 +102,7 @@ comments — a ready-to-copy workflow lives in
 ```yaml
 - name: E2E review
   id: review
-  uses: Lee-Dongwook/E2E-Self-Heal@v0.2.0
+  uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0
   with:
       mode: review
       test-path: tests/example.spec.ts
@@ -179,12 +179,13 @@ uv tool install git+https://github.com/Lee-Dongwook/E2E-Self-Heal.git
 Then in any Playwright project:
 
 ```bash
-cp .env.example .env    # set E2E_HEALER_NVIDIA_API_KEY
+cp .env.example .env    # set E2E_HEALER_LLM_API_KEY (or your provider's key)
 e2e-healer tests/login.spec.ts
 ```
 
-Get a free NVIDIA NIM API key at [build.nvidia.com](https://build.nvidia.com/) (default
-model `openai/gpt-oss-120b`).
+Works with **NVIDIA NIM (default), OpenAI, Anthropic (Claude), or a local Ollama model** —
+see [Configuration](#configuration) to pick one. For the default, get a free NVIDIA NIM API
+key at [build.nvidia.com](https://build.nvidia.com/) (default model `openai/gpt-oss-120b`).
 
 <details>
 <summary>Development install from a local clone</summary>
@@ -373,7 +374,6 @@ bigger picture. New to the project? Comment on an issue to claim it — we're ha
 ## Limitations
 
 - Fixes selectors and waits only — never assertions or control flow.
-- The JSX/TSX diff analyzer is a regex heuristic in v0.1 (tree-sitter upgrade planned).
 - The Selector Verifier checks the **entry-page state** at `APP_URL` in v1. Elements that
   only appear after clicks/navigation aren't verified here; the Test Runner remains the final
   arbiter (failure-time snapshot capture is planned).

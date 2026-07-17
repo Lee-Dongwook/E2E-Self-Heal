@@ -112,11 +112,12 @@ fixed after 0 loop(s)
 
 ```bash
 uv sync                 # or, once published: pipx install ai-driven-e2e
-cp .env.example .env    # then set E2E_HEALER_NVIDIA_API_KEY
+cp .env.example .env    # 设置 E2E_HEALER_LLM_API_KEY（或所用提供商的密钥）
 ```
 
-前往 [build.nvidia.com](https://build.nvidia.com/) 即可免费获取 NVIDIA NIM API 密钥
-（默认使用 `openai/gpt-oss-120b` 模型）。
+支持 **NVIDIA NIM（默认）、OpenAI、Anthropic（Claude）以及本地 Ollama 模型** —
+请在[配置](#配置)中选择一个后端。若使用默认后端，可前往
+[build.nvidia.com](https://build.nvidia.com/) 免费获取 NVIDIA NIM API 密钥（默认使用 `openai/gpt-oss-120b` 模型）。
 
 ### 在自己的项目中运行（全局 CLI）
 
@@ -167,7 +168,7 @@ CI 可据此决定后续流程。
 ```yaml
 - name: E2E self-heal
   id: heal
-  uses: Lee-Dongwook/E2E-Self-Heal@v0.2.0
+  uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0
   with:
     test-path: tests/example.spec.ts
     nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
@@ -240,8 +241,6 @@ make test       # pytest
 ## 限制
 
 - 只修复选择器和等待条件，绝不改动断言或控制流。
-- v0.1 版的 JSX/TSX diff 分析器采用基于正则表达式的启发式实现（后续计划改用
-  tree-sitter）。
 - v1 版的选择器验证器只检查打开 `APP_URL` 后的**初始页面状态**。对于必须经过点击或跳转
   才会出现的元素，此阶段无法进行验证；最终仍由测试运行器判定测试是否通过（后续计划支持
   捕获失败时的页面快照）。

@@ -111,11 +111,12 @@ Python 3.13+ 과 저장소 내 Playwright(Node) 프로젝트가 필요합니다.
 
 ```bash
 uv sync                 # 또는 (배포 후): pipx install ai-driven-e2e
-cp .env.example .env    # 이후 E2E_HEALER_NVIDIA_API_KEY 설정
+cp .env.example .env    # E2E_HEALER_LLM_API_KEY 설정 (또는 사용하는 프로바이더의 키)
 ```
 
-무료 NVIDIA NIM API 키는 [build.nvidia.com](https://build.nvidia.com/)에서 발급받을 수
-있습니다(기본 모델 `openai/gpt-oss-120b`).
+**NVIDIA NIM(기본값), OpenAI, Anthropic(Claude), 로컬 Ollama 모델**을 지원합니다 —
+[설정](#설정)에서 원하는 백엔드를 선택하세요. 기본값을 쓰려면 무료 NVIDIA NIM API 키를
+[build.nvidia.com](https://build.nvidia.com/)에서 발급받을 수 있습니다(기본 모델 `openai/gpt-oss-120b`).
 
 ### 내 실무 프로젝트에서 돌리기 (전역 CLI)
 
@@ -166,7 +167,7 @@ uv run e2e-healer tests/example.spec.ts --app-url http://localhost:4173
 ```yaml
 - name: E2E self-heal
   id: heal
-  uses: Lee-Dongwook/E2E-Self-Heal@v0.2.0
+  uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0
   with:
     test-path: tests/example.spec.ts
     nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
@@ -224,7 +225,6 @@ make test       # pytest
 ## 한계
 
 - 셀렉터와 대기 조건만 수정 — 단언이나 제어 흐름은 절대 건드리지 않음.
-- JSX/TSX diff 분석기는 v0.1 기준 정규식 휴리스틱(tree-sitter 업그레이드 예정).
 - Selector Verifier는 v1에서 `APP_URL`의 **진입 페이지 상태**를 기준으로 검증합니다. 클릭·이동
   이후의 깊은 상태에서만 나타나는 요소는 이 단계에서 검증되지 않고, 최종 판정은 Test Runner가
   맡습니다(추후 실패 시점 스냅샷 캡처로 고도화 예정).
