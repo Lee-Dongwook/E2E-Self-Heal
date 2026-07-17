@@ -16,7 +16,6 @@ from functools import lru_cache
 from typing import Any, Protocol, TypeVar
 
 import structlog
-from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_openai import ChatOpenAI
@@ -25,6 +24,14 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import LLMProvider, settings
 from app.schemas import PatchOutput, ReviewOutput
+
+# Anthropic is an optional dependency: non-Anthropic users don't install langchain-anthropic
+# (nor the anthropic SDK), so importing this module must not require it. The guarded import
+# stays at module top per the imports-at-top rule; provider=anthropic checks it at build time.
+try:
+    from langchain_anthropic import ChatAnthropic
+except ImportError:  # pragma: no cover - exercised only without the extra installed
+    ChatAnthropic = None
 
 logger = structlog.get_logger(__name__)
 
@@ -123,6 +130,20 @@ def _openai_api_key() -> str:
     return key
 
 
+def _anthropic_api_key() -> str:
+    """Anthropic key: prefer the generic setting, else the standard ``ANTHROPIC_API_KEY`` env var.
+
+    Lets a user with an existing ``ANTHROPIC_API_KEY`` drop in without duplicating it under
+    the ``E2E_HEALER_`` prefix.
+    """
+    key = settings.llm_api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        raise RuntimeError(
+            "E2E_HEALER_LLM_API_KEY or ANTHROPIC_API_KEY is not set for provider=anthropic"
+        )
+    return key
+
+
 def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
     """Construct the LangChain chat model for ``provider`` from settings (the factory core).
 
@@ -130,9 +151,17 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
     ``max_tokens`` as pydantic aliases the type checker can't see on the constructor.
     """
     if provider == "anthropic":
+        if ChatAnthropic is None:
+            raise RuntimeError(
+                "provider=anthropic requires the optional 'anthropic' extra: "
+                'install it with pip install "ai-driven-e2e[anthropic]"'
+            )
+        # Anthropic has no OpenAI-style response_format; with_structured_output maps
+        # PatchOutput/ReviewOutput onto Claude tool-use (the default method), so the schema
+        # is still enforced. That's why anthropic is absent from _STRICT_SCHEMA_PROVIDERS.
         params: dict[str, Any] = {
             "model": settings.llm_model,
-            "api_key": _require_key(),
+            "api_key": _anthropic_api_key(),
             "max_tokens": settings.llm_max_tokens,
         }
         return ChatAnthropic(**params)

@@ -249,6 +249,25 @@ OPENAI_API_KEY=sk-...            # or E2E_HEALER_LLM_API_KEY=sk-...
 E2E_HEALER_LLM_MODEL=gpt-4o-mini
 ```
 
+### Using Anthropic (Claude)
+
+Anthropic is an **optional** dependency — install the extra so non-Anthropic users don't
+pull it in:
+
+```bash
+pip install "ai-driven-e2e[anthropic]"   # or: uv sync --extra anthropic
+```
+
+Then set the provider and a key — either `E2E_HEALER_LLM_API_KEY` or an existing standard
+`ANTHROPIC_API_KEY` (fallback). Claude has no OpenAI-style `response_format`, so
+`PatchOutput`/`ReviewOutput` are enforced via tool-use.
+
+```bash
+E2E_HEALER_LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...     # or E2E_HEALER_LLM_API_KEY=sk-ant-...
+E2E_HEALER_LLM_MODEL=claude-sonnet-4-6
+```
+
 | Variable                       | Default                               | Purpose                                        |
 | ------------------------------ | ------------------------------------- | ---------------------------------------------- |
 | `E2E_HEALER_LLM_PROVIDER`      | `nvidia`                              | LLM backend: `nvidia`, `openai`, `anthropic`, `ollama` |

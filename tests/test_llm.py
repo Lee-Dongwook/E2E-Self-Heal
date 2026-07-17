@@ -54,6 +54,42 @@ def test_factory_builds_anthropic_client(monkeypatch):
     assert model.model == "claude-opus-4-8"
 
 
+def test_anthropic_falls_back_to_standard_anthropic_api_key(monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "anthropic")
+    monkeypatch.setattr(settings, "llm_api_key", "")  # generic var unset
+    monkeypatch.setattr(settings, "llm_model", "claude-sonnet-4-6")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-from-env")
+
+    model = llm._build_chat_model("anthropic")
+
+    assert isinstance(model, ChatAnthropic)
+    assert cast(SecretStr, model.anthropic_api_key).get_secret_value() == "sk-ant-from-env"
+
+
+def test_anthropic_missing_key_raises(monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "anthropic")
+    monkeypatch.setattr(settings, "llm_api_key", "")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+        llm._build_chat_model("anthropic")
+
+
+def test_anthropic_missing_extra_raises(monkeypatch):
+    # When langchain-anthropic isn't installed, provider=anthropic must fail with an install hint.
+    monkeypatch.setattr(settings, "llm_provider", "anthropic")
+    monkeypatch.setattr(settings, "llm_api_key", "sk-ant-test")
+    monkeypatch.setattr(llm, "ChatAnthropic", None)
+
+    with pytest.raises(RuntimeError, match=r"anthropic\]"):
+        llm._build_chat_model("anthropic")
+
+
+def test_anthropic_uses_default_tool_use_not_strict_schema():
+    # Claude has no json_schema response_format; it must not be forced into strict mode.
+    assert "anthropic" not in llm._STRICT_SCHEMA_PROVIDERS
+
+
 def test_factory_ollama_needs_no_key(monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "ollama")
     monkeypatch.setattr(settings, "llm_api_key", "")

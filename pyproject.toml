@@ -29,7 +29,6 @@ dependencies = [
     "tree-sitter-typescript>=0.23.2",
     "playwright>=1.40",
     "langchain-openai>=1.0",
-    "langchain-anthropic>=1.0",
 ]
 
 [project.urls]
@@ -41,11 +40,17 @@ Issues = "https://github.com/Lee-Dongwook/E2E-Self-Heal/issues"
 e2e-healer = "app.cli:app"
 
 [project.optional-dependencies]
+# Anthropic (Claude) is opt-in so non-Anthropic users don't pull in langchain-anthropic
+# / the anthropic SDK. Install with: pip install "ai-driven-e2e[anthropic]".
+anthropic = [
+    "langchain-anthropic>=1.0",
+]
 dev = [
     "ruff>=0.5",
     "pyright>=1.1",
     "pytest>=8.2",
     "pytest-cov>=5.0",
+    "langchain-anthropic>=1.0",  # keep installed so the Anthropic provider is tested
 ]
 
 [build-system]

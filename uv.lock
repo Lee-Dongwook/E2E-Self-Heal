@@ -7,7 +7,6 @@ name = "ai-driven-e2e"
 version = "0.3.0"
 source = { editable = "." }
 dependencies = [
-    { name = "langchain-anthropic" },
     { name = "langchain-openai" },
     { name = "langgraph" },
     { name = "openai" },
@@ -23,7 +22,11 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+anthropic = [
+    { name = "langchain-anthropic" },
+]
 dev = [
+    { name = "langchain-anthropic" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -37,7 +40,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "langchain-anthropic", specifier = ">=1.0" },
+    { name = "langchain-anthropic", marker = "extra == 'anthropic'", specifier = ">=1.0" },
+    { name = "langchain-anthropic", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "langchain-openai", specifier = ">=1.0" },
     { name = "langgraph", specifier = ">=0.2" },
     { name = "openai", specifier = ">=1.40" },
@@ -55,7 +59,7 @@ requires-dist = [
     { name = "tree-sitter-typescript", specifier = ">=0.23.2" },
     { name = "typer", specifier = ">=0.12" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["anthropic", "dev"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]
