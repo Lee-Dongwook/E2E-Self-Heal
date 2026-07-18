@@ -76,3 +76,19 @@
   color: var(--eeh-text-muted);
   font-family: var(--eeh-font-mono);
 }
+
+highlightBroken {
+  background-color: var(--eeh-broken);
+  color: var(--eeh-surface);
+  border-radius: var(--eeh-radius-sm);
+  padding: 0 var(--eeh-space-1);
+  font-weight: bold;
+}
+
+.highlightHealed {
+  background-color: var(--eeh-healed);
+  color: var(--eeh-surface);
+  border-radius: var(--eeh-radius-sm);
+  padding: 0 var(--eeh-space-1);
+  font-weight: bold;
+}
