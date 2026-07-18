@@ -304,3 +304,42 @@ def test_cli_suite_healing_success(mock_graph_success, monkeypatch, tmp_path):
     assert "1/1 test(s) healed" in result.stderr
     assert test_file.read_text() == "await page.click('#new')"
     assert run_count == 2
+
+
+def test_cli_init_scaffolds_workflow_successfully(monkeypatch, tmp_path):
+    # Change working directory to a temporary path so we don't overwrite your actual files
+    monkeypatch.chdir(tmp_path)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["init"])
+
+    assert result.exit_code == 0
+    assert "Successfully scaffolded starter workflow" in result.stderr
+
+    target_file = tmp_path / ".github" / "workflows" / "e2e-healer.yml"
+    assert target_file.exists()
+    assert "E2E Self-Healing CI" in target_file.read_text()
+
+
+def test_cli_init_prevents_overwrite_unless_forced(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    # Pre-create the file with dummy text
+    target_dir = tmp_path / ".github" / "workflows"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_file = target_dir / "e2e-healer.yml"
+    target_file.write_text("old content")
+
+    runner = CliRunner()
+
+    # 1. Try running without force flag -> Should fail and not change file
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 1
+    assert "Workflow file already exists" in result.stderr
+    assert target_file.read_text() == "old content"
+
+    # 2. Try running with force flag -> Should succeed and overwrite file
+    result_forced = runner.invoke(app, ["init", "--force"])
+    assert result_forced.exit_code == 0
+    assert "Successfully scaffolded" in result_forced.stderr
+    assert "E2E Self-Healing CI" in target_file.read_text()
