@@ -1,5 +1,9 @@
 # e2e-healer — Product Roadmap
 
+> [!IMPORTANT]
+   > ### 📍 Track Active Progress
+   > Follow live engineering velocity in the **[v1.0 Roadmap Tracking Issue (#141)](https://github.com/Lee-Dongwook/E2E-Self-Heal/issues/141)** — a living checklist of every milestone (`v0.5.5` → `v1.0`) and its open issues.
+
 > Strategic roadmap for growing `e2e-healer` from a repair CLI into a test-management
 > platform, developer-experience tool, and viral open-source ecosystem.
 >

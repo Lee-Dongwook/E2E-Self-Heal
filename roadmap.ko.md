@@ -1,5 +1,9 @@
 # e2e-healer — 제품 로드맵
 
+> [!IMPORTANT]
+   > ### 📍 실시간 진행 상황 추적 (Track Active Progress)
+   > **[v1.0 로드맵 트래킹 이슈 (#141)](https://github.com/Lee-Dongwook/E2E-Self-Heal/issues/141)** 에서 모든 마일스톤(`v0.5.5` → `v1.0`)과 열린 이슈를 담은 체크리스트로 실시간 진행 상황을 확인할 수 있습니다.
+
 > `e2e-healer`를 단순 복구 CLI에서 **테스트 관리 플랫폼 · 개발자 경험(DX) 도구 · 바이럴
 > 오픈소스 생태계**로 성장시키기 위한 전략 로드맵.
 >
