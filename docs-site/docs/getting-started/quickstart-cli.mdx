@@ -3,17 +3,109 @@ title: "Quickstart — Local CLI"
 description: "Run the same engine locally: pipx/uv install, point it at a failing spec, watch it heal."
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Quickstart — Local CLI
 
-Run the same engine locally: pipx/uv install, point it at a failing spec, watch it heal.
+The same engine CI runs, on your machine. Point `e2e-healer` at a failing spec and it
+diagnoses, patches the selector, and re-runs until green. Great for trying it out or fixing a
+break locally before you push.
 
-:::note Draft — scaffolded page
-This page is a stub. Planned contents:
-
-- Install (pipx install ai-driven-e2e / uv tool install)
-- Set E2E_HEALER_NVIDIA_API_KEY via .env
-- Heal one test vs whole suite
-- --dry-run preview
-- Exit codes and --json summary
-- Tabs: CLI command ↔ the JS/TS spec it scans
+:::tip Prefer zero local setup?
+Most FE/QA teams run e2e-healer entirely in CI. If you just want healed PRs, start with the
+**[GitHub Action quickstart](./quickstart-github-action)** — no install required.
 :::
+
+## Install
+
+Requires **Python 3.13+** and a **Playwright (Node)** project in your repo. Install the CLI
+once, globally:
+
+```bash
+pipx install ai-driven-e2e
+# or, before the PyPI release:
+uv tool install git+https://github.com/Lee-Dongwook/E2E-Self-Heal.git
+```
+
+## Configure a key
+
+The engine calls an LLM to reason about the diff. Set a provider key via `.env`:
+
+```bash
+cp .env.example .env
+# set E2E_HEALER_LLM_API_KEY (or your provider's key)
+```
+
+The default provider is [NVIDIA NIM](https://build.nvidia.com/) (free key,
+`openai/gpt-oss-120b`). To use OpenAI, Anthropic, or a local Ollama model instead, see
+[Configuration](../reference/configuration).
+
+## Heal a test
+
+The CLI (Python) reads and rewrites your **JS/TS Playwright spec** — here's the command
+alongside the file it operates on:
+
+<Tabs groupId="cli-vs-spec">
+  <TabItem value="cli" label="Engine (CLI)" default>
+
+```bash
+# Heal one failing test. With no --log, the engine runs the test to capture the failure:
+e2e-healer tests/login.spec.ts
+
+# Preview only — run the loop but write nothing to disk:
+e2e-healer tests/login.spec.ts --dry-run
+```
+
+  </TabItem>
+  <TabItem value="spec" label="Your test (tests/login.spec.ts)">
+
+```ts title="tests/login.spec.ts"
+import { test, expect } from '@playwright/test';
+
+test('user logs in from the header', async ({ page }) => {
+  await page.goto('/');
+  await page.click('#login-btn');        // ⛔ id renamed → healer patches this line
+  await expect(page).toHaveURL(/\/app/); // ✅ assertion — never touched
+});
+```
+
+  </TabItem>
+</Tabs>
+
+The engine only ever rewrites the **selector/wait** line; the `expect(...)` assertion is
+out of scope by design.
+
+## Heal the whole suite
+
+Run every test, then repair each failing file and print an aggregate summary:
+
+```bash
+e2e-healer            # no path = whole suite
+```
+
+## The CI-style invocation
+
+When scripting (or debugging what CI does), feed a pre-captured log and a PR-scoped diff, and
+ask for machine-readable output:
+
+```bash
+e2e-healer tests/login.spec.ts \
+  --log playwright.log \
+  --diff-base origin/main \
+  --json
+```
+
+- **Exit code** — `0` when the test is healed, non-zero otherwise. CI branches on this.
+- **`--json`** — prints a machine-readable `RepairSummary` to **stdout** (human-readable
+  output goes to **stderr**), so a wrapper can build a PR body without parsing prose.
+
+See [Exit codes & JSON output](../reference/exit-codes) for the full contract, and the
+[CLI reference](../reference/cli) for every flag.
+
+## Next steps
+
+- **[Heal vs Review](./heal-vs-review)** — patch the test, or advise the fix at the source.
+- **[Suite vs single file](../guides/suite-vs-single)** — whole-suite runs and the CI diff path.
+- **[Live selector verification](../guides/selector-verification)** — catch hallucinated
+  selectors against a running app with `--app-url`.

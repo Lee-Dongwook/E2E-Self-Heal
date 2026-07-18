@@ -45,18 +45,10 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           editUrl: `${GITHUB_URL}/tree/main/docs-site/`,
         },
-        blog: {
-          showReadingTime: true,
-          feedOptions: {
-            type: ['rss', 'atom'],
-            xslt: true,
-          },
-          editUrl: `${GITHUB_URL}/tree/main/docs-site/`,
-          // Useful options to enforce blogging best practices
-          onInlineTags: 'warn',
-          onInlineAuthors: 'warn',
-          onUntruncatedBlogPosts: 'warn',
-        },
+        // Blog is intentionally disabled for now — the default Docusaurus demo
+        // posts were removed. Re-enable (and add a `blog/` dir) when we start
+        // publishing release notes.
+        blog: false,
         theme: {
           customCss: './src/css/custom.css',
         },

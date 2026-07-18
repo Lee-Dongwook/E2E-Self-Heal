@@ -1,0 +1,78 @@
+/**
+ * HealingDiff — DESIGN.md §3.3.
+ * Tokens only (--eeh-* / --ifm-*). Semantic colors --eeh-broken / --eeh-healed
+ * are locked and must not be swapped.
+ */
+
+.wrapper {
+  margin: var(--eeh-space-5) 0;
+  font-family: var(--eeh-font-sans);
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--eeh-space-4);
+}
+
+/* Side by side from tablet up; stacked on mobile (DESIGN §3.3). */
+@media (min-width: 768px) {
+  .panels {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--eeh-space-2);
+  padding: var(--eeh-space-4);
+  border-radius: var(--eeh-radius-md);
+  border: 1px solid var(--eeh-border);
+  background-color: var(--eeh-surface);
+}
+
+.panelBroken {
+  border-color: color-mix(in srgb, var(--eeh-broken) 40%, var(--eeh-border));
+  background-color: color-mix(in srgb, var(--eeh-broken) 8%, var(--eeh-surface));
+}
+
+.panelHealed {
+  border-color: color-mix(in srgb, var(--eeh-healed) 40%, var(--eeh-border));
+  background-color: color-mix(in srgb, var(--eeh-healed) 8%, var(--eeh-surface));
+}
+
+.panelLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.panelBroken .panelLabel {
+  color: var(--eeh-broken);
+}
+
+.panelHealed .panelLabel {
+  color: var(--eeh-healed);
+}
+
+/* Long selectors wrap instead of overflowing (DESIGN §3.3). */
+.code {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-family: var(--eeh-font-mono);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--eeh-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.reason {
+  margin: var(--eeh-space-3) 0 0;
+  font-size: 0.85rem;
+  color: var(--eeh-text-muted);
+  font-family: var(--eeh-font-mono);
+}

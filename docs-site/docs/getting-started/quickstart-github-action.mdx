@@ -5,15 +5,113 @@ description: "Add self-healing to your PRs in ~5 minutes. No local setup — it 
 
 # Quickstart — GitHub Action
 
-Add self-healing to your PRs in ~5 minutes. No local setup — it runs in the cloud and opens a patch PR.
+Add self-healing to your PRs in **~5 minutes**. This is the recommended way to run
+e2e-healer: it runs **in CI, in the cloud** — **you don't install or run anything locally**.
+When a PR breaks a selector, the Action heals the test and opens a **patch PR** for you to
+review and merge.
 
-:::note Draft — scaffolded page
-This page is a stub. Planned contents:
+## Prerequisites
 
-- Prerequisites: a Playwright suite + NVIDIA NIM key secret
-- Copy-paste workflow YAML (from ci/github-workflow.example.yml)
-- Explain inputs: test-path, diff-base, app-url
-- outcome output: passed/healed/unhealed
-- What the patch PR looks like
-- Scope guardrail reminder
+- A repo with a **Playwright** suite (`npx playwright test` works).
+- An LLM API key stored as a **GitHub Actions secret**. The default provider is
+  [NVIDIA NIM](https://build.nvidia.com/) — a free key works. (Other providers:
+  [Configuration](../reference/configuration).)
+
+## Add the workflow
+
+Create `.github/workflows/e2e-self-heal.yml`. On PRs it runs your suite; if it fails, the
+engine heals the target test and opens a patch PR:
+
+```yaml title=".github/workflows/e2e-self-heal.yml"
+name: e2e-self-heal
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  self-heal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so diff-base can resolve the PR base
+
+      - name: E2E self-heal
+        id: heal
+        uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0
+        with:
+          test-path: tests/example.spec.ts
+          nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
+          diff-base: ${{ github.event.pull_request.base.sha }}
+          app-url: http://localhost:4173 # optional: enables live selector verification
+
+      - name: Open patch PR
+        if: steps.heal.outputs.outcome == 'healed'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "fix(e2e): auto-heal broken selector"
+          title: "Auto-healed E2E test"
+          body-path: ${{ steps.heal.outputs.summary-path }}
+          branch: e2e-self-heal/${{ github.run_id }}
+
+      - name: Fail if unhealed
+        if: steps.heal.outputs.outcome == 'unhealed'
+        run: exit 1
+```
+
+That's the whole setup. A **runnable self-demo** that heals this repo's own `examples/`
+project lives in
+[`ci/github-workflow.example.yml`](https://github.com/Lee-Dongwook/E2E-Self-Heal/blob/main/ci/github-workflow.example.yml).
+
+## Inputs that matter
+
+| Input | Required | What it's for |
+| --- | --- | --- |
+| `test-path` | ✅ | The Playwright spec to heal when the suite fails (e.g. `tests/login.spec.ts`). |
+| `nvidia-api-key` | ✅ | Your LLM API key, from a GitHub secret. Never hardcode it. |
+| `diff-base` | – | Base git ref (usually the PR base SHA). Scopes the `git diff` the engine reasons over. |
+| `app-url` | – | URL of your running app. Enables **live-DOM selector verification** — patched selectors are checked against the real page before a full test run. |
+| `working-directory` | – | Set this if your Playwright project lives in a subdirectory (monorepos). |
+
+Full list: [GitHub Action reference](../reference/github-action).
+
+## What comes out: the `outcome` output
+
+The Action reports what happened via `steps.heal.outputs.outcome`, so you can branch in YAML:
+
+| `outcome` | Meaning | Typical follow-up |
+| --- | --- | --- |
+| `passed` | Suite was green — nothing to do. | — |
+| `healed` | A selector broke and was fixed. | Open a patch PR (as above). |
+| `unhealed` | Broke and couldn't be fixed within the loop cap. | Fail the job so a human looks. |
+
+## What the patch PR looks like
+
+The healer changes **only the broken selector** — the assertion is left exactly as written:
+
+```diff
+  test('guest enters the demo workspace from the landing CTA', async ({ page }) => {
+    await page.goto('/')
+-   await page.click('#enter-demo-btn')
++   await page.click('#demo-cta-btn')
+    await expect(page).toHaveURL(/\/w\//)   // assertion left untouched
+  })
+```
+
+The PR body is generated from the machine-readable `RepairSummary`
+(`steps.heal.outputs.summary-path`), so reviewers see exactly what changed and why.
+
+:::warning Scope guardrail
+Even in CI, the engine only patches **locators and wait conditions** — never `expect(...)`
+or control flow. The patch always lands as a reviewable PR; nothing is merged automatically.
 :::
+
+## Next steps
+
+- Prefer suggestions over auto-patches? Run it as a **[PR review bot](../guides/pr-review-bot)**.
+- Want the full auto-heal-on-PR flow (monorepos, branching on outputs)?
+  See **[Auto-heal on PR](../guides/auto-heal-on-pr)**.
+- Want to run it locally first? **[Quickstart — CLI](./quickstart-cli)**.

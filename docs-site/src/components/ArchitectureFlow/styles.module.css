@@ -1,0 +1,91 @@
+/**
+ * ArchitectureFlow — DESIGN.md §3.2. Centered vertical pipeline.
+ * Tokens only. Boxes: --eeh-surface, border --eeh-border, radius --eeh-radius-md,
+ * mono label; arrows in --eeh-text-muted.
+ */
+
+.flow {
+  list-style: none;
+  margin: var(--eeh-space-6) 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stageItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.stageBox {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  padding: var(--eeh-space-3) var(--eeh-space-4);
+  text-align: center;
+  background-color: var(--eeh-surface);
+  border: 1px solid var(--eeh-border);
+  border-radius: var(--eeh-radius-md);
+  box-shadow: var(--eeh-shadow-card);
+  transition: border-color var(--eeh-transition), background-color var(--eeh-transition);
+  cursor: default;
+}
+
+.stageBox:hover {
+  border-color: var(--ifm-color-primary);
+  background-color: var(--eeh-surface-raised);
+}
+
+.stageLabel {
+  font-family: var(--eeh-font-mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--eeh-text);
+}
+
+/* Tooltip revealed on hover/focus (DESIGN §3.2). Uses the native title as a
+   fallback; this styled variant appears above the box on wider screens. */
+.stageTooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + var(--eeh-space-2));
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 300px;
+  padding: var(--eeh-space-2) var(--eeh-space-3);
+  background-color: var(--eeh-surface-raised);
+  border: 1px solid var(--eeh-border);
+  border-radius: var(--eeh-radius-sm);
+  box-shadow: var(--eeh-shadow-card);
+  font-family: var(--eeh-font-sans);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--eeh-text-muted);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--eeh-transition);
+  z-index: 2;
+}
+
+.stageBox:hover .stageTooltip,
+.stageBox:focus-within .stageTooltip {
+  opacity: 1;
+}
+
+.arrow {
+  display: block;
+  margin: var(--eeh-space-2) 0;
+  color: var(--eeh-text-muted);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* Hide the styled tooltip on narrow screens (the native title still works). */
+@media (max-width: 767px) {
+  .stageTooltip {
+    display: none;
+  }
+}

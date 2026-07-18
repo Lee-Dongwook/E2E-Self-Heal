@@ -3,16 +3,73 @@ title: "heal vs review"
 description: "Two outputs from one diagnosis engine: patch the test (heal) or advise the source fix (review)."
 ---
 
+import HealingDiff from '@site/src/components/HealingDiff';
+
 # heal vs review
 
-Two outputs from one diagnosis engine: patch the test (heal) or advise the source fix (review).
+Auto-healing patches the _test_. That's fast — but on its own it can look like papering over
+the real problem: the source change that broke the selector. So e2e-healer offers a second
+mode. **Same diagnosis engine, two outputs** — choose per project or per PR.
 
-:::note Draft — scaffolded page
-This page is a stub. Planned contents:
+## `heal` — patch the test
 
-- heal: patches selector/wait, re-runs until green
-- review: inline PR comments, never edits the test
-- When to pick which (intentional UI change vs source smell)
-- Per-project / per-PR selection
-- mode: review workflow pointer
+The default. The engine patches the broken **selector/wait** and re-runs the suite until it's
+green (or the loop cap is hit), then writes the fix back:
+
+<HealingDiff
+  before={`await page.click('#submit-btn')`}
+  after={`await page.click('#submit')`}
+  reason="id changed: #submit-btn → #submit — patched, assertion untouched"
+/>
+
+**Best when** the UI change is intentional and the test simply needs to catch up. The output
+is a small, reviewable diff (or a patch PR in CI).
+
+→ [Quickstart — GitHub Action](./quickstart-github-action) · [Quickstart — CLI](./quickstart-cli)
+
+## `review` — advise the fix at the source
+
+Review mode diagnoses **why** the selector broke and posts **source-level suggestions** as
+inline PR comments. It **never edits the test**:
+
+> 💬 This `className` rename broke the `#cta` selector. Add a stable `data-testid`, or switch
+> the test to `getByRole('button', { name: 'Get started' })` so it survives styling changes.
+
+**Best when** the break is a symptom of a brittle selector and you'd rather fix the root
+cause — nudging the team toward resilient, accessibility-first selectors.
+
+→ [PR review bot guide](../guides/pr-review-bot) · [Resilient selectors](../guides/resilient-selectors)
+
+## Which should I pick?
+
+| | `heal` | `review` |
+| --- | --- | --- |
+| **Edits the test?** | Yes — patches selector/wait | No — comments only |
+| **Output** | Patched file / patch PR | Inline PR comments |
+| **CI exit** | `0` healed, non-zero if it gave up | Always `0` — branch on `has_findings` |
+| **Reach for it when** | The UI change is intentional | The selector itself is the smell |
+
+A common setup: **`heal`** on internal/rapidly-changing apps where tests should just keep up,
+and **`review`** on codebases where you're actively hardening selectors. You can even run both
+— heal to stay green, review to drive long-term selector quality.
+
+In CI, select the mode with the `mode:` input:
+
+```yaml
+- uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0
+  with:
+    mode: review # default is "heal"
+    test-path: tests/example.spec.ts
+    nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
+    diff-base: ${{ github.event.pull_request.base.sha }}
+```
+
+:::warning Scope guardrail
+Both modes are read-only toward your assertions and test logic. `heal` touches **only**
+selectors/waits; `review` touches **nothing** — it just advises.
 :::
+
+## Next steps
+
+- **[Auto-heal on PR](../guides/auto-heal-on-pr)** — the full heal workflow with a patch PR.
+- **[PR review bot](../guides/pr-review-bot)** — wire up review mode end to end.

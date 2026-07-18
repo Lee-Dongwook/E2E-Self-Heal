@@ -3,16 +3,66 @@ title: "Introduction"
 description: "What e2e-healer is and why FE/QA teams use it: broken Playwright selectors, healed automatically on the PR."
 ---
 
+import HealingDiff from '@site/src/components/HealingDiff';
+
 # Introduction
 
-What e2e-healer is and why FE/QA teams use it: broken Playwright selectors, healed automatically on the PR.
+**e2e-healer** automatically repairs broken **Playwright** E2E tests. When a UI change
+renames or restructures an element and a test's selector stops matching, the engine
+diagnoses the failure, patches the broken selector, verifies it against the live DOM, and
+re-runs the test until it's green — as a local **CLI** or a **GitHub Action that opens a
+patch PR**.
 
-:::note Draft — scaffolded page
-This page is a stub. Planned contents:
+## The problem
 
-- The problem: UI changes break selectors, red pipelines
-- What it does in one sentence + the demo GIF
-- Scope guardrail callout (only locators/waits — never assertions)
-- heal vs review at a glance
-- Where to go next: GitHub Action quickstart
+You ship a component change. A `className` gets renamed, a button `id` changes, a wrapper
+`<div>` moves. Nothing is _wrong_ — but a Playwright selector somewhere no longer matches,
+and the pipeline goes red:
+
+```text
+locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator('#submit-btn')
+```
+
+The test isn't testing anything broken. It's just pointing at an element that moved. Someone
+now has to read the trace, find the new selector, and push a one-line fix — for every brittle
+locator, on every PR. e2e-healer does that step for you.
+
+## What it does
+
+<HealingDiff
+  before={`await page.click('#submit-btn')  // ⛔ times out — id renamed`}
+  after={`await page.click('#submit')       // ✅ healed, assertion untouched`}
+  reason="id changed: #submit-btn → #submit"
+/>
+
+One renamed selector, patched automatically — and **nothing else in the test is touched**.
+
+![e2e-healer demo — diagnose, verify against the live DOM, re-run, fixed](https://raw.githubusercontent.com/Lee-Dongwook/E2E-Self-Heal/main/docs/demo.gif)
+
+:::warning Scope guardrail
+The engine **only** fixes failing **locators** and **wait conditions**. It **never** edits
+your assertions (`expect(...)`), test flow, or business logic — enforced at both the prompt
+and JSON-schema level. Every patch stays small and human-reviewable, so it's safe to run in
+an enterprise pipeline.
 :::
+
+## Two modes: heal and review
+
+Same diagnosis engine, two outputs — pick per project or per PR:
+
+| Mode | What it does | Best when |
+| --- | --- | --- |
+| **`heal`** _(default)_ | Patches the broken selector/wait and re-runs until green. | The UI change is intentional and the test just needs to catch up. |
+| **`review`** | Posts **source-level suggestions** as inline PR comments (e.g. "add a `data-testid`" or "use `getByRole`"). **Never edits the test.** | You want to fix the _root cause_ and push the team toward resilient selectors. |
+
+See [Heal vs Review](./heal-vs-review) for how to choose.
+
+## Where to go next
+
+- **[Quickstart — GitHub Action](./quickstart-github-action)** — add self-healing to your
+  PRs in ~5 minutes. **No local setup.** _(Recommended starting point for FE/QA teams.)_
+- **[Quickstart — CLI](./quickstart-cli)** — run the engine locally against a single test or
+  your whole suite.
+- **[Heal vs Review](./heal-vs-review)** — patch the test, or advise the fix at the source.
