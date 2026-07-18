@@ -29,6 +29,15 @@ def route_after_shadow(state: AgentState) -> str:
     return "patch_generator"
 
 
+def route_after_patch(state: AgentState) -> str:
+    """Retry a rejected boundary without entering verification or writing files."""
+    if not state.get("boundary_report", {}).get("ok", True):
+        if state["loop_count"] >= settings.max_loops:
+            return END
+        return "patch_generator"
+    return "shadow_verifier"
+
+
 def route_after_verify(state: AgentState) -> str:
     """After verification: run the test if selectors hold, else re-patch (or end at cap).
 
@@ -53,7 +62,11 @@ def build_graph():
 
     graph.add_edge(START, "diagnoser")
     graph.add_edge("diagnoser", "patch_generator")
-    graph.add_edge("patch_generator", "shadow_verifier")
+    graph.add_conditional_edges(
+        "patch_generator",
+        route_after_patch,
+        {"shadow_verifier": "shadow_verifier", "patch_generator": "patch_generator", END: END},
+    )
     graph.add_conditional_edges(
         "shadow_verifier",
         route_after_shadow,

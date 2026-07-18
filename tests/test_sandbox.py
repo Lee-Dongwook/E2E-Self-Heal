@@ -8,6 +8,7 @@ from app.sandbox import (
     assert_command_allowed,
     assert_read_allowed,
     assert_write_allowed,
+    assert_patch_boundary_allowed,
 )
 from app.utils.files import atomic_write
 
@@ -111,3 +112,18 @@ def test_command_guard_rejects_shell_chaining(monkeypatch):
     assert_command_allowed(["npx", "playwright", "test"], reason="playwright")
     with pytest.raises(SandboxViolation):
         assert_command_allowed(["npx", "playwright", "test", "&&", "rm"], reason="playwright")
+
+
+def test_architecture_boundary_allows_configured_layer(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "workspace_root", str(tmp_path))
+    monkeypatch.setattr(settings, "architecture_allow_globs", "tests/**")
+    monkeypatch.setattr(settings, "architecture_deny_globs", "src/**")
+    assert_patch_boundary_allowed(tmp_path / "tests" / "login.spec.ts")
+
+
+def test_architecture_boundary_rejects_forbidden_layer(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "workspace_root", str(tmp_path))
+    monkeypatch.setattr(settings, "architecture_allow_globs", "**/*")
+    monkeypatch.setattr(settings, "architecture_deny_globs", "src/**")
+    with pytest.raises(SandboxViolation, match="architecture boundary"):
+        assert_patch_boundary_allowed(tmp_path / "src" / "app.ts")

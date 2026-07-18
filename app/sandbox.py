@@ -54,9 +54,19 @@ def assert_write_allowed(path: Path, reason: str = "write") -> None:
         return
     if not _matches_any(_write_match_value(resolved), _patterns(settings.write_globs)):
         raise SandboxViolation(f"write denied by sandbox globs: {path}")
-
     if reason == "selector_verifier_helper" and not _is_allowed_temp_helper(resolved):
         raise SandboxViolation(f"unexpected helper write target: {path}")
+
+
+def assert_patch_boundary_allowed(path: Path) -> None:
+    """Reject generated patches outside the configured architecture boundary."""
+    resolved = _resolve(path)
+    _assert_not_denied(resolved)
+    value = _relative_or_name(resolved)
+    if _matches_any(value, _patterns(settings.architecture_deny_globs)):
+        raise SandboxViolation(f"patch denied by architecture boundary: {path}")
+    if not _matches_any(value, _patterns(settings.architecture_allow_globs)):
+        raise SandboxViolation(f"patch not allowed by architecture boundary: {path}")
 
 
 def assert_command_allowed(argv: list[str], reason: str = "subprocess") -> None:

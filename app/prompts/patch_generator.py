@@ -8,7 +8,8 @@ SYSTEM_PROMPT = (
     "'selector' as a Playwright selector-engine string usable by page.locator() (e.g. "
     "'#submit', 'role=button[name=\"Submit\"]', 'text=Submit') matching the new locator, so "
     "it can be verified against the live DOM; leave 'selector' empty for non-locator edits "
-    "such as wait tweaks. If a prior attempt is reported as rejected in the diagnosis, do NOT "
+    "such as wait tweaks. Respect the configured architecture boundary and never propose edits "
+    "outside it. If a prior attempt is reported as rejected in the diagnosis, do NOT "
     "reuse the rejected selector — pick a different, more specific one. Return edits strictly "
     "via the provided schema; if no selector/wait fix is warranted, return an empty list."
 )

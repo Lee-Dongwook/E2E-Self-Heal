@@ -73,6 +73,12 @@ class Settings(BaseSettings):
         "node_modules/**,.venv/**,uv.lock,package-lock.json,pnpm-lock.yaml,yarn.lock",
         description="comma-separated path globs denied by the sandbox",
     )
+    architecture_allow_globs: str = Field(
+        default="**/*", description="path globs allowed for generated patches"
+    )
+    architecture_deny_globs: str = Field(
+        default="", description="path globs forbidden for generated patches"
+    )
     allow_temp_helper: bool = Field(
         default=True,
         description="allow the temporary selector verifier helper file",
