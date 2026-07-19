@@ -8,8 +8,13 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref || github.ref }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -23,14 +28,18 @@ jobs:
       - name: Lint
         run: uv run ruff check .
 
-      - name: Format check
-        run: uv run ruff format --check .
+      - name: Auto-format
+        run: uv run ruff format .
 
       - name: Commit formatting changes
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "style: auto-format code with ruff"
           file_pattern: "*.py"
+
+      - name: Verify formatting changes were committed
+        run: git diff --exit-code -- "*.py"
 
       - name: Typecheck
         run: uv run pyright
