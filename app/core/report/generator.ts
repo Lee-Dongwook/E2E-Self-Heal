@@ -24,18 +24,19 @@ export function redactPaths(text: string): string {
 function prefixLines(text: string, prefix: string): string {
   return text
     .split(/\r?\n/)
-    .map(line => `${prefix} ${line}`)
+    .map(line => `${prefix}${line}`)
     .join('\n');
 }
 
 /**
  * Determines a safe backtick code fence length that won't conflict with content.
+ * Enforces a minimum length of 3 backticks for valid Markdown syntax.
  */
 function getDynamicFence(content: string): string {
   const matches = content.match(/`+/g);
   if (!matches) return '```';
   const maxLength = Math.max(...matches.map(m => m.length));
-  return '`'.repeat(maxLength + 1);
+  return '`'.repeat(Math.max(3, maxLength + 1));
 }
 
 export function generateCaseStudy(summary: RunSummary, anonymize: boolean = false): string {
@@ -66,7 +67,8 @@ ${processText(summary.diagnosis)}
 
 ## The Patch
 ${patchFence}typescript
-${cleanPatch}${patchFence}
+${cleanPatch}
+${patchFence}
 
 ## Result
 The test run **${summary.result.toUpperCase()}**.`;
