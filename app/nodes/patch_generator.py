@@ -5,7 +5,7 @@ from pathlib import Path
 import structlog
 
 from app.llm import generate_patch
-from app.prompts.patch_generator import SYSTEM_PROMPT
+from app.prompts.patch_generator import build_system_prompt, detect_framework
 from app.sandbox import SandboxViolation, assert_patch_boundary_allowed
 from app.schemas import PatchInstruction
 from app.state import AgentState
@@ -48,8 +48,14 @@ def patch_generator(state: AgentState) -> dict:
         f"Failure diagnosis:\n{state['analysis_report']}\n\n"
         f"Current test code:\n{state['current_code']}"
     )
+    framework = state.get("detected_framework") or detect_framework(
+        state["test_script_path"],
+        state["current_code"],
+        state["dom_diff_context"],
+    )
+    system_prompt = build_system_prompt(framework)
     try:
-        output = generate_patch(SYSTEM_PROMPT, user_prompt)
+        output = generate_patch(system_prompt, user_prompt)
     except Exception:
         logger.exception("patch_generation_failed")
         return {"current_code": state["current_code"], "patch_instructions": {}}

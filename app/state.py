@@ -15,6 +15,7 @@ class AgentState(TypedDict):
     dom_diff_context: list[dict]  # DOM changes from AST parsing
     dom_snapshot: str  # ARIA snapshot of the failing page (from error-context.md)
     analysis_report: str  # Diagnoser's failure-cause report
+    detected_framework: NotRequired[str]  # optional framework hint for prompt strategy selection
     patch_instructions: dict  # Patch Generator's fix guide (line, code)
     verification_report: dict  # Selector Verifier's live-DOM match result
     boundary_report: NotRequired[dict]  # Architecture-boundary validation result
