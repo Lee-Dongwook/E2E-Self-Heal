@@ -1,11 +1,11 @@
 # Shadow Testing — Architecture
 
-> **Status: design reference.** This document describes the _planned_ Shadow Testing
-> execution pipeline and the responsibilities of each component. It introduces **no
-> production code** and changes **no runtime behavior** — it is the shared reference
-> that future Shadow Testing issues (#13+) build against. Terminology and stage
-> boundaries may evolve as implementation lands, but the data-flow contract described
-> here should stay stable.
+> **Status: implemented (design reference).** This document describes the Shadow Testing
+> execution pipeline and the responsibilities of each component. The pipeline is **shipped
+> as of `0.4.0`** — parser, store, injector, matcher, and runtime are implemented and wired
+> into the heal graph via the `shadow_verifier` node. The stage responsibilities and the
+> data-flow contract below remain the shared reference; the only open work is the
+> `help wanted` extension points (see [Extension points](#extension-points)).
 
 ## Motivation
 
@@ -75,10 +75,13 @@ discarding everything irrelevant to replay.
 **Produces:** a `ShadowSnapshot` containing a list of `NetworkSnapshot` objects
 (each a `CapturedRequest` + `CapturedResponse` pair).
 
-**Contract / current state:** the interface exists as
-[`ITraceParser`](../app/shadow/interfaces.py) (`parse(trace_path: Path) -> Any`); a
-concrete parser is a future issue. It is the analogue of the Error Log Parser in the heal
-pipeline: it exists to keep noisy, oversized raw input from flowing downstream unabstracted.
+**Contract / current state:** implemented as
+[`PlaywrightTraceParser`](../app/shadow/trace_parser.py) behind the
+[`ITraceParser`](../app/shadow/interfaces.py) interface — it reads a Playwright `trace.zip`
+and extracts its `resource-snapshot` (HAR) entries into `NetworkSnapshot`s. A standalone
+`.har`-file parser (a different input format) is still an open extension point (see
+[Extension points](#extension-points)). It is the analogue of the Error Log Parser in the
+heal pipeline: it keeps noisy, oversized raw input from flowing downstream unabstracted.
 
 ### 3. Snapshot Store
 
@@ -138,10 +141,11 @@ shadow execution.
 **Produces:** a configured, sandboxed context ready for Playwright to run in, and cleans
 it up afterward.
 
-**Current state:** [`ShadowWorkspace`](../app/shadow/workspace.py) provides the workspace
-substrate today — it creates and resolves `base_dir/{cache,snapshots,tmp}` and tears the
-whole tree down on `cleanup()`. The orchestration that composes parser + store + injector
-into a runnable shadow context is a future issue.
+**Current state:** implemented. [`ShadowWorkspace`](../app/shadow/workspace.py) provides the
+workspace substrate — it creates and resolves `base_dir/{cache,snapshots,tmp}` and tears the
+whole tree down on `cleanup()` — and [`ShadowRuntime`](../app/shadow/runtime.py) composes
+workspace + store + injector + a Playwright run into a runnable shadow context, invoked by
+the `shadow_verifier` heal-graph node.
 
 ### 6. Playwright Execution (output)
 
@@ -161,11 +165,12 @@ returns_, not _how the test is executed_.
 
 | Pipeline stage      | Interface (`interfaces.py`) | Concrete component                                  | Status            |
 | ------------------- | --------------------------- | --------------------------------------------------- | ----------------- |
-| Trace Parser        | `ITraceParser`              | ✅ Implemented (v0.4)                                        | `app/shadow/trace_parser.py`     |
-| Snapshot Store      | `ISnapshotStore`            | `SnapshotStore` (`snapshot_store.py`)               | implemented (#48) |
-| Mock Injector       | `IMockInjector`             | `MockInjector` + `SnapshotMatcher`                  | implemented (#43) |
-| Shadow Runtime      | `IShadowWorkspace`          | `ShadowWorkspace` (`workspace.py`); orchestration TBD | partial         |
-| Data exchange types | —                           | `ShadowSnapshot`, `NetworkSnapshot`, `CapturedRequest`, `CapturedResponse` | implemented |
+| Trace Parser        | `ITraceParser`              | `PlaywrightTraceParser` (`trace_parser.py`)         | ✅ implemented (v0.4) |
+| Snapshot Store      | `ISnapshotStore`            | `SnapshotStore` (`snapshot_store.py`)               | ✅ implemented (#48) |
+| Mock Injector       | `IMockInjector`             | `MockInjector` + `SnapshotMatcher`                  | ✅ implemented (#43) |
+| Shadow Runtime      | `IShadowRuntime` / `IShadowWorkspace` | `ShadowRuntime` (`runtime.py`) + `ShadowWorkspace` (`workspace.py`) | ✅ implemented |
+| Heal-graph gate     | —                           | `shadow_verifier` (`app/nodes/shadow_verifier.py`)  | ✅ implemented |
+| Data exchange types | —                           | `ShadowSnapshot`, `NetworkSnapshot`, `CapturedRequest`, `CapturedResponse` | ✅ implemented |
 
 Programming against the `I*` interfaces (rather than the concrete classes) keeps each
 stage swappable — see extension points below.
@@ -212,10 +217,10 @@ Where future Shadow Testing work is expected to plug in:
 
 ## Non-goals (for this document)
 
-- No new modules, functions, or schema changes are introduced here.
-- No wiring into the existing LangGraph heal/review graph is implemented.
-- The exact CLI surface and config flags for launching a shadow run are deferred to the
-  implementing issues.
+- This is a reference document — it introduces no new modules, functions, or schema changes
+  itself; the implementation it describes lives in `app/shadow/` and `app/nodes/`.
+- Failure-time snapshot capture and non-HTTP snapshot scope (localStorage / cookies / clock)
+  remain open extension points, not part of the shipped core.
 
 ## References
 

@@ -2,12 +2,19 @@
 
 > [!IMPORTANT]
    > ### 📍 Track Active Progress
-   > Follow live engineering velocity in the **[v1.0 Roadmap Tracking Issue (#141)](https://github.com/Lee-Dongwook/E2E-Self-Heal/issues/141)** — a living checklist of every milestone (`v0.5.5` → `v1.0`) and its open issues.
+   > Follow live engineering velocity in the **[v1.0 Roadmap Tracking Issue (#141)](https://github.com/Lee-Dongwook/E2E-Self-Heal/issues/141)** — a living checklist of every milestone (`v0.5` → `v1.0`) and its open issues, or browse the **[milestones board](https://github.com/Lee-Dongwook/E2E-Self-Heal/milestones)** directly.
 
 > Strategic roadmap for growing `e2e-healer` from a repair CLI into a test-management
 > platform, developer-experience tool, and viral open-source ecosystem.
 >
 > **Current release: `0.4.0`** (multi-provider LLM: OpenAI / Anthropic / Ollama / NVIDIA NIM).
+>
+> **Already shipped through `0.4.0`:** the core repair loop (Diagnoser → Patch Generator →
+> Shadow-verify → Selector Verifier → Test Runner), multi-provider LLM, and the **Shadow
+> Testing** subsystem (parser/store/injector/matcher wired into the heal graph via
+> `shadow_verifier`). The table below covers only what's still ahead. Remaining Shadow
+> extension points live under the [`shadow-extensions`](https://github.com/Lee-Dongwook/E2E-Self-Heal/milestones)
+> milestone, not a version bucket.
 >
 > The initiatives below are organized into four strategic axes. Each item carries a
 > **suggested target version** — see [Release Plan](#release-plan) for the reasoning and

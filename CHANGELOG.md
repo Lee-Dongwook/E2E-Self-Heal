@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- `e2e-healer init` command — scaffolds a starter GitHub Actions workflow so a repo can wire
+  the healer into CI in one step (#144).
+- Architecture-boundary enforcement in the Patch Generator — patches are constrained to stay
+  within configured module boundaries and can no longer leak across architectural lines.
+- Real **React + Vite** demo app under `examples/` with an id-rename breakage scenario, for
+  reproducible end-to-end tries.
+- Documentation site (Docusaurus) with GitHub Pages deploy, SEO/GEO metadata, and analytics.
+
 ## [0.4.0] - 2026-07-17
 
 ### Added

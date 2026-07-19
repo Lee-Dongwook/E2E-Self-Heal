@@ -1,6 +1,15 @@
 # E2E-Self-Heal — v0.5 Roadmap (`v0.5-preview`)
 
-> **Status: planning.** This document is the plan for the `v0.5-preview` milestone. v0.5
+> **✅ Shipped — archived.** This document was the plan for the Shadow Testing push, and
+> that work has landed: the runtime, the heal-graph integration (`shadow_verifier`), and
+> the `--shadow` CLI surface are all implemented as of `0.4.0`. It is kept for historical
+> context. **The single source of truth for the forward roadmap is
+> [`../roadmap.en.md`](../roadmap.en.md).** Remaining Shadow work is only the extension
+> points behind the `I*` interfaces, tracked under the `shadow-extensions` milestone.
+>
+> _Original planning note follows, preserved as-is:_
+>
+> This document is the plan for the `v0.5-preview` milestone. v0.5
 > has one theme — **ship Shadow Testing** — and it is the first release we are opening up
 > to outside contributors. The high-risk core is maintainer-owned; everything around it is
 > up for grabs. Terminology may shift as work lands, but the split below is stable.
@@ -26,10 +35,12 @@ specified in [`shadow-testing.md`](shadow-testing.md). Component status today:
 | Match Scorer              | `app/shadow/scoring.py`        | Implemented                                     |
 | Request Normalizer        | `app/shadow/normalizer.py`     | Implemented                                     |
 | Workspace                 | `app/shadow/workspace.py`      | Implemented                                     |
-| **Runtime orchestration** | `app/shadow/runtime.py`        | **Stub** (`run_shadow()` returns a placeholder) |
+| **Runtime orchestration** | `app/shadow/runtime.py`        | **Implemented** — `ShadowRuntime` composes workspace + store + injector + a Playwright run |
 
-The pieces exist; nothing wires them into a runnable shadow run or into the heal graph yet.
-That gap is what v0.5 closes.
+All pieces are now wired into a runnable shadow run **and** into the heal graph: the
+`shadow_verifier` node (`app/nodes/shadow_verifier.py`) gates a candidate patch against
+snapshots before the live Test Runner. That gap — the whole point of this milestone — is
+closed.
 
 ## v0.5 theme — "Ship Shadow Testing"
 
@@ -99,8 +110,8 @@ Out of scope for this milestone, kept here so the theme stays focused:
 
 - **Failure-time snapshot capture** and post-navigation selector verification — the Selector
   Verifier checks the entry-page state only today (see the README "Limitations").
-- **Multi-provider LLM pluggability** (Anthropic / Ollama / other OpenAI-compatible
-  endpoints) — the engine targets NVIDIA NIM today.
+- ~~**Multi-provider LLM pluggability**~~ — **shipped in `0.4.0`** (OpenAI / Anthropic /
+  Ollama / NVIDIA NIM, selected via `E2E_HEALER_LLM_PROVIDER`). No longer deferred.
 
 ## Guardrails (unchanged)
 
