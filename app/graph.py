@@ -4,6 +4,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.config import settings
 from app.nodes.diagnoser import diagnoser
+from app.nodes.memory import memory_lookup
 from app.nodes.patch_generator import patch_generator
 from app.nodes.reviewer import reviewer
 from app.nodes.selector_verifier import selector_verifier
@@ -53,16 +54,36 @@ def route_after_verify(state: AgentState) -> str:
     return "patch_generator"
 
 
+def route_after_memory(state: AgentState) -> str:
+    """After memory lookup: skip straight to Test Runner on a confident hit, else fall back to Diagnoser."""
+    memory_report = state.get("memory_report", {})
+    if memory_report.get("hit", False):
+        return "test_runner"
+    return "diagnoser"
+
+
 def build_graph():
-    """Build and compile the Diagnoser → Patch Generator → Shadow Verifier → Selector Verifier → Test Runner loop."""
+    """Build and compile the repair graph with memory-first patch attempt.
+
+    Memory lookup runs first; on a confident hit the patch is applied and the state
+    goes straight to the Test Runner. On a miss (or failed patch application) the
+    normal Diagnoser → Patch Generator → Shadow Verifier → Selector Verifier →
+    Test Runner loop is entered.
+    """
     graph = StateGraph(AgentState)
+    graph.add_node("memory_lookup", memory_lookup)
     graph.add_node("diagnoser", diagnoser)
     graph.add_node("patch_generator", patch_generator)
     graph.add_node("shadow_verifier", shadow_verifier)
     graph.add_node("selector_verifier", selector_verifier)
     graph.add_node("test_runner", test_runner)
 
-    graph.add_edge(START, "diagnoser")
+    graph.add_edge(START, "memory_lookup")
+    graph.add_conditional_edges(
+        "memory_lookup",
+        route_after_memory,
+        {"test_runner": "test_runner", "diagnoser": "diagnoser"},
+    )
     graph.add_edge("diagnoser", "patch_generator")
     graph.add_conditional_edges(
         "patch_generator",

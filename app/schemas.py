@@ -31,7 +31,7 @@ class PatchInstruction(BaseModel):
         default="",
         description=(
             "the new locator as a Playwright selector-engine string usable by page.locator() "
-            "(e.g. '#submit', 'role=button[name=\"Submit\"]', 'text=Submit'), for live-DOM "
+            '(e.g. \'#submit\', \'role=button[name="Submit"]\', \'text=Submit\'), for live-DOM '
             "verification. Empty if this edit is not a selector change (e.g. a wait tweak)."
         ),
     )
@@ -97,3 +97,12 @@ class ReviewReport(BaseModel):
     test_script_path: str
     findings: list[ReviewFinding] = Field(default_factory=list)
     has_findings: bool = False
+
+
+class MemoryReport(BaseModel):
+    """Machine-readable result of a memory lookup attempt (issue #120)."""
+
+    hit: bool = Field(..., description="True when a confident match was found and applied")
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    matched_record_id: str = Field(default="", description="ID of the matched HealingRecord")
+    error: str = Field(default="", description="Human-readable message on miss or failure")

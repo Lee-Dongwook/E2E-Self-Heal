@@ -1,5 +1,6 @@
 """Type-safe configuration via Pydantic Settings."""
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -89,6 +90,21 @@ class Settings(BaseSettings):
         description="allow the temporary selector verifier helper file",
     )
     log_level: str = Field(default="INFO")
+
+    # Memory / healing-history settings (issue #120)
+    memory_enabled: bool = Field(
+        default=True, description="enable healing-history memory lookup and save"
+    )
+    memory_path: str = Field(
+        default=".healing_history.jsonl",
+        description="path to the JSONL healing-history store",
+    )
+    memory_similarity_threshold: float = Field(
+        default=0.75,
+        ge=0.0,
+        le=1.0,
+        description="minimum similarity score (0.0–1.0) to treat a memory match as confident",
+    )
 
     @model_validator(mode="after")
     def _map_legacy_nvidia_fields(self) -> "Settings":

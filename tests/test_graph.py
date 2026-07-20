@@ -1,7 +1,7 @@
 from langgraph.graph import END
 
 from app.config import settings
-from app.graph import build_graph, route
+from app.graph import build_graph, route, route_after_memory
 from app.state import AgentState
 
 
@@ -37,3 +37,18 @@ def test_route_continues_when_failing_under_cap():
 
 def test_graph_compiles():
     assert build_graph() is not None
+
+
+# --- Memory routing tests (issue #120) ---
+
+
+def test_route_after_memory_goes_to_test_runner_on_hit():
+    assert route_after_memory(_state(memory_report={"hit": True})) == "test_runner"
+
+
+def test_route_after_memory_goes_to_diagnoser_on_miss():
+    assert route_after_memory(_state(memory_report={"hit": False})) == "diagnoser"
+
+
+def test_route_after_memory_goes_to_diagnoser_when_no_report():
+    assert route_after_memory(_state()) == "diagnoser"

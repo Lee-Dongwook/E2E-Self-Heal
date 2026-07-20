@@ -16,6 +16,7 @@ from typer.core import TyperGroup
 from app.config import settings
 from app.graph import build_graph, build_review_graph
 from app.logging import configure_logging
+from app.memory.node import memory_save
 from app.preprocess.aria_snapshot import read_failure_snapshot
 from app.preprocess.diff_ast_analyzer import analyze_diff
 from app.preprocess.error_log_parser import parse_error_log
@@ -127,7 +128,7 @@ def _render_diff(original: str, patched: str, path: str) -> None:
 
 
 def _heal_file(
-    test_path: Path, raw_log: str, dom_diff_context: list[dict], dry_run: bool
+    test_path: Path, raw_log: str, dom_diff_context: list[dict], dry_run: bool, no_memory: bool = False
 ) -> RepairSummary:
     """Run the repair graph on one test file and return its machine-readable summary.
 
@@ -166,11 +167,18 @@ def _heal_file(
         loop_count=final_state["loop_count"],
         instructions=[PatchInstruction(**i) for i in instructions.get("instructions", [])],
     )
+
+    # Save successful repairs to memory for future lookups (issue #120)
+    if summary.is_success and not no_memory:
+        memory_save(final_state)
+
     logger.info("repair_run_finished", is_success=summary.is_success, loop_count=summary.loop_count)
     return summary
 
 
-def _heal_suite(suite_target: str, dom_diff_context: list[dict], dry_run: bool) -> SuiteSummary:
+def _heal_suite(
+    suite_target: str, dom_diff_context: list[dict], dry_run: bool, no_memory: bool = False
+) -> SuiteSummary:
     """Run the whole suite (or a directory), then heal each failing test file.
 
     ``suite_target`` empty means the whole suite. A per-file re-run gives each file a
@@ -196,7 +204,7 @@ def _heal_suite(suite_target: str, dom_diff_context: list[dict], dry_run: bool) 
         if rerun_passed:  # flaky or already fixed by an earlier file's patch
             results.append(RepairSummary(test_script_path=rel, is_success=True, loop_count=0))
             continue
-        results.append(_heal_file(path, focused_log, dom_diff_context, dry_run))
+        results.append(_heal_file(path, focused_log, dom_diff_context, dry_run, no_memory))
 
     healed = sum(1 for r in results if r.is_success)
     return SuiteSummary(
@@ -278,12 +286,17 @@ def heal(
         None, "--app-url", help="URL the Selector Verifier loads to check patched selectors"
     ),
     json_output: bool = typer.Option(False, "--json", help="emit JSON summary to stdout"),
+    no_memory: bool = typer.Option(
+        False, "--no-memory", help="disable healing-history memory lookup and save (issue #120)"
+    ),
 ) -> None:
     """Repair a failing test (or the whole suite). Exit 0 if everything is fixed, else non-zero."""
     configure_logging(settings.log_level)
     try:
         if app_url is not None:
             settings.app_url = app_url  # CLI flag overrides the E2E_HEALER_APP_URL setting
+        if no_memory:
+            settings.memory_enabled = False
         if test_path is not None:
             assert_read_allowed(test_path)
             if not test_path.exists():
@@ -303,7 +316,7 @@ def heal(
                 if passed:
                     console.print("[green]test already passes[/green] — nothing to heal")
                     raise typer.Exit(code=0)
-            summary = _heal_file(test_path, raw_log, dom_diff_context, dry_run)
+            summary = _heal_file(test_path, raw_log, dom_diff_context, dry_run, no_memory)
             if json_output:
                 typer.echo(summary.model_dump_json())
             status = "fixed" if summary.is_success else "not fixed"
@@ -312,7 +325,7 @@ def heal(
 
         # Suite mode: no path or a directory.
         suite = _heal_suite(
-            str(test_path) if test_path is not None else "", dom_diff_context, dry_run
+            str(test_path) if test_path is not None else "", dom_diff_context, dry_run, no_memory
         )
         if suite.total_failed == 0 and suite.is_success:
             console.print("[green]suite passes[/green] — nothing to heal")

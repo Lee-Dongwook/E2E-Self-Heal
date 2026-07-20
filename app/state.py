@@ -29,5 +29,6 @@ class AgentState(TypedDict):
     patch_application_report: NotRequired[PatchApplicationReport]
     shadow_report: NotRequired[dict]  # Shadow Verifier's network replay result
     review_report: NotRequired[dict]  # Reviewer's source-level suggestions (review mode only)
+    memory_report: NotRequired[dict]  # Memory lookup hit/miss report (issue #120)
     loop_count: int  # infinite-loop guard (max: settings.max_loops)
     is_success: bool  # whether the test passed

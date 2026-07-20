@@ -28,7 +28,7 @@ def test_suite_all_healed(monkeypatch, tmp_path):
     monkeypatch.setattr(
         cli,
         "_heal_file",
-        lambda p, log, ctx, dry: RepairSummary(
+        lambda p, log, ctx, dry, no_mem=False: RepairSummary(
             test_script_path=str(p), is_success=True, loop_count=1
         ),
     )
@@ -47,7 +47,7 @@ def test_suite_partial_heal_is_not_success(monkeypatch, tmp_path):
     monkeypatch.setattr(
         cli,
         "_heal_file",
-        lambda p, log, ctx, dry: RepairSummary(
+        lambda p, log, ctx, dry, no_mem=False: RepairSummary(
             test_script_path=str(p), is_success=(p.name == "a.spec.ts"), loop_count=1
         ),
     )
