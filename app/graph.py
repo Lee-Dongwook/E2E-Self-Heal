@@ -30,8 +30,10 @@ def route_after_shadow(state: AgentState) -> str:
 
 
 def route_after_patch(state: AgentState) -> str:
-    """Retry a rejected boundary without entering verification or writing files."""
-    if not state.get("boundary_report", {}).get("ok", True):
+    """Retry a rejected boundary or stale line target before entering verification."""
+    boundary_ok = state.get("boundary_report", {}).get("ok", True)
+    application_ok = state.get("patch_application_report", {}).get("ok", True)
+    if not boundary_ok or not application_ok:
         if state["loop_count"] >= settings.max_loops:
             return END
         return "patch_generator"
