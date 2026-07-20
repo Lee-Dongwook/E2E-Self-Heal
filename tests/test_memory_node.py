@@ -1,13 +1,10 @@
 """Tests for the memory lookup node."""
 
-from pathlib import Path
 
-import pytest
 
 from app.memory.node import _extract_broken_selector, _extract_error_signature, memory_lookup, memory_save
-from app.memory.schemas import HealingRecord, MemoryReport
+from app.memory.schemas import HealingRecord
 from app.memory.store import JsonlHealingHistoryStore
-from app.schemas import PatchInstruction
 from app.state import AgentState
 
 

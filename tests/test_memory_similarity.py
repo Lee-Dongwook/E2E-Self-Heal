@@ -1,6 +1,5 @@
 """Tests for memory similarity scoring."""
 
-import pytest
 
 from app.memory.schemas import HealingRecord
 from app.memory.similarity import (

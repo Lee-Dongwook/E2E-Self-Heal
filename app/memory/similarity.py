@@ -8,7 +8,6 @@ changing the store interface.
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from app.memory.schemas import HealingRecord, MemoryMatchResult
 

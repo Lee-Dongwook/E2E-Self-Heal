@@ -1,6 +1,5 @@
 """Type-safe configuration via Pydantic Settings."""
 
-from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, model_validator

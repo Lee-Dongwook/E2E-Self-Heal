@@ -7,7 +7,6 @@ patch without an LLM call. Falls back to the normal Diagnoser path on a miss.
 from __future__ import annotations
 
 import structlog
-from pathlib import Path
 
 from app.config import settings
 from app.memory.schemas import HealingRecord, MemoryReport
