@@ -18,6 +18,7 @@ class AgentState(TypedDict):
     patch_instructions: dict  # Patch Generator's fix guide (line, code)
     verification_report: dict  # Selector Verifier's live-DOM match result
     boundary_report: NotRequired[dict]  # Architecture-boundary validation result
+    patch_application_report: NotRequired[dict]  # Line-target validation result
     shadow_report: NotRequired[dict]  # Shadow Verifier's network replay result
     review_report: NotRequired[dict]  # Reviewer's source-level suggestions (review mode only)
     loop_count: int  # infinite-loop guard (max: settings.max_loops)
