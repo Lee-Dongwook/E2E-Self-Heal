@@ -7,6 +7,13 @@ each node reads from it and returns a partial update dict.
 from typing import NotRequired, TypedDict
 
 
+class PatchApplicationReport(TypedDict):
+    """Result of validating generated patch instructions against current code."""
+
+    ok: bool
+    error: NotRequired[str]
+
+
 class AgentState(TypedDict):
     test_script_path: str  # path to the test file under repair
     original_code: str  # the original test script
@@ -18,7 +25,7 @@ class AgentState(TypedDict):
     patch_instructions: dict  # Patch Generator's fix guide (line, code)
     verification_report: dict  # Selector Verifier's live-DOM match result
     boundary_report: NotRequired[dict]  # Architecture-boundary validation result
-    patch_application_report: NotRequired[dict]  # Line-target validation result
+    patch_application_report: NotRequired[PatchApplicationReport]
     shadow_report: NotRequired[dict]  # Shadow Verifier's network replay result
     review_report: NotRequired[dict]  # Reviewer's source-level suggestions (review mode only)
     loop_count: int  # infinite-loop guard (max: settings.max_loops)

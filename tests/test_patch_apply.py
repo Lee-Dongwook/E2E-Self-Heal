@@ -7,20 +7,26 @@ from app.schemas import PatchInstruction, PatchOutput
 from app.state import AgentState
 
 
-def _instruction(line: int, original: str, replacement: str) -> PatchInstruction:
+def _instruction(
+    line: int,
+    original: str,
+    replacement: str,
+    selector: str = "#new",
+) -> PatchInstruction:
     return PatchInstruction(
         line=line,
         original=original,
         replacement=replacement,
         reason="test",
+        selector=selector,
     )
 
 
 def _state() -> AgentState:
     return {
         "test_script_path": "test.spec.ts",
-        "original_code": "line1\nline2\n",
-        "current_code": "line1\nline2\n",
+        "original_code": "await page.click('#old')\n",
+        "current_code": "await page.click('#old')\n",
         "error_log": "",
         "dom_diff_context": [],
         "dom_snapshot": "",
@@ -32,60 +38,115 @@ def _state() -> AgentState:
     }
 
 
-def test_replaces_target_line_only():
-    code = "line1\nline2\nline3\n"
-    result = _apply(code, [_instruction(2, "line2", "LINE2")])
-    assert result == "line1\nLINE2\nline3\n"
+def test_replaces_target_line_only() -> None:
+    code = "await page.click('#first')\nawait page.click('#old')\n"
+    result = _apply(
+        code,
+        [_instruction(2, "await page.click('#old')", "await page.click('#new')")],
+    )
+    assert result == "await page.click('#first')\nawait page.click('#new')\n"
 
 
-def test_preserves_trailing_newline_state():
-    code = "a\nb"  # no trailing newline on last line
-    result = _apply(code, [_instruction(2, "b", "B")])
-    assert result == "a\nB"
+def test_preserves_trailing_newline_state() -> None:
+    code = "await page.click('#old')"  # no trailing newline
+    result = _apply(
+        code,
+        [_instruction(1, "await page.click('#old')", "await page.click('#new')")],
+    )
+    assert result == "await page.click('#new')"
 
 
-def test_preserves_crlf_line_endings():
-    code = "a\r\nb\r\n"
-    result = _apply(code, [_instruction(2, "b", "B")])
-    assert result == "a\r\nB\r\n"
+def test_preserves_crlf_line_endings() -> None:
+    code = "await page.click('#old')\r\n"
+    result = _apply(
+        code,
+        [_instruction(1, "await page.click('#old')", "await page.click('#new')")],
+    )
+    assert result == "await page.click('#new')\r\n"
 
 
-def test_rejects_out_of_range_line():
+def test_rejects_out_of_range_line() -> None:
     with pytest.raises(PatchApplicationError, match="outside the current file"):
-        _apply("only\n", [_instruction(99, "missing", "x")])
+        _apply(
+            "await page.click('#old')\n",
+            [_instruction(99, "await page.click('#old')", "await page.click('#new')")],
+        )
 
 
-def test_rejects_mismatched_original_line():
+def test_rejects_mismatched_original_line() -> None:
     with pytest.raises(PatchApplicationError, match="no longer matches"):
-        _apply("actual\n", [_instruction(1, "stale", "replacement")])
+        _apply(
+            "await page.click('#actual')\n",
+            [_instruction(1, "await page.click('#stale')", "await page.click('#new')")],
+        )
 
 
-def test_rejects_duplicate_line_targets():
+def test_rejects_duplicate_line_targets() -> None:
     instructions = [
-        _instruction(1, "line1", "first"),
-        _instruction(1, "line1", "second"),
+        _instruction(1, "await page.click('#old')", "await page.click('#first')"),
+        _instruction(1, "await page.click('#old')", "await page.click('#second')"),
     ]
     with pytest.raises(PatchApplicationError, match="targeted more than once"):
-        _apply("line1\n", instructions)
+        _apply("await page.click('#old')\n", instructions)
 
 
-def test_rejects_entire_patch_set_when_one_instruction_is_stale():
+def test_rejects_entire_patch_set_when_one_instruction_is_stale() -> None:
     instructions = [
-        _instruction(1, "line1", "LINE1"),
-        _instruction(2, "stale", "LINE2"),
+        _instruction(1, "await page.click('#one')", "await page.click('#new-one')"),
+        _instruction(2, "await page.click('#stale')", "await page.click('#new-two')"),
     ]
     with pytest.raises(PatchApplicationError, match="no longer matches"):
-        _apply("line1\nline2\n", instructions)
+        _apply("await page.click('#one')\nawait page.click('#two')\n", instructions)
 
 
-def test_empty_instructions_is_noop():
+def test_empty_instructions_is_noop() -> None:
     code = "x\ny\n"
     assert _apply(code, []) == code
 
 
-def test_patch_generator_returns_rejection_feedback(monkeypatch):
+def test_rejects_multiline_replacement() -> None:
+    instruction = _instruction(
+        1,
+        "await page.click('#old')",
+        "await page.click('#new')\nawait page.goto('/admin')",
+    )
+    with pytest.raises(PatchApplicationError, match="exactly one line"):
+        _apply("await page.click('#old')\n", [instruction])
+
+
+def test_rejects_assertion_edit() -> None:
+    instruction = _instruction(
+        1,
+        "await expect(page.locator('#old')).toBeVisible()",
+        "await expect(page.locator('#new')).toBeHidden()",
+    )
+    with pytest.raises(PatchApplicationError, match="targets an assertion"):
+        _apply("await expect(page.locator('#old')).toBeVisible()\n", [instruction])
+
+
+def test_rejects_unrelated_code_edit() -> None:
+    instruction = _instruction(1, "const retries = 3;", "const retries = 4;", selector="")
+    with pytest.raises(PatchApplicationError, match="not limited to a locator or wait"):
+        _apply("const retries = 3;\n", [instruction])
+
+
+def test_allows_wait_condition_edit() -> None:
+    instruction = _instruction(
+        1,
+        "await page.waitForSelector('#old')",
+        "await page.waitForSelector('#new')",
+        selector="#new",
+    )
+    assert _apply("await page.waitForSelector('#old')\n", [instruction]) == (
+        "await page.waitForSelector('#new')\n"
+    )
+
+
+def test_patch_generator_returns_rejection_feedback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     output = PatchOutput(
-        instructions=[_instruction(2, "stale line", "replacement")],
+        instructions=[_instruction(1, "await page.click('#stale')", "await page.click('#new')")],
     )
     monkeypatch.setattr(patch_node, "generate_patch", lambda system, user: output)
 
@@ -101,3 +162,41 @@ def test_patch_generator_returns_rejection_feedback(monkeypatch):
     state["patch_application_report"] = result["patch_application_report"]
     state["loop_count"] = result["loop_count"]
     assert route_after_patch(state) == "patch_generator"
+
+
+def test_patch_generator_reports_success_and_routes_to_shadow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = PatchOutput(
+        instructions=[_instruction(1, "await page.click('#old')", "await page.click('#new')")],
+    )
+    monkeypatch.setattr(patch_node, "generate_patch", lambda system, user: output)
+
+    state = _state()
+    result = patch_node.patch_generator(state)
+
+    assert result["current_code"] == "await page.click('#new')\n"
+    assert result["patch_application_report"] == {"ok": True}
+
+    state["boundary_report"] = result["boundary_report"]
+    state["patch_application_report"] = result["patch_application_report"]
+    assert route_after_patch(state) == "shadow_verifier"
+
+
+def test_generation_failure_clears_previous_rejection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_generation(system: str, user: str) -> PatchOutput:
+        raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr(patch_node, "generate_patch", fail_generation)
+    state = _state()
+    state["patch_application_report"] = {"ok": False, "error": "stale rejection"}
+
+    result = patch_node.patch_generator(state)
+
+    assert result["current_code"] == state["current_code"]
+    assert result["patch_application_report"] == {"ok": True}
+
+    state["patch_application_report"] = result["patch_application_report"]
+    assert route_after_patch(state) == "shadow_verifier"
