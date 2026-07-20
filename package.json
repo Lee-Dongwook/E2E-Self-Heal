@@ -1,0 +1,11 @@
+{
+  "name": "e2e-self-heal-report",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}
