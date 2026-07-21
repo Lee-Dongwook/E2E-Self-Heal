@@ -1,7 +1,7 @@
 import json
 import re
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 import app.cli as cli_module
@@ -347,7 +347,7 @@ def test_cli_heal_notifies_slack_single_file(monkeypatch, tmp_path) -> None:
         with patch("app.cli.run_playwright") as mock_run:
             mock_run.return_value = (True, "")  # Test passes after heal
 
-            result = runner.invoke(app, ["heal", str(test_file)])
+            runner.invoke(app, ["heal", str(test_file)])
 
             # Should have called notify_heal_outcome once
             assert mock_notify.call_count == 1
@@ -388,7 +388,7 @@ def test_cli_heal_notifies_slack_suite(monkeypatch, tmp_path) -> None:
                         instructions=[],
                     )
 
-                    result = runner.invoke(app, ["heal"])
+                    runner.invoke(app, ["heal"])
 
                     # Should have called notify_heal_outcome for each result
                     assert mock_notify.call_count >= 1

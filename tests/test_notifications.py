@@ -1,7 +1,6 @@
 """Tests for the Slack notifier (Issue #124)."""
 
 import json
-from typing import None
 from unittest.mock import MagicMock, patch
 from urllib.error import URLError
 
@@ -88,9 +87,9 @@ def test_retry_on_transient_error(mock_urlopen: MagicMock) -> None:
 
     with patch("app.notifications.settings") as mock_settings:
         mock_settings.slack_webhook_url = "https://hooks.slack.com/services/FAKE"
-        
+
         # Should not raise an exception to the caller because notify_heal_outcome catches it
         notify_heal_outcome(make_summary())
-        
+
         # tenacity should have retried exactly 3 times
         assert mock_urlopen.call_count == 3

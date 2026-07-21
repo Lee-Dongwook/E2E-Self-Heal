@@ -8,7 +8,7 @@ import structlog
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.config import settings
-from app.schemas import PatchInstruction, RepairSummary
+from app.schemas import RepairSummary
 
 logger = structlog.get_logger(__name__)
 
