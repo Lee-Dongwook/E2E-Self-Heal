@@ -394,13 +394,11 @@ def init(
     test_patterns = ["**/*.spec.ts", "**/*.test.ts", "**/*.spec.js", "**/*.test.js"]
     test_files = []
     for pattern in test_patterns:
-        # Walk the tree while pruning node_modules and .git
         for path in Path(".").rglob(pattern.split("/")[-1]):
-            # Skip paths in node_modules, .git, or other dependency directories
             if "node_modules" not in path.parts and ".git" not in path.parts:
                 if path.match(pattern):
                     test_files.append(path)
-    test_files = list(set(test_files))  # Deduplicate
+    test_files = list(set(test_files))
     test_count = len(test_files)
 
     test_dirs = list(set(f.parent for f in test_files))
@@ -451,13 +449,13 @@ def init(
         "API Key",
         "[green]✓ Configured[/green]"
         if has_api_key
-        else "[red]✗ Missing (set E2E_HEALER_LLM_API_KEY or provider-specific key)[/red]",
+        else "[red] Missing (set E2E_HEALER_LLM_API_KEY or provider-specific key)[/red]",
     )
 
     console.print(table)
     console.print()
 
-    # Compute readiness: both API key and Playwright presence
+    # Compute readiness
     is_playwright_present = has_pw_config or pw_installed or test_count > 0
     is_ready = has_api_key and is_playwright_present
 
@@ -507,10 +505,9 @@ def init(
                 border_style="yellow",
             )
         )
-        # Exit 1 when Playwright is absent (major blocker)
         exit_code = 1 if not is_playwright_present else 0
 
-    # Scaffolding (when explicitly requested via --scaffold flag)
+    # Scaffolding (when explicitly requested)
     if scaffold:
         if WORKFLOW_TARGET_PATH.exists() and not force:
             console.print(
