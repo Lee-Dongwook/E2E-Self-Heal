@@ -45,11 +45,11 @@ WORKFLOW_TARGET_PATH = Path(".github/workflows/e2e-healer.yml")
 
 
 class _DefaultCommandGroup(TyperGroup):
-    """Route a bare invocation to ``heal`` so ``e2e-healer <path>`` keeps working.
+    """Route a bare invocation to `heal` so `e2e-healer <path>` keeps working.
 
-    Adding the ``review`` subcommand would otherwise force every caller (and the shipped
-    action.yml) to spell out ``heal``; instead we inject ``heal`` whenever the first token
-    is not a known command or option. Explicit ``heal``/``review`` still route normally.
+    Adding the review subcommand would otherwise force every caller (and the shipped
+    action.yml) to spell out heal; instead we inject heal whenever the first token
+    is not a known command or option. Explicit heal/review still route normally.
     """
 
     default_command = "heal"
@@ -103,7 +103,7 @@ def main(
 def _read_diff(diff_file: Optional[Path], diff_base: Optional[str]) -> str:
     """Return the git diff from a file, else `git diff [base...HEAD]`.
 
-    ``diff_base`` (e.g. a PR base ref) scopes the diff to `base...HEAD`, which is what
+    diff_base (e.g. a PR base ref) scopes the diff to `base...HEAD`, which is what
     the CI/PR path needs; without it we fall back to the working-tree `git diff`.
     """
     if diff_file is not None:
@@ -152,15 +152,11 @@ def _heal_file(
         "loop_count": 0,
         "is_success": False,
     }
-
     logger.info("repair_run_started", test_script_path=str(test_path))
     final_state = build_graph().invoke(initial_state)
-
     if dry_run or not final_state["is_success"]:
         atomic_write(test_path, original_code)
-
     _render_diff(original_code, final_state["current_code"], str(test_path))
-
     instructions = final_state["patch_instructions"] or {}
     summary = RepairSummary(
         test_script_path=final_state["test_script_path"],
@@ -181,7 +177,6 @@ def _heal_suite(suite_target: str, dom_diff_context: list[dict], dry_run: bool) 
     passed, raw_log = run_playwright(suite_target)
     if passed:
         return SuiteSummary(total_failed=0, healed=0, is_success=True)
-
     results: list[RepairSummary] = []
     for rel in scan_failing_tests(raw_log):
         path = Path(rel)
@@ -199,7 +194,6 @@ def _heal_suite(suite_target: str, dom_diff_context: list[dict], dry_run: bool) 
             results.append(RepairSummary(test_script_path=rel, is_success=True, loop_count=0))
             continue
         results.append(_heal_file(path, focused_log, dom_diff_context, dry_run))
-
     healed = sum(1 for r in results if r.is_success)
     return SuiteSummary(
         total_failed=len(results),
@@ -227,10 +221,8 @@ def _review_file(test_path: Path, raw_log: str, dom_diff_context: list[dict]) ->
         "loop_count": 0,
         "is_success": False,
     }
-
     logger.info("review_run_started", test_script_path=str(test_path))
     final_state = build_review_graph().invoke(initial_state)
-
     findings = [ReviewFinding(**f) for f in final_state["review_report"].get("findings", [])]
     report = ReviewReport(
         test_script_path=str(test_path), findings=findings, has_findings=len(findings) > 0
@@ -370,7 +362,6 @@ def review(
             if passed:
                 console.print("[green]test passes[/green] — nothing to review")
                 raise typer.Exit(code=0)
-
         report = _review_file(test_path, raw_log, dom_diff_context)
         if json_output:
             typer.echo(report.model_dump_json())
@@ -380,9 +371,6 @@ def review(
     except SandboxViolation as exc:
         console.print(f"[red]sandbox denied:[/red] {exc}")
         raise typer.Exit(code=2) from exc
-
-
-# Place this at the bottom of app/cli.py, right before: if __name__ == "__main__":
 
 
 @app.command()
@@ -402,11 +390,16 @@ def init(
     has_pw_config = len(pw_configs) > 0
     pw_config_name = pw_configs[0].name if has_pw_config else "None"
 
-    # 2. Detect test directory and count tests
+    # 2. Detect test directory and count tests (exclude dependency directories)
     test_patterns = ["**/*.spec.ts", "**/*.test.ts", "**/*.spec.js", "**/*.test.js"]
     test_files = []
     for pattern in test_patterns:
-        test_files.extend(Path(".").glob(pattern))
+        # Walk the tree while pruning node_modules and .git
+        for path in Path(".").rglob(pattern.split("/")[-1]):
+            # Skip paths in node_modules, .git, or other dependency directories
+            if "node_modules" not in path.parts and ".git" not in path.parts:
+                if path.match(pattern):
+                    test_files.append(path)
     test_files = list(set(test_files))  # Deduplicate
     test_count = len(test_files)
 
@@ -464,8 +457,12 @@ def init(
     console.print(table)
     console.print()
 
-    # Show warning if Playwright is absent (informational only)
-    if not has_pw_config and not pw_installed and test_count == 0:
+    # Compute readiness: both API key and Playwright presence
+    is_playwright_present = has_pw_config or pw_installed or test_count > 0
+    is_ready = has_api_key and is_playwright_present
+
+    # Show warning if Playwright is absent
+    if not is_playwright_present:
         console.print(
             Panel(
                 "[yellow]Warning:[/yellow] This does not look like a Playwright project.\n"
@@ -487,8 +484,8 @@ def init(
             )
         )
 
-    # Only show "Ready to Go" if API key is configured
-    if has_api_key:
+    # Show "Ready to Go" only if fully ready
+    if is_ready:
         console.print(
             Panel(
                 "[green]✓ Repository is ready for E2E Self-Healing![/green]\n\n"
@@ -500,14 +497,18 @@ def init(
                 border_style="green",
             )
         )
+        exit_code = 0
     else:
         console.print(
             Panel(
-                "Once you've configured your API key, you'll be ready to use E2E Self-Healing!",
+                "Once you've configured your API key and have Playwright tests, "
+                "you'll be ready to use E2E Self-Healing!",
                 title="Next Steps",
                 border_style="yellow",
             )
         )
+        # Exit 1 when Playwright is absent (major blocker)
+        exit_code = 1 if not is_playwright_present else 0
 
     # Scaffolding (when explicitly requested via --scaffold flag)
     if scaffold:
@@ -538,7 +539,7 @@ jobs:
                 console.print(f"[red]Failed to write workflow file: {e}[/red]")
                 raise typer.Exit(code=1)
 
-    raise typer.Exit(code=0)
+    raise typer.Exit(code=exit_code)
 
 
 if __name__ == "__main__":
