@@ -57,7 +57,7 @@ def test_posts_payload_when_configured(mock_urlopen):
         payload = json.loads(req.data.decode("utf-8"))
         assert "Healed" in payload["text"]
         assert "tests/login.spec.ts" in payload["text"]
-        assert "Loops:*\n2" in payload["text"]
+        assert "*Loops:* 2" in payload["text"]
         assert "button id changed" in payload["text"]
 
 
