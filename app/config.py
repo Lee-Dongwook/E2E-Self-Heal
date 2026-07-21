@@ -88,6 +88,10 @@ class Settings(BaseSettings):
         default=True,
         description="allow the temporary selector verifier helper file",
     )
+    slack_webhook_url: str = Field(
+        default="",
+        description="Slack incoming webhook URL for heal notifications (no-op when empty)",
+    )
     log_level: str = Field(default="INFO")
 
     @model_validator(mode="after")
