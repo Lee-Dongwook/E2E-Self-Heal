@@ -97,3 +97,12 @@ class ReviewReport(BaseModel):
     test_script_path: str
     findings: list[ReviewFinding] = Field(default_factory=list)
     has_findings: bool = False
+
+
+class SelectorHint(BaseModel):
+    """A stable selector hint provided by the user or Chrome Extension."""
+
+    type: Literal["role", "testid", "text", "css"]
+    value: str
+    original: str
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)

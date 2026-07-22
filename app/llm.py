@@ -29,12 +29,12 @@ from app.schemas import PatchOutput, ReviewOutput
 # install langchain-anthropic / langchain-ollama. The guarded imports stay at module top per
 # the imports-at-top rule; the matching provider branch checks availability at build time.
 try:
-    from langchain_anthropic import ChatAnthropic
+    from langchain_anthropic import ChatAnthropic  # pyright: ignore[reportMissingImports]
 except ImportError:  # pragma: no cover - exercised only without the extra installed
     ChatAnthropic = None
 
 try:
-    from langchain_ollama import ChatOllama
+    from langchain_ollama import ChatOllama  # pyright: ignore[reportMissingImports]
 except ImportError:  # pragma: no cover - exercised only without the extra installed
     ChatOllama = None
 

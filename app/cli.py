@@ -35,6 +35,7 @@ from app.schemas import (
     RepairSummary,
     ReviewFinding,
     ReviewReport,
+    SelectorHint,
     SuiteSummary,
 )
 from app.shadow.runtime import run_shadow
@@ -243,6 +244,11 @@ def heal(
         None, "--app-url", help="URL the Selector Verifier loads to check patched selectors"
     ),
     json_output: bool = typer.Option(False, "--json", help="emit JSON summary to stdout"),
+    selector_hint: Optional[str] = typer.Option(
+        None,
+        "--selector-hint",
+        help='JSON selector hint for pinpoint healing (e.g. \'{"type":"role","value":"button[name=Submit]","original":"#old-btn"}\')',
+    ),
 ) -> None:
     """Repair a failing test (or the whole suite). Exit 0 if everything is fixed, else non-zero."""
     configure_logging(settings.log_level)
@@ -255,7 +261,36 @@ def heal(
                 console.print(f"[red]path not found:[/red] {test_path}")
                 raise typer.Exit(code=2)
 
+        # Parse and validate selector hint FIRST (Issue #119)
+        parsed_hint = None
+        if selector_hint is not None:
+            try:
+                parsed_hint = SelectorHint.model_validate_json(selector_hint)
+                logger.info(
+                    "selector_hint_parsed",
+                    type=parsed_hint.type,
+                    value=parsed_hint.value,
+                    original=parsed_hint.original,
+                )
+            except Exception as e:
+                console.print(f"[red]Invalid --selector-hint JSON:[/red] {e}")
+                raise typer.Exit(code=2)
+
         dom_diff_context = [d.model_dump() for d in analyze_diff(_read_diff(diff_file, diff_base))]
+
+        # Now inject the already-validated hint into context
+        if parsed_hint is not None:
+            dom_diff_context.append(
+                {
+                    "type": "selector_hint",
+                    "hint_type": parsed_hint.type,
+                    "value": parsed_hint.value,
+                    "original": parsed_hint.original,
+                    "confidence": parsed_hint.confidence,
+                    "priority": "high",
+                }
+            )
+            logger.info("selector_hint_injected", value=parsed_hint.value)
 
         if test_path is not None and test_path.is_file():
             assert_write_allowed(test_path, reason="repair_target")

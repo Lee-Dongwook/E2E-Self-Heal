@@ -7,8 +7,8 @@ Also covers the provider-agnostic factory: the right chat model is built from
 from typing import cast
 
 import pytest
-from langchain_anthropic import ChatAnthropic
-from langchain_ollama import ChatOllama
+from langchain_anthropic import ChatAnthropic  # pyright: ignore[reportMissingImports]
+from langchain_ollama import ChatOllama  # pyright: ignore[reportMissingImports]
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
@@ -52,7 +52,7 @@ def test_factory_builds_anthropic_client(monkeypatch):
     model = llm._build_chat_model("anthropic")
 
     assert isinstance(model, ChatAnthropic)
-    assert model.model == "claude-opus-4-8"
+    assert model.model == "claude-opus-4-8"  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_anthropic_falls_back_to_standard_anthropic_api_key(monkeypatch):
@@ -64,7 +64,7 @@ def test_anthropic_falls_back_to_standard_anthropic_api_key(monkeypatch):
     model = llm._build_chat_model("anthropic")
 
     assert isinstance(model, ChatAnthropic)
-    assert cast(SecretStr, model.anthropic_api_key).get_secret_value() == "sk-ant-from-env"
+    assert cast(SecretStr, model.anthropic_api_key).get_secret_value() == "sk-ant-from-env"  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_anthropic_missing_key_raises(monkeypatch):
@@ -100,8 +100,8 @@ def test_factory_ollama_needs_no_key(monkeypatch):
     model = llm._build_chat_model("ollama")
 
     assert isinstance(model, ChatOllama)
-    assert model.base_url == "http://localhost:11434"
-    assert model.model == "llama3.1"
+    assert model.base_url == "http://localhost:11434"  # pyright: ignore[reportAttributeAccessIssue]
+    assert model.model == "llama3.1"  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_factory_ollama_honors_base_url_override(monkeypatch):
@@ -113,7 +113,7 @@ def test_factory_ollama_honors_base_url_override(monkeypatch):
     model = llm._build_chat_model("ollama")
 
     assert isinstance(model, ChatOllama)
-    assert model.base_url == "http://remote-ollama:11434"
+    assert model.base_url == "http://remote-ollama:11434"  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_ollama_missing_extra_raises(monkeypatch):

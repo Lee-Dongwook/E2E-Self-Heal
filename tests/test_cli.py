@@ -9,7 +9,7 @@ from app.cli import app
 from app.sandbox import SandboxViolation
 from app.schemas import RepairSummary
 
-_ANSI_RE = re.compile(r"\x1b[[0-9;]*m")
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def _strip_ansi(text: str) -> str:
