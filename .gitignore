@@ -34,3 +34,6 @@ repair-summary.json
 # Misc
 *.ipynb
 .DS_Store
+
+.vscode/
+settings.json
