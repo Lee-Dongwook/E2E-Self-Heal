@@ -220,6 +220,42 @@ def test_entries_without_valid_timestamps_sort_last_in_source_order(tmp_path: Pa
     ]
 
 
+def test_rejects_boolean_status_and_duration_values(tmp_path: Path) -> None:
+    boolean_status = _entry("https://example.com/status")
+    boolean_status["response"] = {
+        "status": True,
+        "headers": [],
+        "content": {"text": "invalid"},
+    }
+    boolean_duration = _entry("https://example.com/duration")
+    boolean_duration["time"] = True
+    path = _write_har(tmp_path / "booleans.har", [boolean_status, boolean_duration])
+
+    snapshots = HarTraceParser().parse(path)
+
+    assert len(snapshots) == 1
+    assert snapshots[0].request.url == "https://example.com/duration"
+    assert snapshots[0].duration_ms is None
+
+
+def test_timezone_less_timestamp_uses_stable_fallback_order(tmp_path: Path) -> None:
+    path = _write_har(
+        tmp_path / "naive-timestamp.har",
+        [
+            _entry("https://example.com/naive", started_at="2026-07-24T12:00:00"),
+            _entry("https://example.com/aware", started_at="2026-07-24T13:00:00+00:00"),
+        ],
+    )
+
+    snapshots = HarTraceParser().parse(path)
+
+    assert [snapshot.request.url for snapshot in snapshots] == [
+        "https://example.com/aware",
+        "https://example.com/naive",
+    ]
+    assert snapshots[1].started_at is None
+
+
 @pytest.mark.parametrize(
     "content",
     [

@@ -126,7 +126,7 @@ def response_from_har(
     if not isinstance(response, dict):
         return None
     status = response.get("status")
-    if not isinstance(status, int) or status <= 0:
+    if isinstance(status, bool) or not isinstance(status, int) or status <= 0:
         return None
 
     body, is_base64 = resolve_body(response.get("content"))
@@ -154,7 +154,10 @@ def started_at_from_har(entry: dict) -> float | None:
     if not isinstance(started, str) or not started:
         return None
     try:
-        return datetime.fromisoformat(started.replace("Z", "+00:00")).timestamp()
+        parsed = datetime.fromisoformat(started.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return None
+        return parsed.timestamp()
     except ValueError:
         return None
 
@@ -162,4 +165,6 @@ def started_at_from_har(entry: dict) -> float | None:
 def duration_ms_from_har(entry: dict) -> float | None:
     """Return the HAR total duration in milliseconds when numeric."""
     value = entry.get("time")
+    if isinstance(value, bool):
+        return None
     return float(value) if isinstance(value, (int, float)) else None
