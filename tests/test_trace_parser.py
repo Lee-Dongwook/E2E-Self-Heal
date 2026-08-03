@@ -105,10 +105,18 @@ def test_parses_request_and_response_pair(tmp_path):
     snap = snapshots[0]
     assert snap.request.method == "POST"
     assert snap.request.url == "https://api.example.com/submit"
-    assert snap.request.headers == {"Accept": "application/json"}
+
+    # Updated: test tuple list representation & backward-compat dictionary
+    assert snap.request.headers == [("Accept", "application/json")]
+    assert snap.request.headers_dict == {"Accept": "application/json"}
+
     assert snap.request.body == '{"a":1}'
     assert snap.response.status == 201
-    assert snap.response.headers == {"Content-Type": "application/json"}
+
+    # Updated: test tuple list representation & backward-compat dictionary
+    assert snap.response.headers == [("Content-Type", "application/json")]
+    assert snap.response.headers_dict == {"Content-Type": "application/json"}
+
     assert snap.response.body == '{"ok":true}'
     assert snap.response.is_base64 is False
     assert snap.sequence == 0
