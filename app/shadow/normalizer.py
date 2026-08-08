@@ -85,11 +85,12 @@ class RequestNormalizer:
 
         return normalized_path, normalized_query
 
-    def normalize_headers(self, headers: dict[str, str]) -> dict[str, str]:
+    def normalize_headers(self, headers: list[tuple[str, str]] | dict[str, str]) -> dict[str, str]:
         """Normalize header values and filter out unstable headers."""
         extra_ignored = {h.lower() for h in self.options.ignored_headers}
         normalized = {}
-        for k, v in headers.items():
+        items = headers if isinstance(headers, list) else headers.items()
+        for k, v in items:
             k_lower = k.lower()
             if k_lower in DYNAMIC_HEADER_KEYS or k_lower in extra_ignored:
                 continue

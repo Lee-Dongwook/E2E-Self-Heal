@@ -11,9 +11,9 @@ BodyResolver = Callable[[object], tuple[str | None, bool]]
 _DEFAULT_MULTIPART_BOUNDARY = "----e2e-self-heal-har-boundary"
 
 
-def headers_to_dict(headers: object) -> dict[str, str]:
-    """Convert HAR header lists into the normalized dictionary representation."""
-    result: dict[str, str] = {}
+def headers_to_list(headers: object) -> list[tuple[str, str]]:
+    """Convert HAR header lists into ordered name/value tuple pairs preserving duplicates."""
+    result: list[tuple[str, str]] = []
     if not isinstance(headers, list):
         return result
     for header in headers:
@@ -23,9 +23,13 @@ def headers_to_dict(headers: object) -> dict[str, str]:
         if not isinstance(name, str) or not name:
             continue
         value = header.get("value")
-        result[name] = value if isinstance(value, str) else ""
+        result.append((name, value if isinstance(value, str) else ""))
     return result
 
+
+def headers_to_dict(headers: object) -> dict[str, str]:
+    """Convert HAR header lists into normalized dictionary (backwards-compatibility helper)."""
+    return {k: v for k, v in headers_to_list(headers)}
 
 def request_from_har(request: object) -> CapturedRequest | None:
     """Map a HAR request object onto the normalized request schema."""
@@ -40,7 +44,7 @@ def request_from_har(request: object) -> CapturedRequest | None:
     return CapturedRequest(
         method=method,
         url=url,
-        headers=headers_to_dict(request.get("headers")),
+        headers=headers_to_list(request.get("headers")),
         body=body,
     )
 
@@ -132,7 +136,7 @@ def response_from_har(
     body, is_base64 = resolve_body(response.get("content"))
     return CapturedResponse(
         status=status,
-        headers=headers_to_dict(response.get("headers")),
+        headers=headers_to_list(response.get("headers")),
         body=body,
         is_base64=is_base64,
     )

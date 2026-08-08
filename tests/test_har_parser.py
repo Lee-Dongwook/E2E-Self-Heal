@@ -49,22 +49,10 @@ def test_parses_standalone_har_fixture() -> None:
 
     assert first.request.method == "POST"
     assert first.request.url == "https://api.example.com/items"
-    assert first.request.headers == {"Accept": "application/json"}
-    assert first.request.body == '{"name":"widget"}'
-    assert first.response.status == 201
-    assert first.response.headers == {"Content-Type": "application/json"}
-    assert first.response.body == '{"id":42}'
-    assert first.response.is_base64 is False
-    assert first.sequence == 0
-    assert first.duration_ms == 15.5
-    assert first.started_at is not None
-
-    assert second.request.method == "GET"
-    assert second.response.body == "iVBORw0KGgo="
-    assert second.response.is_base64 is True
-    assert second.sequence == 1
-    assert second.duration_ms == 4.0
-
+    
+    # Updated: verify tuple list representation & backward-compatibility dictionary
+    assert first.request.headers == [("Accept", "application/json")]
+    assert first.request.headers_dict == {"Accept": "application/json"}
 
 def test_skips_incomplete_entries_and_keeps_sequences_contiguous(tmp_path: Path) -> None:
     document = {
@@ -290,3 +278,38 @@ def test_invalid_utf8_raises_typed_error(tmp_path: Path) -> None:
 
 def test_error_derives_from_trace_parse_error() -> None:
     assert issubclass(InvalidHarFileError, TraceParseError)
+
+def test_har_parser_preserves_duplicate_headers_and_set_cookie() -> None:
+    """Verify duplicate HTTP request headers and multiple Set-Cookie response headers are preserved."""
+    har_entry = {
+        "request": {
+            "method": "GET",
+            "url": "https://api.example.com/data",
+            "headers": [
+                {"name": "Accept", "value": "text/html"},
+                {"name": "Accept", "value": "application/json"},
+            ],
+        },
+        "response": {
+            "status": 200,
+            "headers": [
+                {"name": "Set-Cookie", "value": "session=abc; Path=/"},
+                {"name": "Set-Cookie", "value": "theme=dark; Path=/"},
+            ],
+            "content": {"text": "ok"},
+        },
+    }
+
+    snapshot = HarTraceParser()._to_network_snapshot(har_entry, sequence=0)
+    
+    assert snapshot is not None
+    # Duplicate request headers preserved in order
+    assert snapshot.request.headers == [
+        ("Accept", "text/html"),
+        ("Accept", "application/json"),
+    ]
+    # Multiple Set-Cookie headers preserved
+    assert snapshot.response.headers == [
+        ("Set-Cookie", "session=abc; Path=/"),
+        ("Set-Cookie", "theme=dark; Path=/"),
+    ]

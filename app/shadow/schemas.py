@@ -12,20 +12,58 @@ from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_val
 
 class CapturedRequest(BaseModel):
     """Schema representing an intercepted outgoing request."""
-
     method: str
     url: str
-    headers: dict[str, str] = Field(default_factory=dict)
+    headers: list[tuple[str, str]] = Field(default_factory=list)
     body: str | None = None
+
+    @field_validator("headers", mode="before")
+    @classmethod
+    def normalize_headers_list(cls, value: Any) -> list[tuple[str, str]]:
+        if isinstance(value, dict):
+            return [(k, str(v)) for k, v in value.items()]
+        if isinstance(value, list):
+            res = []
+            for item in value:
+                if isinstance(item, tuple) and len(item) == 2:
+                    res.append((str(item[0]), str(item[1])))
+                elif isinstance(item, dict) and "name" in item and "value" in item:
+                    res.append((str(item["name"]), str(item["value"])))
+            return res
+        return []
+
+    @property
+    def headers_dict(self) -> dict[str, str]:
+        """Backwards-compatibility helper returning a dict (last key wins)."""
+        return {k: v for k, v in self.headers}
 
 
 class CapturedResponse(BaseModel):
     """Schema representing the captured HTTP response to replay."""
-
     status: int
-    headers: dict[str, str] = Field(default_factory=dict)
+    headers: list[tuple[str, str]] = Field(default_factory=list)
     body: str | None = None
     is_base64: bool = False
+
+    @field_validator("headers", mode="before")
+    @classmethod
+    def normalize_headers_list(cls, value: Any) -> list[tuple[str, str]]:
+        if isinstance(value, dict):
+            return [(k, str(v)) for k, v in value.items()]
+        if isinstance(value, list):
+            res = []
+            for item in value:
+                if isinstance(item, tuple) and len(item) == 2:
+                    res.append((str(item[0]), str(item[1])))
+                elif isinstance(item, dict) and "name" in item and "value" in item:
+                    res.append((str(item["name"]), str(item["value"])))
+            return res
+        return []
+
+    @property
+    def headers_dict(self) -> dict[str, str]:
+        """Backwards-compatibility helper returning a dict (last key wins)."""
+        return {k: v for k, v in self.headers}
 
 
 class NetworkSnapshot(BaseModel):

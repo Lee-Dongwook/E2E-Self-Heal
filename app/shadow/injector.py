@@ -116,39 +116,50 @@ class MockInjector(IMockInjector):
 
     @staticmethod
     def _capture_request(request: Any) -> CapturedRequest:
-        """Build a :class:`CapturedRequest` from a Playwright request object."""
+        """Build a CapturedRequest from a Playwright request object."""
+        headers_list = [(k, v) for k, v in request.headers.items()] if hasattr(request.headers, "items") else []
         return CapturedRequest(
             method=request.method,
             url=request.url,
-            headers=request.headers,
+            headers=headers_list,
             body=request.post_data,
         )
 
     @staticmethod
     def _fulfill_kwargs(response: CapturedResponse) -> dict[str, Any]:
-        """Build ``route.fulfill`` keyword arguments from a captured response."""
+        """Build route.fulfill keyword arguments from a captured response."""
         body = response.body
         if response.is_base64 and body:
             body_bytes = base64.b64decode(body)
         else:
             body_bytes = body.encode("utf-8") if body is not None else None
-        return {"status": response.status, "headers": response.headers, "body": body_bytes}
+            
+        # Convert header tuples to dict or newline-joined multi-value dict for Playwright fulfill
+        headers_dict: dict[str, str] = {}
+        for k, v in response.headers:
+            if k in headers_dict:
+                headers_dict[k] = f"{headers_dict[k]}\n{v}"
+            else:
+                headers_dict[k] = v
+
+        return {"status": response.status, "headers": headers_dict, "body": body_bytes}
 
     @staticmethod
     def _capture_response(
-        status: int, headers: dict[str, str], body_bytes: bytes | None
+        status: int, headers: dict[str, str] | list[tuple[str, str]], body_bytes: bytes | None
     ) -> CapturedResponse:
-        """Build a :class:`CapturedResponse` from a live response, base64-encoding binary bodies."""
+        """Build a CapturedResponse from a live response."""
+        headers_list = [(k, v) for k, v in headers.items()] if isinstance(headers, dict) else list(headers)
         if body_bytes is None:
-            return CapturedResponse(status=status, headers=headers, body=None, is_base64=False)
+            return CapturedResponse(status=status, headers=headers_list, body=None, is_base64=False)
         try:
             return CapturedResponse(
-                status=status, headers=headers, body=body_bytes.decode("utf-8"), is_base64=False
+                status=status, headers=headers_list, body=body_bytes.decode("utf-8"), is_base64=False
             )
         except UnicodeDecodeError:
             return CapturedResponse(
                 status=status,
-                headers=headers,
+                headers=headers_list,
                 body=base64.b64encode(body_bytes).decode("ascii"),
                 is_base64=True,
             )
