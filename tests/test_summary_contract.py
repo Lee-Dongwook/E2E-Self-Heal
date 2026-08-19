@@ -1,4 +1,4 @@
-"""Contract tests: every emitted summary carries schema_version + a kind discriminator (#189)."""
+"""Contract tests: every emitted summary carries schema_version + a kind discriminator."""
 
 import json
 from collections.abc import Callable
