@@ -1,6 +1,7 @@
 """Patch Generator node: produce a narrow, schema-constrained fix."""
 
 import re
+from enum import Enum, auto
 from pathlib import Path
 from typing import cast
 
@@ -35,6 +36,24 @@ _SELECTOR_CALL = re.compile(
     r"(?:\bpage\.|\.)(locator|getByRole|getByText|getByLabel|getByPlaceholder|"
     r"getByAltText|getByTitle|getByTestId)\s*\("
 )
+
+
+class _MaskState(Enum):
+    """Lexical states for :func:`_mask_js_non_code` (Issue #261)."""
+
+    CODE = auto()
+    LINE_COMMENT = auto()
+    BLOCK_COMMENT = auto()
+    TEMPLATE = auto()
+    TEMPLATE_EXPR = auto()
+    SINGLE = "'"
+    DOUBLE = '"'
+
+
+# Quote characters map onto their masking states; ``TEMPLATE`` is a backtick template.
+_QUOTE_STATE = {"'": _MaskState.SINGLE, '"': _MaskState.DOUBLE, "`": _MaskState.TEMPLATE}
+# String-literal states only — ``TEMPLATE`` gets its own backtick/${…} handling.
+_QUOTE_STATES = frozenset({_MaskState.SINGLE, _MaskState.DOUBLE})
 
 
 def _matching_paren(text: str, opening: int) -> int | None:
@@ -107,52 +126,120 @@ def _mask_js_non_code(text: str) -> str:
     block (``/* … */``) comments, single/double-quoted strings, and backtick templates
     (including delimiters and ``\\`` escapes) are replaced with spaces, so matches keep
     the same offsets while the original ``text`` is still used for paren/argument parsing.
+
+    A small state machine drives the masking. Template ``${…}`` expressions are tracked
+    (not treated as plain template text) so a nested backtick or ``}`` inside
+    interpolation cannot end the template early; the expression is blanked together with
+    the literal segments, keeping the guardrail conservative (Issue #261).
     """
     chars = list(text)
-    i = 0
     n = len(chars)
+    i = 0
+    # Lexical context stack: comments, strings, templates, and template expressions
+    # return to the context they started from (code or an enclosing expression), so e.g.
+    # ``${`b`}`` cannot terminate the surrounding template. ``TEMPLATE_EXPR`` entries
+    # carry the ``${`` brace depth; depth 1 closes the expression.
+    stack: list[tuple[_MaskState, int]] = [(_MaskState.CODE, 0)]
     while i < n:
+        state, depth = stack[-1]
         char = chars[i]
         nxt = chars[i + 1] if i + 1 < n else ""
 
-        if char == "/" and nxt == "/":
-            chars[i] = chars[i + 1] = " "
-            i += 2
-            while i < n and chars[i] != "\n":
+        if state is _MaskState.CODE:
+            if char == "/" and nxt == "/":
+                chars[i] = chars[i + 1] = " "
+                i += 2
+                stack.append((_MaskState.LINE_COMMENT, 0))
+            elif char == "/" and nxt == "*":
+                chars[i] = chars[i + 1] = " "
+                i += 2
+                stack.append((_MaskState.BLOCK_COMMENT, 0))
+            elif char in {"'", '"', "`"}:
                 chars[i] = " "
                 i += 1
-            continue
-
-        if char == "/" and nxt == "*":
-            chars[i] = chars[i + 1] = " "
-            i += 2
-            while i < n:
-                if chars[i] == "*" and i + 1 < n and chars[i + 1] == "/":
-                    chars[i] = chars[i + 1] = " "
-                    i += 2
-                    break
-                chars[i] = " "
+                stack.append((_QUOTE_STATE[char], 0))
+            else:
                 i += 1
-            continue
 
-        if char in {"'", '"', "`"}:
-            quote = char
-            chars[i] = " "
+        elif state is _MaskState.LINE_COMMENT:
+            if char == "\n":
+                stack.pop()  # the newline is code; everything before it stays blanked
+            else:
+                chars[i] = " "
             i += 1
-            while i < n:
-                if chars[i] == "\\" and i + 1 < n:
-                    chars[i] = chars[i + 1] = " "
-                    i += 2
-                    continue
-                if chars[i] == quote:
+
+        elif state is _MaskState.BLOCK_COMMENT:
+            if char == "*" and nxt == "/":
+                chars[i] = chars[i + 1] = " "
+                i += 2
+                stack.pop()
+            else:
+                chars[i] = " "
+                i += 1
+
+        elif state in _QUOTE_STATES:
+            if char == "\\":
+                chars[i] = " "
+                i += 1
+                if i < n:
                     chars[i] = " "
                     i += 1
-                    break
+            elif char == state.value:
                 chars[i] = " "
                 i += 1
-            continue
+                stack.pop()
+            else:
+                chars[i] = " "
+                i += 1
 
-        i += 1
+        elif state is _MaskState.TEMPLATE:
+            if char == "\\":
+                chars[i] = " "
+                i += 1
+                if i < n:
+                    chars[i] = " "
+                    i += 1
+            elif char == "$" and nxt == "{":
+                chars[i] = chars[i + 1] = " "
+                i += 2
+                stack.append((_MaskState.TEMPLATE_EXPR, 1))
+            elif char == "`":
+                chars[i] = " "
+                i += 1
+                stack.pop()
+            else:
+                chars[i] = " "
+                i += 1
+
+        else:  # TEMPLATE_EXPR — ``${…}``: blanked like the template, but tracked so
+            # strings, comments, and nested backticks cannot close the expression early.
+            if char == "{":
+                chars[i] = " "
+                i += 1
+                stack[-1] = (_MaskState.TEMPLATE_EXPR, depth + 1)
+            elif char == "}":
+                chars[i] = " "
+                i += 1
+                if depth == 1:
+                    stack.pop()
+                else:
+                    stack[-1] = (_MaskState.TEMPLATE_EXPR, depth - 1)
+            elif char == "/" and nxt == "/":
+                chars[i] = chars[i + 1] = " "
+                i += 2
+                stack.append((_MaskState.LINE_COMMENT, 0))
+            elif char == "/" and nxt == "*":
+                chars[i] = chars[i + 1] = " "
+                i += 2
+                stack.append((_MaskState.BLOCK_COMMENT, 0))
+            elif char in {"'", '"', "`"}:
+                chars[i] = " "
+                i += 1
+                stack.append((_QUOTE_STATE[char], 0))
+            else:
+                chars[i] = " "
+                i += 1
+
     return "".join(chars)
 
 

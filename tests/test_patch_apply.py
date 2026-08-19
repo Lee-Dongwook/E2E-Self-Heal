@@ -3,7 +3,7 @@ from langgraph.graph import END
 
 import app.nodes.patch_generator as patch_node
 from app.graph import route_after_patch
-from app.nodes.patch_generator import PatchApplicationError, _apply
+from app.nodes.patch_generator import PatchApplicationError, _apply, _mask_js_non_code
 from app.schemas import PatchInstruction, PatchOutput
 from app.state import AgentState
 
@@ -413,6 +413,61 @@ def test_allows_real_locator_line_after_block_comment() -> None:
     code = "/* header */\nawait page.click('#old')\n"
     instruction = _instruction(2, "await page.click('#old')", "await page.click('#new')")
     assert _apply(code, [instruction]) == "/* header */\nawait page.click('#new')\n"
+
+
+# --- _mask_js_non_code state-machine unit tests (Issue #261) -------------------------
+
+
+def test_mask_handles_nested_template_interpolation() -> None:
+    # `` `a${`b`}c` `` — the inner backtick is inside ${} interpolation and must not
+    # terminate the outer template.
+    source = "`a${`b`}c`"
+    assert _mask_js_non_code(source) == " " * len(source)
+
+
+def test_mask_handles_strings_and_braces_in_template_expression() -> None:
+    # A } inside a string inside ${...} must not close the expression.
+    source = '`a${"}"}b`'
+    assert _mask_js_non_code(source) == " " * len(source)
+
+
+def test_mask_keeps_template_expressions_blanked() -> None:
+    # Conservative: interpolation is blanked with the literal segments, so a call inside
+    # ${...} is not visible to the action-call regexes.
+    source = "`x${page.click('#a')}`"
+    assert _mask_js_non_code(source) == " " * len(source)
+
+
+def test_mask_handles_backslash_escapes() -> None:
+    source = r"'a\'b'"
+    assert _mask_js_non_code(source) == " " * len(source)
+
+
+def test_mask_handles_unterminated_constructs() -> None:
+    for source in ("/* unterminated", "'unterminated", "`unterminated"):
+        assert _mask_js_non_code(source) == " " * len(source)
+
+
+def test_mask_line_comment_preserves_newline() -> None:
+    assert _mask_js_non_code("// note\ncode") == " " * len("// note") + "\ncode"
+
+
+def test_mask_block_comment_swallows_newlines() -> None:
+    assert _mask_js_non_code("/* a\nb */") == " " * len("/* a\nb */")
+
+
+def test_rejects_edit_on_line_with_only_nested_template_locator() -> None:
+    # A locator that appears only inside a nested template interpolation must not pass the
+    # scope gate — under the old scanner the inner backtick ended the template early and
+    # the locator leaked as real code.
+    code = "const sel = `outer${`page.getByRole('button')`}`;\n"
+    instruction = _instruction(
+        1,
+        "const sel = `outer${`page.getByRole('button')`}`;",
+        "const sel = `outer${`page.getByRole('other')`}`;",
+    )
+    with pytest.raises(PatchApplicationError, match="not limited to a locator"):
+        _apply(code, [instruction])
 
 
 def test_patch_generator_returns_rejection_feedback(
