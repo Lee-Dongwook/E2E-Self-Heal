@@ -63,7 +63,7 @@ def test_jsx_chunk_margin_lines_rejects_negative_values():
         make_settings(jsx_chunk_margin_lines=-1)
 
 
-# --- repair-loop and token-limit bounds (#184) -------------------------------------------
+# --- repair-loop and token-limit bounds -------------------------------------------
 
 
 @pytest.mark.parametrize("bad", [0, -1, -5])
@@ -99,7 +99,7 @@ def test_token_limits_accept_positive_values(field):
     assert make_settings(**{field: 512}).model_dump()[field] == 512
 
 
-# --- fail-fast model requirement (#184) --------------------------------------------------
+# --- fail-fast model requirement --------------------------------------------------
 
 
 @pytest.mark.parametrize("provider", ["openai", "anthropic", "ollama", "deepseek"])

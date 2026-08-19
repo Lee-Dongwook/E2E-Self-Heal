@@ -115,7 +115,7 @@ def test_cli_review_emits_report_and_leaves_file_unmodified(
     assert data["has_findings"] is True
     assert data["findings"][0]["file"] == "components/CTAButton.tsx"
     assert data["findings"][0]["recommended_selector"] == "getByTestId('cta')"
-    # Contract (#189): review mode emits a self-describing review report.
+    # Contract: review mode emits a self-describing review report.
     assert data["kind"] == "review"
     assert data["schema_version"] == SCHEMA_VERSION
     # review mode is advisory only — the test file must be untouched.
@@ -259,7 +259,7 @@ def test_cli_json_output(mock_graph_success, monkeypatch, tmp_path) -> None:
     assert data["loop_count"] == 1
     assert len(data["instructions"]) == 1
     assert data["instructions"][0]["replacement"] == "await page.click('#new')"
-    # Contract (#189): single-file heal is a self-describing repair summary.
+    # Contract: single-file heal is a self-describing repair summary.
     assert data["kind"] == "repair"
     assert data["schema_version"] == SCHEMA_VERSION
 
@@ -279,7 +279,7 @@ def test_cli_suite_mode_emits_suite_kind(monkeypatch: pytest.MonkeyPatch) -> Non
     assert result.exit_code == 0
     json_line = next(line for line in result.stdout.splitlines() if line.strip().startswith("{"))
     data = json.loads(json_line)
-    # Contract (#189): suite mode emits a self-describing suite summary.
+    # Contract: suite mode emits a self-describing suite summary.
     assert data["kind"] == "suite"
     assert data["schema_version"] == SCHEMA_VERSION
     assert data["results"][0]["kind"] == "repair"

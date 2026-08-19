@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 # Version of the machine-readable CI contract emitted as `--json` output (RepairSummary /
 # SuiteSummary / ReviewReport). Bump this on any breaking change to the JSON shape so CI
-# wrappers can detect it instead of guessing on keys (Issue #189). The Literal type pins
+# wrappers can detect it instead of guessing on keys. The Literal type pins
 # the version so a model can never silently serialize an unsupported one.
 SCHEMA_VERSION: Literal["1.0"] = "1.0"
 
