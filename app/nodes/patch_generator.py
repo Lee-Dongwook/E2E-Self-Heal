@@ -39,7 +39,7 @@ _SELECTOR_CALL = re.compile(
 
 
 class _MaskState(Enum):
-    """Lexical states for :func:`_mask_js_non_code` (Issue #261)."""
+    """Lexical states for :func:`_mask_js_non_code`."""
 
     CODE = auto()
     LINE_COMMENT = auto()
@@ -130,7 +130,7 @@ def _mask_js_non_code(text: str) -> str:
     A small state machine drives the masking. Template ``${…}`` expressions are tracked
     (not treated as plain template text) so a nested backtick or ``}`` inside
     interpolation cannot end the template early; the expression is blanked together with
-    the literal segments, keeping the guardrail conservative (Issue #261).
+    the literal segments, keeping the guardrail conservative.
     """
     chars = list(text)
     n = len(chars)
@@ -336,7 +336,7 @@ def _apply(code: str, instructions: list[PatchInstruction]) -> str:
     """Validate and atomically apply line-targeted replacements to ``code``."""
     lines = code.splitlines(keepends=True)
     # Mask the complete source once so a targeted line that continues a block comment or
-    # template literal opened on an earlier line cannot satisfy the scope gates (Issue #260).
+    # template literal opened on an earlier line cannot satisfy the scope gates.
     # The mask preserves length (blanking non-code, including the newlines it swallows), so
     # each original line maps onto the same character span of the masked code.
     masked_code = _mask_js_non_code(code)

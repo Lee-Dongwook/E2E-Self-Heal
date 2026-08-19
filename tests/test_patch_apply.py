@@ -415,7 +415,7 @@ def test_allows_real_locator_line_after_block_comment() -> None:
     assert _apply(code, [instruction]) == "/* header */\nawait page.click('#new')\n"
 
 
-# --- _mask_js_non_code state-machine unit tests (Issue #261) -------------------------
+# --- _mask_js_non_code state-machine unit tests -------------------------
 
 
 def test_mask_handles_nested_template_interpolation() -> None:
