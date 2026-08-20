@@ -46,6 +46,8 @@ class _MaskState(Enum):
     BLOCK_COMMENT = auto()
     TEMPLATE = auto()
     TEMPLATE_EXPR = auto()
+    REGEX = auto()
+    REGEX_CLASS = auto()
     SINGLE = "'"
     DOUBLE = '"'
 
@@ -54,6 +56,24 @@ class _MaskState(Enum):
 _QUOTE_STATE = {"'": _MaskState.SINGLE, '"': _MaskState.DOUBLE, "`": _MaskState.TEMPLATE}
 # String-literal states only — ``TEMPLATE`` gets its own backtick/${…} handling.
 _QUOTE_STATES = frozenset({_MaskState.SINGLE, _MaskState.DOUBLE})
+
+# Characters after which ``/`` is division rather than a regex literal.
+_REGEX_DIVISION_AFTER = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$'\"`)]/"
+)
+
+
+def _regex_can_start(prev: str) -> bool:
+    """Heuristic: is ``/`` at the current point a regex literal rather than division?
+
+    Mirrors the usual JS-lexer rule: a slash starts a regex at the start of an
+    expression or after an operator/bracket/punctuation, while it is division after a
+    value (identifier, number, string, closing paren/bracket, another slash). This is
+    intentionally not a full tokenizer — the few ambiguous keyword cases (e.g.
+    ``return /re/``) may mask slightly less precisely, which errs on the guardrail's
+    conservative side.
+    """
+    return prev not in _REGEX_DIVISION_AFTER
 
 
 def _matching_paren(text: str, opening: int) -> int | None:
@@ -130,7 +150,9 @@ def _mask_js_non_code(text: str) -> str:
     A small state machine drives the masking. Template ``${…}`` expressions are tracked
     (not treated as plain template text) so a nested backtick or ``}`` inside
     interpolation cannot end the template early; the expression is blanked together with
-    the literal segments, keeping the guardrail conservative.
+    the literal segments, keeping the guardrail conservative. Regex literals are masked
+    too (escapes and character classes included), so a ``}`` or ``/`` inside one cannot
+    leak into the surrounding expression or end it early.
     """
     chars = list(text)
     n = len(chars)
@@ -140,6 +162,8 @@ def _mask_js_non_code(text: str) -> str:
     # ``${`b`}`` cannot terminate the surrounding template. ``TEMPLATE_EXPR`` entries
     # carry the ``${`` brace depth; depth 1 closes the expression.
     stack: list[tuple[_MaskState, int]] = [(_MaskState.CODE, 0)]
+    # Last significant code character, used to tell a regex literal from a division.
+    prev = ""
     while i < n:
         state, depth = stack[-1]
         char = chars[i]
@@ -158,12 +182,19 @@ def _mask_js_non_code(text: str) -> str:
                 chars[i] = " "
                 i += 1
                 stack.append((_QUOTE_STATE[char], 0))
+            elif char == "/" and _regex_can_start(prev):
+                chars[i] = " "
+                i += 1
+                stack.append((_MaskState.REGEX, 0))
             else:
+                if not char.isspace():
+                    prev = char
                 i += 1
 
         elif state is _MaskState.LINE_COMMENT:
             if char == "\n":
                 stack.pop()  # the newline is code; everything before it stays blanked
+                prev = ";"  # a fresh statement may open a regex literal
             else:
                 chars[i] = " "
             i += 1
@@ -173,6 +204,7 @@ def _mask_js_non_code(text: str) -> str:
                 chars[i] = chars[i + 1] = " "
                 i += 2
                 stack.pop()
+                prev = ";"
             else:
                 chars[i] = " "
                 i += 1
@@ -188,6 +220,7 @@ def _mask_js_non_code(text: str) -> str:
                 chars[i] = " "
                 i += 1
                 stack.pop()
+                prev = char
             else:
                 chars[i] = " "
                 i += 1
@@ -203,7 +236,44 @@ def _mask_js_non_code(text: str) -> str:
                 chars[i] = chars[i + 1] = " "
                 i += 2
                 stack.append((_MaskState.TEMPLATE_EXPR, 1))
+                prev = ""  # the expression may start with a regex literal
             elif char == "`":
+                chars[i] = " "
+                i += 1
+                stack.pop()
+                prev = "`"
+            else:
+                chars[i] = " "
+                i += 1
+
+        elif state is _MaskState.REGEX:
+            if char == "\\":
+                chars[i] = " "
+                i += 1
+                if i < n:
+                    chars[i] = " "
+                    i += 1
+            elif char == "[":
+                chars[i] = " "
+                i += 1
+                stack.append((_MaskState.REGEX_CLASS, 0))
+            elif char == "/":
+                chars[i] = " "
+                i += 1
+                stack.pop()
+                prev = "/"  # a finished regex is a value, so a following / is division
+            else:
+                chars[i] = " "
+                i += 1
+
+        elif state is _MaskState.REGEX_CLASS:
+            if char == "\\":
+                chars[i] = " "
+                i += 1
+                if i < n:
+                    chars[i] = " "
+                    i += 1
+            elif char == "]":
                 chars[i] = " "
                 i += 1
                 stack.pop()
@@ -217,6 +287,7 @@ def _mask_js_non_code(text: str) -> str:
                 chars[i] = " "
                 i += 1
                 stack[-1] = (_MaskState.TEMPLATE_EXPR, depth + 1)
+                prev = "{"
             elif char == "}":
                 chars[i] = " "
                 i += 1
@@ -224,6 +295,7 @@ def _mask_js_non_code(text: str) -> str:
                     stack.pop()
                 else:
                     stack[-1] = (_MaskState.TEMPLATE_EXPR, depth - 1)
+                prev = "}"
             elif char == "/" and nxt == "/":
                 chars[i] = chars[i + 1] = " "
                 i += 2
@@ -236,7 +308,13 @@ def _mask_js_non_code(text: str) -> str:
                 chars[i] = " "
                 i += 1
                 stack.append((_QUOTE_STATE[char], 0))
+            elif char == "/" and _regex_can_start(prev):
+                chars[i] = " "
+                i += 1
+                stack.append((_MaskState.REGEX, 0))
             else:
+                if not char.isspace():
+                    prev = char
                 chars[i] = " "
                 i += 1
 

@@ -456,6 +456,45 @@ def test_mask_block_comment_swallows_newlines() -> None:
     assert _mask_js_non_code("/* a\nb */") == " " * len("/* a\nb */")
 
 
+def test_mask_handles_regex_in_template_expression() -> None:
+    # A } inside a regex literal must not close the ${...} expression early (CodeRabbit):
+    # under the previous scanner the inner backtick after the regex leaked as code.
+    source = "`${/}/.test(x) ? `page.getByRole('a')` : `page.getByRole('b')`}`"
+    assert _mask_js_non_code(source) == " " * len(source)
+
+
+def test_mask_handles_regex_char_class_in_template_expression() -> None:
+    source = "`${/[/}]/.test(x)}`"
+    assert _mask_js_non_code(source) == " " * len(source)
+
+
+def test_mask_handles_escaped_brace_in_regex_expression() -> None:
+    source = r"`${/\}/.test(x)}`"
+    assert _mask_js_non_code(source) == " " * len(source)
+
+
+def test_mask_division_in_expression_keeps_following_code() -> None:
+    # a / b inside ${...} is division, not a regex: the expression must still close and
+    # code after the template must stay visible.
+    source = "`${a / b}` + page.click('#x')"
+    masked = _mask_js_non_code(source)
+    assert masked.startswith(" " * len("`${a / b}`"))
+    assert masked.endswith("+ page.click(" + " " * len("'#x'") + ")")
+
+
+def test_rejects_edit_on_line_with_regex_template_locator() -> None:
+    # A locator that appears only inside a nested template whose ${...} holds a regex must
+    # not pass the scope gate — the regex's } would otherwise close the expression early.
+    code = "const sel = `${/}/.test(x) ? `page.getByRole('button')` : `nope`}`;\n"
+    instruction = _instruction(
+        1,
+        "const sel = `${/}/.test(x) ? `page.getByRole('button')` : `nope`}`;",
+        "const sel = `${/}/.test(x) ? `page.getByRole('other')` : `nope`}`;",
+    )
+    with pytest.raises(PatchApplicationError, match="not limited to a locator"):
+        _apply(code, [instruction])
+
+
 def test_rejects_edit_on_line_with_only_nested_template_locator() -> None:
     # A locator that appears only inside a nested template interpolation must not pass the
     # scope gate — under the old scanner the inner backtick ended the template early and
