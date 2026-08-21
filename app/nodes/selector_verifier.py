@@ -66,7 +66,10 @@ def selector_verifier(state: AgentState) -> dict:
         logger.info("selector_verify_passed", counts=counts)
         return {"verification_report": {"ok": True, "counts": counts}}
 
-    next_count = state["loop_count"] + 1
+    memory_candidate = state.get("memory_report", {}).get("active", False)
+    if memory_candidate:
+        logger.info("memory_candidate_rejected", stage="selector_verifier", bad=bad)
+    next_count = state["loop_count"] if memory_candidate else state["loop_count"] + 1
     logger.info("selector_verify_failed", bad=bad, loop_count=next_count)
     return {
         "current_code": _revert(state["current_code"], instructions),

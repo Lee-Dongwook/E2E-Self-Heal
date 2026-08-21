@@ -9,6 +9,7 @@ _MODES = {"strict", "relaxed", "off"}
 _SHELL_TOKENS = {"&&", "||", ";", "|", ">", ">>", "<", "$(", "`"}
 _SHELL_TOKEN_FRAGMENTS = ("$(", "`")
 _TEMP_HELPER = ".e2e-healer-verify.mjs"
+_HEALING_HISTORY_RELATIVE_PATH = ".e2e-healer/healing-history.json"
 
 
 class SandboxViolation(PermissionError):
@@ -46,6 +47,11 @@ def assert_write_allowed(path: Path, reason: str = "write") -> None:
 
     resolved = _resolve(path)
     _assert_not_denied(resolved)
+    if reason == "healing_history":
+        _assert_inside_workspace(resolved)
+        if _relative_to_workspace(resolved) != _HEALING_HISTORY_RELATIVE_PATH:
+            raise SandboxViolation(f"unexpected healing-history write target: {path}")
+        return
 
     mode = sandbox_mode()
     if mode == "strict":

@@ -15,6 +15,7 @@ from typer.core import TyperGroup
 
 from app.config import settings
 from app.graph import build_graph, build_review_graph
+from app.healing_history import append_record, make_record
 from app.logging import configure_logging
 from app.notifications import notify_heal_outcome
 from app.preprocess.aria_snapshot import read_failure_snapshot
@@ -157,11 +158,12 @@ def _heal_file(
     assert_read_allowed(test_path)
     assert_write_allowed(test_path, reason="repair_target")
     original_code = test_path.read_text()
+    parsed_error_log = parse_error_log(raw_log)
     initial_state: AgentState = {
         "test_script_path": str(test_path),
         "original_code": original_code,
         "current_code": original_code,
-        "error_log": parse_error_log(raw_log),
+        "error_log": parsed_error_log,
         "dom_diff_context": dom_diff_context,
         "dom_snapshot": read_failure_snapshot(Path(settings.test_results_dir)),
         "analysis_report": "",
@@ -186,6 +188,23 @@ def _heal_file(
             instructions=[PatchInstruction(**i) for i in instructions.get("instructions", [])],
         )
         committed = not dry_run and final_state["is_success"]
+        if committed and final_state.get("memory_report", {}).get("source") != "memory":
+            record = make_record(
+                error_log=parsed_error_log,
+                instructions=summary.instructions,
+                test_script_path=summary.test_script_path,
+                source="llm",
+            )
+            if record is not None:
+                try:
+                    if append_record(record):
+                        logger.info("healing_recorded", test_script_path=summary.test_script_path)
+                except Exception as exc:
+                    logger.warning(
+                        "healing_record_not_saved",
+                        test_script_path=summary.test_script_path,
+                        error=str(exc),
+                    )
         logger.info(
             "repair_run_finished", is_success=summary.is_success, loop_count=summary.loop_count
         )
