@@ -189,16 +189,11 @@ def _heal_file(
         )
         committed = not dry_run and final_state["is_success"]
         if committed and final_state.get("memory_report", {}).get("source") != "memory":
-            history_source = (
-                "memory"
-                if final_state.get("memory_report", {}).get("source") == "memory"
-                else "llm"
-            )
             record = make_record(
                 error_log=parsed_error_log,
                 instructions=summary.instructions,
                 test_script_path=summary.test_script_path,
-                source=history_source,
+                source="llm",
             )
             if record is not None:
                 try:

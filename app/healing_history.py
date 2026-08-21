@@ -74,7 +74,12 @@ def history_path() -> Path:
 
 
 def extract_failing_selector(error_log: str) -> str:
-    """Extract a selector from common Playwright error output, if available."""
+    """Extract a selector from common Playwright error output, if available.
+
+    Semantic locator expressions (for example ``getByRole(...)``) are retained verbatim.
+    Their equality check is intentionally exact: a quoting or option-shape variant is a safe
+    miss rather than a potentially incorrect repair reuse.
+    """
     match = _LOCATOR_SELECTOR_ERROR.search(error_log) or _SELECTOR_ERROR.search(error_log)
     return match.group("selector") if match else ""
 
