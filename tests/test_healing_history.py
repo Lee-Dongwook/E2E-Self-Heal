@@ -1,4 +1,8 @@
+import pytest
+
+import app.healing_history as history_module
 from datetime import UTC, datetime
+from pathlib import Path
 
 from app.config import settings
 from app.healing_history import (
@@ -45,7 +49,9 @@ def test_extract_and_normalize_error_signature() -> None:
     )
 
 
-def test_append_load_and_deduplicate_history(monkeypatch, tmp_path) -> None:
+def test_append_load_and_deduplicate_history(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(settings, "workspace_root", str(tmp_path))
     monkeypatch.setattr(settings, "sandbox_mode", "strict")
     record = _record()
@@ -57,7 +63,7 @@ def test_append_load_and_deduplicate_history(monkeypatch, tmp_path) -> None:
 
 
 def test_matching_requires_exact_selector_and_unambiguous_replacement(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(settings, "workspace_root", str(tmp_path))
     monkeypatch.setattr(settings, "sandbox_mode", "strict")
@@ -77,3 +83,21 @@ def test_matching_requires_exact_selector_and_unambiguous_replacement(
     )
     assert match is None
     assert score == 0.0
+
+
+def test_append_holds_an_exclusive_process_lock(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(settings, "workspace_root", str(tmp_path))
+    monkeypatch.setattr(settings, "sandbox_mode", "strict")
+    operations: list[int] = []
+    flock = history_module.fcntl.flock
+
+    def tracking_flock(descriptor: int, operation: int) -> None:
+        operations.append(operation)
+        flock(descriptor, operation)
+
+    monkeypatch.setattr(history_module.fcntl, "flock", tracking_flock)
+
+    assert append_record(_record()) is True
+    assert operations == [history_module.fcntl.LOCK_EX, history_module.fcntl.LOCK_UN]

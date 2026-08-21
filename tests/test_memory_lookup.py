@@ -1,4 +1,6 @@
+import pytest
 from datetime import UTC, datetime
+from pathlib import Path
 
 from app.config import settings
 from app.healing_history import HealingHistoryRecord, append_record, normalize_error_signature
@@ -24,7 +26,9 @@ def _state() -> AgentState:
     }
 
 
-def test_memory_lookup_applies_rebased_guarded_candidate(monkeypatch, tmp_path) -> None:
+def test_memory_lookup_applies_rebased_guarded_candidate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(settings, "workspace_root", str(tmp_path))
     monkeypatch.setattr(settings, "sandbox_mode", "strict")
     error = "Error: waiting for locator('#old') timed out"
@@ -58,7 +62,7 @@ def test_memory_lookup_applies_rebased_guarded_candidate(monkeypatch, tmp_path) 
 
 
 def test_memory_lookup_rejects_duplicate_source_lines_without_mutating(
-    monkeypatch, tmp_path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(settings, "workspace_root", str(tmp_path))
     monkeypatch.setattr(settings, "sandbox_mode", "strict")

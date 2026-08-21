@@ -1,10 +1,13 @@
 """Persistent, project-local records for safe first-pass selector repairs."""
 
+import fcntl
+import os
 import re
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Literal
+from typing import Iterator, Literal
 
 import structlog
 from pydantic import BaseModel, Field
@@ -94,18 +97,31 @@ def _record_key(record: HealingHistoryRecord) -> tuple[str, str, str, str]:
     )
 
 
+@contextmanager
+def _history_lock(path: Path) -> Iterator[None]:
+    """Hold an advisory process lock over a history update's parent directory."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
+
+
 def append_record(record: HealingHistoryRecord) -> bool:
     """Append one verified record atomically, returning False when it is already present."""
-    history = load_history()
-    if _record_key(record) in {_record_key(existing) for existing in history.records}:
-        return False
-    history.records.append(record)
-    history.records.sort(key=lambda item: (_record_key(item), item.recorded_at.isoformat()))
     path = history_path()
     assert_write_allowed(path, reason="healing_history")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write(path, history.model_dump_json(indent=2) + "\n", reason="healing_history")
-    return True
+    with _history_lock(path):
+        history = load_history()
+        if _record_key(record) in {_record_key(existing) for existing in history.records}:
+            return False
+        history.records.append(record)
+        history.records.sort(key=lambda item: (_record_key(item), item.recorded_at.isoformat()))
+        atomic_write(path, history.model_dump_json(indent=2) + "\n", reason="healing_history")
+        return True
 
 
 def find_match(error_log: str, test_path: str) -> tuple[HealingHistoryRecord | None, float]:

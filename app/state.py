@@ -4,7 +4,7 @@ The state is a plain ``TypedDict`` so it stays immutable/traceable across nodes:
 each node reads from it and returns a partial update dict.
 """
 
-from typing import NotRequired, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 
 class PatchApplicationReport(TypedDict):
@@ -12,6 +12,17 @@ class PatchApplicationReport(TypedDict):
 
     ok: bool
     error: NotRequired[str]
+
+
+class MemoryReport(TypedDict):
+    """Outcome of local healing-history lookup and candidate verification."""
+
+    attempted: NotRequired[bool]
+    hit: NotRequired[bool]
+    active: NotRequired[bool]
+    score: NotRequired[float]
+    source: NotRequired[Literal["llm", "memory"]]
+    rejection: NotRequired[str]
 
 
 class AgentState(TypedDict):
@@ -28,7 +39,7 @@ class AgentState(TypedDict):
     boundary_report: NotRequired[dict]  # Architecture-boundary validation result
     patch_application_report: NotRequired[PatchApplicationReport]
     shadow_report: NotRequired[dict]  # Shadow Verifier's network replay result
-    memory_report: NotRequired[dict]  # Local healing-history lookup and candidate outcome
+    memory_report: NotRequired[MemoryReport]
     review_report: NotRequired[dict]  # Reviewer's source-level suggestions (review mode only)
     loop_count: int  # infinite-loop guard (max: settings.max_loops)
     is_success: bool  # whether the test passed
