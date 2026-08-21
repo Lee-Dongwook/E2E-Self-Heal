@@ -32,8 +32,10 @@ def memory_lookup(state: AgentState) -> dict:
         return {"memory_report": {"attempted": True, "hit": False, "score": score}}
     try:
         assert_patch_boundary_allowed(Path(state["test_script_path"]))
-        instruction = _rebase_instruction(state["current_code"], record.instruction)
-        patched = _apply(state["current_code"], [instruction])
+        instructions = [
+            _rebase_instruction(state["current_code"], item) for item in record.instructions
+        ]
+        patched = _apply(state["current_code"], instructions)
     except (PatchApplicationError, SandboxViolation) as exc:
         logger.warning("memory_candidate_rejected", error=str(exc), score=score)
         return {
@@ -47,7 +49,7 @@ def memory_lookup(state: AgentState) -> dict:
     logger.info("memory_hit", score=score, source=record.source)
     return {
         "current_code": patched,
-        "patch_instructions": {"instructions": [instruction.model_dump()]},
+        "patch_instructions": {"instructions": [item.model_dump() for item in instructions]},
         "boundary_report": {"ok": True},
         "patch_application_report": {"ok": True},
         "memory_report": {

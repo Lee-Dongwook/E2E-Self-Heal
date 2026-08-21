@@ -36,14 +36,16 @@ def test_memory_lookup_applies_rebased_guarded_candidate(
         normalized_error_signature=normalize_error_signature(error),
         selector_kind=classify_selector_kind("#old"),
         original_selector="#old",
-        replacement_selector="#new",
-        instruction=PatchInstruction(
-            line=99,
-            original="await page.click('#old')",
-            replacement="await page.click('#new')",
-            reason="selector renamed",
-            selector="#new",
-        ),
+        replacement_selectors=("#new",),
+        instructions=[
+            PatchInstruction(
+                line=99,
+                original="await page.click('#old')",
+                replacement="await page.click('#new')",
+                reason="selector renamed",
+                selector="#new",
+            )
+        ],
         test_script_path="tests/login.spec.ts",
         provider="test",
         model="test",
@@ -71,14 +73,16 @@ def test_memory_lookup_rejects_duplicate_source_lines_without_mutating(
         normalized_error_signature=normalize_error_signature(error),
         selector_kind=classify_selector_kind("#old"),
         original_selector="#old",
-        replacement_selector="#new",
-        instruction=PatchInstruction(
-            line=1,
-            original="await page.click('#old')",
-            replacement="await page.click('#new')",
-            reason="selector renamed",
-            selector="#new",
-        ),
+        replacement_selectors=("#new",),
+        instructions=[
+            PatchInstruction(
+                line=1,
+                original="await page.click('#old')",
+                replacement="await page.click('#new')",
+                reason="selector renamed",
+                selector="#new",
+            )
+        ],
         test_script_path="tests/login.spec.ts",
         provider="test",
         model="test",

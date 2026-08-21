@@ -227,6 +227,52 @@ def test_heal_file_records_only_committed_selector_repairs(
     assert len(load_history().records) == 1
 
 
+def test_heal_file_does_not_rerecord_memory_repairs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    test_file = tmp_path / "test.spec.ts"
+    original = "await page.click('#old')"
+    replacement = "await page.click('#new')"
+    test_file.write_text(original)
+
+    class MemoryGraph:
+        def invoke(self, state: dict) -> dict:
+            state.update(
+                {
+                    "is_success": True,
+                    "current_code": replacement,
+                    "memory_report": {"source": "memory"},
+                    "patch_instructions": {
+                        "instructions": [
+                            {
+                                "line": 1,
+                                "original": original,
+                                "replacement": replacement,
+                                "reason": "history candidate",
+                                "selector": "#new",
+                            }
+                        ]
+                    },
+                }
+            )
+            atomic_write(Path(state["test_script_path"]), replacement)
+            return state
+
+    monkeypatch.setattr(cli_module, "build_graph", lambda: MemoryGraph())
+    monkeypatch.setattr(
+        cli_module,
+        "append_record",
+        lambda _: pytest.fail("memory-derived repair must not be re-recorded"),
+    )
+
+    assert (
+        cli_module._heal_file(
+            test_file, "Error: waiting for locator('#old') timed out", [], dry_run=False
+        ).is_success
+        is True
+    )
+
+
 def test_cli_dry_run_restores_after_failure(
     mock_graph_failure, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
