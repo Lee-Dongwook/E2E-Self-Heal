@@ -8,6 +8,7 @@ import pytest
 from typer.testing import CliRunner
 import app.cli as cli_module
 from app.cli import app
+from app.healing_history import load_history
 from app.sandbox import SandboxViolation
 from app.schemas import SCHEMA_VERSION, RepairSummary, SuiteSummary
 from app.utils.files import atomic_write
@@ -180,6 +181,50 @@ def test_cli_dry_run_restores_file(mock_graph_success, monkeypatch, tmp_path) ->
     assert result.exit_code == 0
     assert "fixed after 1 loop(s)" in result.stderr
     assert test_file.read_text() == "await page.click('#old')"
+
+
+def test_heal_file_records_only_committed_selector_repairs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    test_file = tmp_path / "test.spec.ts"
+    original = "await page.click('#old')"
+    replacement = "await page.click('#new')"
+    test_file.write_text(original)
+    monkeypatch.setattr(cli_module.settings, "workspace_root", str(tmp_path))
+    monkeypatch.setattr(cli_module.settings, "sandbox_mode", "strict")
+
+    class MockGraph:
+        def invoke(self, state: dict) -> dict:
+            state.update(
+                {
+                    "is_success": True,
+                    "current_code": replacement,
+                    "patch_instructions": {
+                        "instructions": [
+                            {
+                                "line": 1,
+                                "original": original,
+                                "replacement": replacement,
+                                "reason": "selector renamed",
+                                "selector": "#new",
+                            }
+                        ]
+                    },
+                }
+            )
+            atomic_write(Path(state["test_script_path"]), replacement)
+            return state
+
+    monkeypatch.setattr(cli_module, "build_graph", lambda: MockGraph())
+    error = "Error: waiting for locator('#old') timed out"
+
+    assert cli_module._heal_file(test_file, error, [], dry_run=False).is_success is True
+    assert len(load_history().records) == 1
+
+    test_file.write_text(original)
+    assert cli_module._heal_file(test_file, error, [], dry_run=True).is_success is True
+    assert test_file.read_text() == original
+    assert len(load_history().records) == 1
 
 
 def test_cli_dry_run_restores_after_failure(

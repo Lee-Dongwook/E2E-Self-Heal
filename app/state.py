@@ -28,6 +28,7 @@ class AgentState(TypedDict):
     boundary_report: NotRequired[dict]  # Architecture-boundary validation result
     patch_application_report: NotRequired[PatchApplicationReport]
     shadow_report: NotRequired[dict]  # Shadow Verifier's network replay result
+    memory_report: NotRequired[dict]  # Local healing-history lookup and candidate outcome
     review_report: NotRequired[dict]  # Reviewer's source-level suggestions (review mode only)
     loop_count: int  # infinite-loop guard (max: settings.max_loops)
     is_success: bool  # whether the test passed

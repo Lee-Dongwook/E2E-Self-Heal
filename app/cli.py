@@ -15,6 +15,7 @@ from typer.core import TyperGroup
 
 from app.config import settings
 from app.graph import build_graph, build_review_graph
+from app.healing_history import append_record, make_record
 from app.logging import configure_logging
 from app.notifications import notify_heal_outcome
 from app.preprocess.aria_snapshot import read_failure_snapshot
@@ -186,6 +187,34 @@ def _heal_file(
             instructions=[PatchInstruction(**i) for i in instructions.get("instructions", [])],
         )
         committed = not dry_run and final_state["is_success"]
+        if committed:
+            history_source = (
+                "memory"
+                if final_state.get("memory_report", {}).get("source") == "memory"
+                else "llm"
+            )
+            selector_instructions = [
+                instruction for instruction in summary.instructions if instruction.selector
+            ]
+            if len(selector_instructions) == 1:
+                record = make_record(
+                    error_log=raw_log,
+                    instruction=selector_instructions[0],
+                    test_script_path=summary.test_script_path,
+                    source=history_source,
+                )
+                if record is not None:
+                    try:
+                        if append_record(record):
+                            logger.info(
+                                "healing_recorded", test_script_path=summary.test_script_path
+                            )
+                    except Exception as exc:
+                        logger.warning(
+                            "healing_record_not_saved",
+                            test_script_path=summary.test_script_path,
+                            error=str(exc),
+                        )
         logger.info(
             "repair_run_finished", is_success=summary.is_success, loop_count=summary.loop_count
         )

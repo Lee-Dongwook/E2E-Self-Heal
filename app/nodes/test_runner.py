@@ -27,7 +27,10 @@ def test_runner(state: AgentState) -> dict:
         logger.info("test_runner_passed", loop_count=state["loop_count"])
         return {"is_success": True}
 
-    next_count = state["loop_count"] + 1
+    memory_candidate = state.get("memory_report", {}).get("active", False)
+    if memory_candidate:
+        logger.info("memory_candidate_rejected", stage="test_runner")
+    next_count = state["loop_count"] if memory_candidate else state["loop_count"] + 1
     logger.info("test_runner_failed", loop_count=next_count)
     return {
         "is_success": False,

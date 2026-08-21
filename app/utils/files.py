@@ -53,7 +53,7 @@ def _assert_regular_non_symlink_target(path: Path) -> None:
         raise SandboxViolation(f"non-regular write target denied: {path}")
 
 
-def atomic_write(path: Path, content: str) -> None:
+def atomic_write(path: Path, content: str, reason: str = "atomic_write") -> None:
     """Write ``content`` to ``path`` atomically and durably.
 
     Writes to a temp file in the same directory, syncs its contents, replaces the target,
@@ -61,7 +61,7 @@ def atomic_write(path: Path, content: str) -> None:
     or lose the durable rename on supported platforms.
     """
     _assert_regular_non_symlink_target(path)
-    assert_write_allowed(path, reason="atomic_write")
+    assert_write_allowed(path, reason=reason)
     mode = _target_mode(path)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".tmp-", suffix=path.suffix)
     try:

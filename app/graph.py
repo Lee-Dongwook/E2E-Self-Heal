@@ -5,6 +5,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from app.config import settings
 from app.nodes.diagnoser import diagnoser
+from app.nodes.memory_lookup import memory_lookup
 from app.nodes.patch_generator import patch_generator
 from app.nodes.reviewer import reviewer
 from app.nodes.selector_verifier import selector_verifier
@@ -20,11 +21,20 @@ def route(state: AgentState) -> str:
     return "diagnoser"
 
 
+def route_after_memory(state: AgentState) -> str:
+    """Skip LLM work only when a guarded history candidate was applied."""
+    if state.get("memory_report", {}).get("active", False):
+        return "shadow_verifier"
+    return "diagnoser"
+
+
 def route_after_shadow(state: AgentState) -> str:
     """After shadow replay: proceed to live selector verifier on a pass/skip, else re-patch (or end at cap)."""
     report = state.get("shadow_report", {})
     if report.get("ok", True):
         return "selector_verifier"
+    if state.get("memory_report", {}).get("active", False):
+        return "diagnoser"
     if state["loop_count"] >= settings.max_loops:
         return END
     return "patch_generator"
@@ -53,6 +63,8 @@ def route_after_verify(state: AgentState) -> str:
     """
     if state["verification_report"].get("ok", True):
         return "test_runner"
+    if state.get("memory_report", {}).get("active", False):
+        return "diagnoser"
     if state["loop_count"] >= settings.max_loops:
         return END
     return "patch_generator"
@@ -61,13 +73,19 @@ def route_after_verify(state: AgentState) -> str:
 def build_graph() -> CompiledStateGraph:
     """Build and compile the Diagnoser → Patch Generator → Shadow Verifier → Selector Verifier → Test Runner loop."""
     graph = StateGraph(AgentState)
+    graph.add_node("memory_lookup", memory_lookup)
     graph.add_node("diagnoser", diagnoser)
     graph.add_node("patch_generator", patch_generator)
     graph.add_node("shadow_verifier", shadow_verifier)
     graph.add_node("selector_verifier", selector_verifier)
     graph.add_node("test_runner", test_runner)
 
-    graph.add_edge(START, "diagnoser")
+    graph.add_edge(START, "memory_lookup")
+    graph.add_conditional_edges(
+        "memory_lookup",
+        route_after_memory,
+        {"shadow_verifier": "shadow_verifier", "diagnoser": "diagnoser"},
+    )
     graph.add_edge("diagnoser", "patch_generator")
     graph.add_conditional_edges(
         "patch_generator",
@@ -77,12 +95,22 @@ def build_graph() -> CompiledStateGraph:
     graph.add_conditional_edges(
         "shadow_verifier",
         route_after_shadow,
-        {"selector_verifier": "selector_verifier", "patch_generator": "patch_generator", END: END},
+        {
+            "selector_verifier": "selector_verifier",
+            "patch_generator": "patch_generator",
+            "diagnoser": "diagnoser",
+            END: END,
+        },
     )
     graph.add_conditional_edges(
         "selector_verifier",
         route_after_verify,
-        {"test_runner": "test_runner", "patch_generator": "patch_generator", END: END},
+        {
+            "test_runner": "test_runner",
+            "patch_generator": "patch_generator",
+            "diagnoser": "diagnoser",
+            END: END,
+        },
     )
     graph.add_conditional_edges("test_runner", route, {"diagnoser": "diagnoser", END: END})
 

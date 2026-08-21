@@ -81,7 +81,10 @@ def shadow_verifier(state: AgentState) -> dict:
         logger.info("shadow_verify_failed", score=result.score)
         atomic_write(test_path, pre_change_code)
 
-        next_count = state["loop_count"] + 1
+        memory_candidate = state.get("memory_report", {}).get("active", False)
+        if memory_candidate:
+            logger.info("memory_candidate_rejected", stage="shadow")
+        next_count = state["loop_count"] if memory_candidate else state["loop_count"] + 1
         return {
             "current_code": pre_change_code,
             "analysis_report": state["analysis_report"] + _shadow_feedback(result),

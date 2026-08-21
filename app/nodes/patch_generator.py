@@ -468,6 +468,7 @@ def patch_generator(state: AgentState) -> dict:
             "patch_instructions": {},
             "analysis_report": state["analysis_report"] + f"\n\n[BOUNDARY FEEDBACK] {exc}",
             "boundary_report": {"ok": False, "error": str(exc)},
+            "memory_report": {"active": False, "source": "llm"},
             "loop_count": state["loop_count"] + 1,
         }
     user_prompt = (
@@ -488,6 +489,7 @@ def patch_generator(state: AgentState) -> dict:
             "current_code": state["current_code"],
             "patch_instructions": {},
             "patch_application_report": {"ok": True},
+            "memory_report": {"active": False, "source": "llm"},
         }
 
     try:
@@ -504,6 +506,7 @@ def patch_generator(state: AgentState) -> dict:
             "patch_instructions": {},
             "analysis_report": state["analysis_report"] + feedback,
             "patch_application_report": {"ok": False, "error": str(exc)},
+            "memory_report": {"active": False, "source": "llm"},
             "loop_count": next_count,
         }
     logger.info("patch_generator_finished", instruction_count=len(output.instructions))
@@ -512,4 +515,5 @@ def patch_generator(state: AgentState) -> dict:
         "patch_instructions": output.model_dump(),
         "boundary_report": {"ok": True},
         "patch_application_report": {"ok": True},
+        "memory_report": {"active": False, "source": "llm"},
     }
