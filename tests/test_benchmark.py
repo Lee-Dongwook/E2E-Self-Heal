@@ -8,8 +8,10 @@ from app.benchmark import (
     _count_prompt_tokens,
     _benchmark_scenario,
     _line_containing,
+    _tokenizer,
     run_example_benchmark,
 )
+from app.config import settings
 from app.preprocess.jsx_chunker import CodeChunk
 from app.prompts.diagnoser import build_user_prompt
 
@@ -47,14 +49,17 @@ def test_semantic_chunk_prompt_has_fewer_tokens_than_full_file_prompt() -> None:
 
 def test_benchmark_reports_all_checked_in_examples() -> None:
     results = run_example_benchmark()
+    assert [result.name for result in results] == ["id-rename", "jsx-context"]
+    assert results[0].context_strategy == "whole-file fallback"
+    assert results[0].tokens_saved == 0
+    assert results[1].context_strategy.startswith("semantic JSX chunk")
+    assert results[1].chunked_prompt_tokens < results[1].full_prompt_tokens
+    assert results[1].tokens_saved > 0
 
-    assert [result.name for result in results] == ["id-rename", "classname-rename"]
-    assert all(result.context_strategy == "whole-file fallback" for result in results)
-    assert all(result.full_prompt_tokens == result.chunked_prompt_tokens for result in results)
-    assert all(result.tokens_saved == 0 for result in results)
 
-
-def test_benchmark_uses_semantic_jsx_context_when_available(tmp_path: Path) -> None:
+def test_benchmark_uses_configured_semantic_jsx_margin(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     test_path = tmp_path / "button.spec.tsx"
     test_path.write_text(
         "\n".join(
@@ -86,6 +91,7 @@ index 1111111..2222222 100644
 """
     )
 
+    monkeypatch.setattr(settings, "jsx_chunk_margin_lines", 0)
     result = _benchmark_scenario(
         BenchmarkScenario(
             name="jsx-example",
@@ -95,7 +101,7 @@ index 1111111..2222222 100644
         )
     )
 
-    assert result.context_strategy == "semantic JSX chunk (53-55)"
+    assert result.context_strategy == "semantic JSX chunk (54-54)"
     assert result.chunked_prompt_tokens < result.full_prompt_tokens
     assert result.tokens_saved > 0
 
@@ -115,3 +121,25 @@ def test_result_calculates_token_savings() -> None:
 
     assert result.tokens_saved == 80
     assert result.savings_percent == 80.0
+
+
+def test_tokenizer_is_loaded_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    class FakeTokenizer:
+        def encode(self, text: str) -> list[str]:
+            return list(text)
+
+    def fake_get_encoding(name: str) -> FakeTokenizer:
+        calls.append(name)
+        return FakeTokenizer()
+
+    _tokenizer.cache_clear()
+    monkeypatch.setattr("app.benchmark.tiktoken.get_encoding", fake_get_encoding)
+    try:
+        _count_prompt_tokens("first prompt")
+        _count_prompt_tokens("second prompt")
+    finally:
+        _tokenizer.cache_clear()
+
+    assert calls == ["cl100k_base"]

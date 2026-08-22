@@ -12,7 +12,6 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 from typer.core import TyperGroup
-from app.benchmark import run_example_benchmark
 
 from app.config import settings
 from app.graph import build_graph, build_review_graph
@@ -315,6 +314,9 @@ def _render_findings(report: ReviewReport) -> None:
 @app.command()
 def benchmark() -> None:
     """Compare full-file and semantic-context prompt tokens for shipped examples."""
+    configure_logging(settings.log_level)
+    from app.benchmark import run_example_benchmark
+
     results = run_example_benchmark()
     table = Table(title="Diagnoser prompt token benchmark (cl100k_base estimate)")
     table.add_column("Example", style="cyan")

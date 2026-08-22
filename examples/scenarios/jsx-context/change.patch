@@ -1,0 +1,13 @@
+diff --git a/examples/scenarios/jsx-context/benchmark-context.tsx b/examples/scenarios/jsx-context/benchmark-context.tsx
+index 1111111..2222222 100644
+--- a/examples/scenarios/jsx-context/benchmark-context.tsx
++++ b/examples/scenarios/jsx-context/benchmark-context.tsx
+@@ -21,7 +21,7 @@ export function AccountFormContext() {
+           <input name={field.name} required={field.required} />
+         </label>
+       ))}
+-      <button data-testid="legacy-submit">Create account</button>
++      <button data-testid="submit-account">Create account</button>
+     </section>
+   );
+ }

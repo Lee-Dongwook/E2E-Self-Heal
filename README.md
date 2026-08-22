@@ -249,11 +249,12 @@ and verified-repair storage for a run; pass `--memory` explicitly to enable the 
 ### Benchmark semantic-context token usage
 
 Run `uv run e2e-healer benchmark` to render a `rich` table comparing the full-file and
-semantic-context Diagnoser prompt sizes for each checked-in breakage scenario. It is fully
-offline: it needs neither provider credentials nor a running Playwright app. Counts include the
-Diagnoser system and user prompt content, estimated with the fixed `cl100k_base` tokenizer; they
-are a stable comparison metric, not a provider-billed-token statement. A scenario that cannot
-yield an enclosing JSX node is labeled `whole-file fallback` and correctly reports zero savings.
+semantic-context Diagnoser prompt sizes for each checked-in breakage scenario. It needs neither
+provider credentials nor a running Playwright app. Counts include the Diagnoser system and user
+prompt content, estimated with the fixed `cl100k_base` tokenizer; they are a stable comparison
+metric, not a provider-billed-token statement. `tiktoken` may download this tokenizer on first
+use, then serves it from its local cache. A scenario that cannot yield an enclosing JSX node is
+labeled `whole-file fallback` and correctly reports zero savings.
 
 ## Configuration
 

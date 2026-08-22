@@ -1,9 +1,12 @@
 """Offline token benchmark for the checked-in repair examples."""
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import tiktoken
+
+from app.config import settings
 
 from app.preprocess.diff_ast_analyzer import analyze_diff
 from app.preprocess.jsx_chunker import CodeChunk, chunk_for_line
@@ -54,10 +57,10 @@ def example_scenarios(repository_root: Path = _REPOSITORY_ROOT) -> tuple[Benchma
             failing_selector="#submit-btn",
         ),
         BenchmarkScenario(
-            name="classname-rename",
-            test_path=examples / "classname-scenario/classname.spec.ts",
-            diff_path=examples / "classname-scenario/classname-rename.diff",
-            failing_selector=".cta-button",
+            name="jsx-context",
+            test_path=examples / "scenarios/jsx-context/benchmark-context.tsx",
+            diff_path=examples / "scenarios/jsx-context/change.patch",
+            failing_selector="legacy-submit",
         ),
     )
 
@@ -82,7 +85,7 @@ def _benchmark_scenario(scenario: BenchmarkScenario) -> BenchmarkResult:
     full_context = CodeChunk(
         source=source, start_line=1, end_line=len(source.splitlines()), is_fallback=True
     )
-    semantic_context = chunk_for_line(source, failing_line)
+    semantic_context = chunk_for_line(source, failing_line, margin=settings.jsx_chunk_margin_lines)
     full_prompt = build_user_prompt(error_log, dom_diff_context, "", full_context)
     chunked_prompt = build_user_prompt(error_log, dom_diff_context, "", semantic_context)
     return BenchmarkResult(
@@ -105,5 +108,10 @@ def _line_containing(source: str, text: str) -> int:
 
 def _count_prompt_tokens(user_prompt: str) -> int:
     """Count system and user prompt content with a stable tokenizer estimate."""
-    tokenizer = tiktoken.get_encoding(_TOKENIZER_NAME)
-    return len(tokenizer.encode(SYSTEM_PROMPT)) + len(tokenizer.encode(user_prompt))
+    return len(_tokenizer().encode(SYSTEM_PROMPT)) + len(_tokenizer().encode(user_prompt))
+
+
+@lru_cache(maxsize=1)
+def _tokenizer() -> tiktoken.Encoding:
+    """Load the fixed tokenizer once per process."""
+    return tiktoken.get_encoding(_TOKENIZER_NAME)

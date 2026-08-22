@@ -187,8 +187,10 @@ def test_cli_benchmark_renders_example_token_comparison() -> None:
     output = _strip_ansi(result.output)
     assert "Diagnoser prompt token benchmark" in output
     assert "id-rename" in output
-    assert "classname-rename" in output
+    assert "jsx-context" in output
     assert "whole-file fallback" in output
+    assert "semantic JSX chunk" in output
+    assert "diff_analyzed_tree_sitter" not in output
 
 
 def test_heal_file_no_memory_bypasses_persistence(
