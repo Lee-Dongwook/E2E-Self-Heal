@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from app.benchmark import (
     BenchmarkScenario,
@@ -55,6 +56,36 @@ def test_benchmark_reports_all_checked_in_examples() -> None:
     assert results[1].context_strategy.startswith("semantic JSX chunk")
     assert results[1].chunked_prompt_tokens < results[1].full_prompt_tokens
     assert results[1].tokens_saved > 0
+
+
+def test_benchmark_models_validate_paths_and_token_totals(tmp_path: Path) -> None:
+    test_path = tmp_path / "scenario.spec.ts"
+    diff_path = tmp_path / "scenario.diff"
+    test_path.write_text("test('example', () => {})")
+    diff_path.write_text("")
+
+    scenario = BenchmarkScenario(
+        name="example",
+        test_path=test_path,
+        diff_path=diff_path,
+        failing_selector="#submit",
+    )
+
+    assert scenario.test_path == test_path
+    with pytest.raises(ValidationError, match="does not exist"):
+        BenchmarkScenario(
+            name="missing",
+            test_path=tmp_path / "missing.spec.ts",
+            diff_path=diff_path,
+            failing_selector="#submit",
+        )
+    with pytest.raises(ValidationError, match="must not exceed"):
+        BenchmarkResult(
+            name="invalid",
+            context_strategy="semantic JSX chunk",
+            full_prompt_tokens=1,
+            chunked_prompt_tokens=2,
+        )
 
 
 def test_benchmark_uses_configured_semantic_jsx_margin(

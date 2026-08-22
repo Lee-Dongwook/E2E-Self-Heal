@@ -1,10 +1,11 @@
 """Offline token benchmark for the checked-in repair examples."""
 
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Self
 
 import tiktoken
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.config import settings
 
@@ -16,23 +17,42 @@ _TOKENIZER_NAME = "cl100k_base"
 _REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 
 
-@dataclass(frozen=True)
-class BenchmarkScenario:
+class BenchmarkScenario(BaseModel):
     """A stored example with the selector expected to fail after applying its diff."""
 
-    name: str
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(min_length=1)
     test_path: Path
     diff_path: Path
-    failing_selector: str
+    failing_selector: str = Field(min_length=1)
+
+    @field_validator("test_path", "diff_path")
+    @classmethod
+    def validate_scenario_file(cls, path: Path) -> Path:
+        """Require each stored scenario input to be a readable regular file."""
+        if not path.is_file():
+            raise ValueError(f"benchmark scenario file does not exist: {path}")
+        return path
 
 
-@dataclass(frozen=True)
-class BenchmarkResult:
+class BenchmarkResult(BaseModel):
     """Full-file and semantic-context token totals for one example."""
 
-    name: str
-    context_strategy: str
-    full_prompt_tokens: int
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(min_length=1)
+    context_strategy: str = Field(min_length=1)
+    full_prompt_tokens: int = Field(ge=0)
+    chunked_prompt_tokens: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_chunked_total(self) -> Self:
+        """Prevent invalid benchmark results whose chunk is larger than the baseline."""
+        if self.chunked_prompt_tokens > self.full_prompt_tokens:
+            raise ValueError("chunked_prompt_tokens must not exceed full_prompt_tokens")
+        return self
+
     chunked_prompt_tokens: int
 
     @property
