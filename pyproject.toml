@@ -29,6 +29,7 @@ dependencies = [
     "tree-sitter-typescript>=0.23.2",
     "playwright>=1.40",
     "langchain-openai>=1.0",
+    "tiktoken>=0.8",
 ]
 
 [project.urls]

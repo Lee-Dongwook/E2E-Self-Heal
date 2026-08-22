@@ -180,6 +180,17 @@ def test_cli_help_documents_memory_toggle() -> None:
     assert "--no-memory" in _strip_ansi(result.stdout)
 
 
+def test_cli_benchmark_renders_example_token_comparison() -> None:
+    result = CliRunner().invoke(app, ["benchmark"])
+
+    assert result.exit_code == 0
+    output = _strip_ansi(result.output)
+    assert "Diagnoser prompt token benchmark" in output
+    assert "id-rename" in output
+    assert "classname-rename" in output
+    assert "whole-file fallback" in output
+
+
 def test_heal_file_no_memory_bypasses_persistence(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

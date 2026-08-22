@@ -12,6 +12,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 from typer.core import TyperGroup
+from app.benchmark import run_example_benchmark
 
 from app.config import settings
 from app.graph import build_graph, build_review_graph
@@ -307,6 +308,27 @@ def _render_findings(report: ReviewReport) -> None:
             finding.root_cause,
             finding.suggestion,
             finding.recommended_selector,
+        )
+    console.print(table)
+
+
+@app.command()
+def benchmark() -> None:
+    """Compare full-file and semantic-context prompt tokens for shipped examples."""
+    results = run_example_benchmark()
+    table = Table(title="Diagnoser prompt token benchmark (cl100k_base estimate)")
+    table.add_column("Example", style="cyan")
+    table.add_column("Context strategy")
+    table.add_column("Full-file", justify="right")
+    table.add_column("Chunked", justify="right")
+    table.add_column("Saved", justify="right", style="green")
+    for result in results:
+        table.add_row(
+            result.name,
+            result.context_strategy,
+            str(result.full_prompt_tokens),
+            str(result.chunked_prompt_tokens),
+            f"{result.tokens_saved} ({result.savings_percent:.1f}%)",
         )
     console.print(table)
 
