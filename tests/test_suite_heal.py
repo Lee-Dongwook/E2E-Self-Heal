@@ -39,7 +39,7 @@ def test_suite_all_healed(monkeypatch, tmp_path):
     monkeypatch.setattr(
         cli,
         "_heal_file",
-        lambda p, log, ctx, dry: RepairSummary(
+        lambda p, log, ctx, dry, memory: RepairSummary(
             test_script_path=str(p), is_success=True, loop_count=1
         ),
     )
@@ -58,7 +58,7 @@ def test_suite_partial_heal_is_not_success(monkeypatch, tmp_path):
     monkeypatch.setattr(
         cli,
         "_heal_file",
-        lambda p, log, ctx, dry: RepairSummary(
+        lambda p, log, ctx, dry, memory: RepairSummary(
             test_script_path=str(p), is_success=(p.name == "a.spec.ts"), loop_count=1
         ),
     )
@@ -95,8 +95,9 @@ def test_suite_denies_external_path_but_keeps_it_visible(monkeypatch, tmp_path):
     def fake_run(target=""):
         return (False, combined) if target == "" else (False, "focused")
 
-    def _heal(p, log, ctx, dry):
+    def _heal(p, log, ctx, dry, memory):
         assert cli.Path(p) == inside, "only the in-workspace target may be healed"
+        assert memory is True
         return RepairSummary(test_script_path=str(p), is_success=True, loop_count=1)
 
     monkeypatch.setattr(cli, "run_playwright", fake_run)
@@ -123,7 +124,7 @@ def test_suite_denies_relative_external_path(monkeypatch, tmp_path):
     monkeypatch.setattr(
         cli,
         "_heal_file",
-        lambda p, log, ctx, dry: RepairSummary(
+        lambda p, log, ctx, dry, memory: RepairSummary(
             test_script_path=str(p), is_success=True, loop_count=1
         ),
     )
@@ -132,3 +133,24 @@ def test_suite_denies_relative_external_path(monkeypatch, tmp_path):
     assert any(
         r.test_script_path == "../victim.spec.ts" and not r.is_success for r in summary.results
     )
+
+
+def test_suite_threads_no_memory_to_each_file(monkeypatch, tmp_path):
+    test_file = tmp_path / "a.spec.ts"
+    test_file.write_text("x")
+    seen_memory: list[bool] = []
+
+    def fake_run(target=""):
+        return (False, _combined(test_file)) if target == "" else (False, "focused")
+
+    def _heal(path, log, context, dry_run, memory):
+        seen_memory.append(memory)
+        return RepairSummary(test_script_path=str(path), is_success=True, loop_count=0)
+
+    monkeypatch.setattr(cli, "run_playwright", fake_run)
+    monkeypatch.setattr(cli, "_heal_file", _heal)
+
+    summary = cli._heal_suite("", [], dry_run=False, memory=False)
+
+    assert summary.is_success is True
+    assert seen_memory == [False]

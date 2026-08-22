@@ -217,6 +217,9 @@ uv run e2e-healer tests/example.spec.ts
 # Preview only — run the loop but write nothing:
 uv run e2e-healer tests/example.spec.ts --dry-run
 
+# Disable local healing-history lookup and storage for this run:
+uv run e2e-healer tests/example.spec.ts --no-memory
+
 # Feed a pre-captured log and a PR-scoped diff (the CI path):
 uv run e2e-healer tests/example.spec.ts --log playwright.log --diff-base origin/main --json
 
@@ -236,6 +239,9 @@ a `RepairSummary` for single-file heals, a `SuiteSummary` for suite mode, and a
 is shorthand for `e2e-healer heal <path>`; `review` is a separate subcommand that emits a
 `ReviewReport` (findings anchored to the changed source line) and always exits `0` — the
 CI wrapper branches on `has_findings`.
+
+Healing history is enabled by default. Pass `--no-memory` to fully bypass local history lookup
+and verified-repair storage for a run; pass `--memory` explicitly to enable the default behavior.
 
 ## Configuration
 
