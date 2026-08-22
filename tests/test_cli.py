@@ -54,7 +54,7 @@ def mock_graph_success(monkeypatch):
 @pytest.fixture
 def mock_graph_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     class MockGraph:
-        def invoke(self, state: dict) -> dict:
+        def invoke(self, state: AgentState) -> AgentState:
             state["is_success"] = False
             state["loop_count"] = 3
             state["current_code"] = "await page.click('#new')"
@@ -189,8 +189,8 @@ def test_heal_file_no_memory_bypasses_persistence(
     test_file.write_text(original)
 
     class MockGraph:
-        def invoke(self, state: dict) -> dict:
-            assert state["memory_enabled"] is False
+        def invoke(self, state: AgentState) -> AgentState:
+            assert state.get("memory_enabled", True) is False
             state.update(
                 {
                     "is_success": True,
@@ -224,7 +224,7 @@ def test_heal_file_no_memory_bypasses_persistence(
             "Error: waiting for locator('#old') timed out",
             [],
             dry_run=False,
-            memory=False,
+            memory_enabled=False,
         ).is_success
         is True
     )

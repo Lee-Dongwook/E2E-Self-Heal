@@ -153,7 +153,11 @@ def _restore_original_file(path: Path, original_code: str) -> None:
 
 
 def _heal_file(
-    test_path: Path, raw_log: str, dom_diff_context: list[dict], dry_run: bool, memory: bool = True
+    test_path: Path,
+    raw_log: str,
+    dom_diff_context: list[dict],
+    dry_run: bool,
+    memory_enabled: bool = True,
 ) -> RepairSummary:
     assert_read_allowed(test_path)
     assert_write_allowed(test_path, reason="repair_target")
@@ -167,7 +171,7 @@ def _heal_file(
         "dom_diff_context": dom_diff_context,
         "dom_snapshot": read_failure_snapshot(Path(settings.test_results_dir)),
         "analysis_report": "",
-        "memory_enabled": memory,
+        "memory_enabled": memory_enabled,
         "patch_instructions": {},
         "verification_report": {},
         "review_report": {},
@@ -189,7 +193,11 @@ def _heal_file(
             instructions=[PatchInstruction(**i) for i in instructions.get("instructions", [])],
         )
         committed = not dry_run and final_state["is_success"]
-        if memory and committed and final_state.get("memory_report", {}).get("source") != "memory":
+        if (
+            memory_enabled
+            and committed
+            and final_state.get("memory_report", {}).get("source") != "memory"
+        ):
             record = make_record(
                 error_log=parsed_error_log,
                 instructions=summary.instructions,
@@ -216,7 +224,10 @@ def _heal_file(
 
 
 def _heal_suite(
-    suite_target: str, dom_diff_context: list[dict], dry_run: bool, memory: bool = True
+    suite_target: str,
+    dom_diff_context: list[dict],
+    dry_run: bool,
+    memory_enabled: bool = True,
 ) -> SuiteSummary:
     passed, raw_log = run_playwright(suite_target)
     if passed:
@@ -244,7 +255,7 @@ def _heal_suite(
         if rerun_passed:
             results.append(RepairSummary(test_script_path=rel, is_success=True, loop_count=0))
             continue
-        results.append(_heal_file(resolved, focused_log, dom_diff_context, dry_run, memory))
+        results.append(_heal_file(resolved, focused_log, dom_diff_context, dry_run, memory_enabled))
     healed = sum(1 for r in results if r.is_success)
     return SuiteSummary(
         total_failed=len(results),
@@ -317,7 +328,7 @@ def heal(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="run the loop but restore the original file; write nothing"
     ),
-    memory: bool = typer.Option(
+    memory_enabled: bool = typer.Option(
         True,
         "--memory/--no-memory",
         help="use local healing history for first-pass repair and verified repair storage",
@@ -392,7 +403,7 @@ def heal(
                 if passed:
                     console.print("[green]test already passes[/green] — nothing to heal")
                     raise typer.Exit(code=0)
-            summary = _heal_file(test_path, raw_log, dom_diff_context, dry_run, memory)
+            summary = _heal_file(test_path, raw_log, dom_diff_context, dry_run, memory_enabled)
             if json_output:
                 typer.echo(summary.model_dump_json())
 
@@ -404,7 +415,10 @@ def heal(
             raise typer.Exit(code=0 if summary.is_success else 1)
 
         suite = _heal_suite(
-            str(test_path) if test_path is not None else "", dom_diff_context, dry_run, memory
+            str(test_path) if test_path is not None else "",
+            dom_diff_context,
+            dry_run,
+            memory_enabled,
         )
         if suite.total_failed == 0 and suite.is_success:
             console.print("[green]suite passes[/green] — nothing to heal")
