@@ -228,6 +228,9 @@ uv run e2e-healer tests/example.spec.ts --app-url http://localhost:4173
 
 # Review mode — suggest source-level fixes instead of patching (never edits the test):
 uv run e2e-healer review tests/example.spec.ts --log playwright.log --diff-base origin/main --json
+
+# Compare the Diagnoser's full-file and semantic-context prompt-token estimates for shipped examples:
+uv run e2e-healer benchmark
 ```
 
 Exit code is `0` when the test is healed, non-zero otherwise. `--json` prints a
@@ -242,6 +245,16 @@ CI wrapper branches on `has_findings`.
 
 Healing history is enabled by default. Pass `--no-memory` to fully bypass local history lookup
 and verified-repair storage for a run; pass `--memory` explicitly to enable the default behavior.
+
+### Benchmark semantic-context token usage
+
+Run `uv run e2e-healer benchmark` to render a `rich` table comparing the full-file and
+semantic-context Diagnoser prompt sizes for each checked-in breakage scenario. It needs neither
+provider credentials nor a running Playwright app. Counts include the Diagnoser system and user
+prompt content, estimated with the fixed `cl100k_base` tokenizer; they are a stable comparison
+metric, not a provider-billed-token statement. `tiktoken` may download this tokenizer on first
+use, then serves it from its local cache. A scenario that cannot yield an enclosing JSX node is
+labeled `whole-file fallback` and correctly reports zero savings.
 
 ## Configuration
 

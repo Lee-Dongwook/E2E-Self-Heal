@@ -312,6 +312,30 @@ def _render_findings(report: ReviewReport) -> None:
 
 
 @app.command()
+def benchmark() -> None:
+    """Compare full-file and semantic-context prompt tokens for shipped examples."""
+    configure_logging(settings.log_level)
+    from app.benchmark import run_example_benchmark
+
+    results = run_example_benchmark()
+    table = Table(title="Diagnoser prompt token benchmark (cl100k_base estimate)")
+    table.add_column("Example", style="cyan")
+    table.add_column("Context strategy")
+    table.add_column("Full-file", justify="right")
+    table.add_column("Chunked", justify="right")
+    table.add_column("Saved", justify="right", style="green")
+    for result in results:
+        table.add_row(
+            result.name,
+            result.context_strategy,
+            str(result.full_prompt_tokens),
+            str(result.chunked_prompt_tokens),
+            f"{result.tokens_saved} ({result.savings_percent:.1f}%)",
+        )
+    console.print(table)
+
+
+@app.command()
 def heal(
     test_path: Path | None = typer.Argument(
         None, help="failing test file; a directory or omitting it heals the whole suite"
