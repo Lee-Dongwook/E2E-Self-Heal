@@ -26,6 +26,19 @@ def _state() -> AgentState:
     }
 
 
+def test_memory_lookup_is_bypassed_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = _state()
+    state["memory_enabled"] = False
+    monkeypatch.setattr(
+        "app.nodes.memory_lookup.find_match",
+        lambda *_: pytest.fail("disabled memory must not query healing history"),
+    )
+
+    result = memory_lookup(state)
+
+    assert result == {"memory_report": {"attempted": False, "enabled": False}}
+
+
 def test_memory_lookup_applies_rebased_guarded_candidate(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

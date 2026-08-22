@@ -11,6 +11,7 @@ from app.cli import app
 from app.healing_history import load_history
 from app.sandbox import SandboxViolation
 from app.schemas import SCHEMA_VERSION, RepairSummary, SuiteSummary
+from app.state import AgentState
 from app.utils.files import atomic_write
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -53,7 +54,7 @@ def mock_graph_success(monkeypatch):
 @pytest.fixture
 def mock_graph_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     class MockGraph:
-        def invoke(self, state: dict) -> dict:
+        def invoke(self, state: AgentState) -> AgentState:
             state["is_success"] = False
             state["loop_count"] = 3
             state["current_code"] = "await page.click('#new')"
@@ -171,6 +172,94 @@ def test_cli_single_file_healed_failed(mock_graph_failure, monkeypatch, tmp_path
     assert test_file.read_text() == "await page.click('#old')"
 
 
+def test_cli_help_documents_memory_toggle() -> None:
+    result = CliRunner().invoke(app, ["heal", "--help"])
+
+    assert result.exit_code == 0
+    assert "--memory" in _strip_ansi(result.stdout)
+    assert "--no-memory" in _strip_ansi(result.stdout)
+
+
+def test_heal_file_no_memory_bypasses_persistence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    test_file = tmp_path / "test.spec.ts"
+    original = "await page.click('#old')"
+    replacement = "await page.click('#new')"
+    test_file.write_text(original)
+
+    class MockGraph:
+        def invoke(self, state: AgentState) -> AgentState:
+            assert state.get("memory_enabled", True) is False
+            state.update(
+                {
+                    "is_success": True,
+                    "current_code": replacement,
+                    "patch_instructions": {
+                        "instructions": [
+                            {
+                                "line": 1,
+                                "original": original,
+                                "replacement": replacement,
+                                "reason": "selector renamed",
+                                "selector": "#new",
+                            }
+                        ]
+                    },
+                }
+            )
+            atomic_write(Path(state["test_script_path"]), replacement)
+            return state
+
+    monkeypatch.setattr(cli_module, "build_graph", lambda: MockGraph())
+    monkeypatch.setattr(
+        cli_module,
+        "append_record",
+        lambda _: pytest.fail("--no-memory must not persist healing history"),
+    )
+
+    assert (
+        cli_module._heal_file(
+            test_file,
+            "Error: waiting for locator('#old') timed out",
+            [],
+            dry_run=False,
+            memory_enabled=False,
+        ).is_success
+        is True
+    )
+
+
+def test_cli_no_memory_passes_disabled_state_to_the_graph(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    test_file = tmp_path / "test.spec.ts"
+    test_file.write_text("await page.click('#old')")
+    log_file = tmp_path / "error.log"
+    log_file.write_text("Error: waiting for locator('#old') timed out")
+    seen_memory_enabled: list[bool] = []
+
+    class MockGraph:
+        def invoke(self, state: AgentState) -> AgentState:
+            seen_memory_enabled.append(state.get("memory_enabled", True))
+            state.update(
+                {
+                    "is_success": True,
+                    "current_code": "await page.click('#new')",
+                    "patch_instructions": {},
+                }
+            )
+            atomic_write(Path(state["test_script_path"]), state["current_code"])
+            return state
+
+    monkeypatch.setattr(cli_module, "build_graph", lambda: MockGraph())
+
+    result = CliRunner().invoke(app, [str(test_file), "--log", str(log_file), "--no-memory"])
+
+    assert result.exit_code == 0
+    assert seen_memory_enabled == [False]
+
+
 def test_cli_dry_run_restores_file(mock_graph_success, monkeypatch, tmp_path) -> None:
     test_file = tmp_path / "test.spec.ts"
     test_file.write_text("await page.click('#old')")
@@ -194,7 +283,7 @@ def test_heal_file_records_only_committed_selector_repairs(
     monkeypatch.setattr(cli_module.settings, "sandbox_mode", "strict")
 
     class MockGraph:
-        def invoke(self, state: dict) -> dict:
+        def invoke(self, state: AgentState) -> AgentState:
             state.update(
                 {
                     "is_success": True,

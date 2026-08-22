@@ -1,6 +1,7 @@
 """Suite-mode orchestration, with Playwright and per-file healing mocked out."""
 
 import pytest
+from pathlib import Path
 
 import app.cli as cli
 from app.config import settings
@@ -12,7 +13,7 @@ def _combined(*paths) -> str:
 
 
 @pytest.fixture(autouse=True)
-def _workspace(monkeypatch, tmp_path):
+def _workspace(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     # Auto-discovered targets must resolve under workspace_root, so anchor it to tmp_path
     # where the fixtures live (Issue #211).
     monkeypatch.setattr(settings, "sandbox_mode", "relaxed")
@@ -26,7 +27,7 @@ def test_suite_passes_nothing_to_heal(monkeypatch):
     assert summary.is_success is True
 
 
-def test_suite_all_healed(monkeypatch, tmp_path):
+def test_suite_all_healed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     a, b = tmp_path / "a.spec.ts", tmp_path / "b.spec.ts"
     a.write_text("x")
     b.write_text("y")
@@ -36,18 +37,18 @@ def test_suite_all_healed(monkeypatch, tmp_path):
         return (False, combined) if target == "" else (False, "focused")
 
     monkeypatch.setattr(cli, "run_playwright", fake_run)
-    monkeypatch.setattr(
-        cli,
-        "_heal_file",
-        lambda p, log, ctx, dry: RepairSummary(
-            test_script_path=str(p), is_success=True, loop_count=1
-        ),
-    )
+
+    def _heal(
+        path: Path, log: str, context: list[dict], dry_run: bool, memory_enabled: bool
+    ) -> RepairSummary:
+        return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
+
+    monkeypatch.setattr(cli, "_heal_file", _heal)
     summary = cli._heal_suite("", [], dry_run=False)
     assert (summary.total_failed, summary.healed, summary.is_success) == (2, 2, True)
 
 
-def test_suite_partial_heal_is_not_success(monkeypatch, tmp_path):
+def test_suite_partial_heal_is_not_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     a, b = tmp_path / "a.spec.ts", tmp_path / "b.spec.ts"
     a.write_text("x")
     b.write_text("y")
@@ -55,13 +56,15 @@ def test_suite_partial_heal_is_not_success(monkeypatch, tmp_path):
     monkeypatch.setattr(
         cli, "run_playwright", lambda target="": (False, combined) if target == "" else (False, "f")
     )
-    monkeypatch.setattr(
-        cli,
-        "_heal_file",
-        lambda p, log, ctx, dry: RepairSummary(
-            test_script_path=str(p), is_success=(p.name == "a.spec.ts"), loop_count=1
-        ),
-    )
+
+    def _heal(
+        path: Path, log: str, context: list[dict], dry_run: bool, memory_enabled: bool
+    ) -> RepairSummary:
+        return RepairSummary(
+            test_script_path=str(path), is_success=(path.name == "a.spec.ts"), loop_count=1
+        )
+
+    monkeypatch.setattr(cli, "_heal_file", _heal)
     summary = cli._heal_suite("", [], dry_run=False)
     assert (summary.total_failed, summary.healed, summary.is_success) == (2, 1, False)
 
@@ -83,7 +86,9 @@ def test_suite_skips_heal_when_file_passes_on_rerun(monkeypatch, tmp_path):
     assert (summary.total_failed, summary.healed, summary.is_success) == (1, 1, True)
 
 
-def test_suite_denies_external_path_but_keeps_it_visible(monkeypatch, tmp_path):
+def test_suite_denies_external_path_but_keeps_it_visible(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     # An absolute path outside the workspace (attacker-influenced reporter output) must not
     # be patched, yet must stay visible as an unresolved suite result (Issue #211).
     inside = tmp_path / "a.spec.ts"
@@ -95,9 +100,12 @@ def test_suite_denies_external_path_but_keeps_it_visible(monkeypatch, tmp_path):
     def fake_run(target=""):
         return (False, combined) if target == "" else (False, "focused")
 
-    def _heal(p, log, ctx, dry):
-        assert cli.Path(p) == inside, "only the in-workspace target may be healed"
-        return RepairSummary(test_script_path=str(p), is_success=True, loop_count=1)
+    def _heal(
+        path: Path, log: str, context: list[dict], dry_run: bool, memory_enabled: bool
+    ) -> RepairSummary:
+        assert path == inside, "only the in-workspace target may be healed"
+        assert memory_enabled is True
+        return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
 
     monkeypatch.setattr(cli, "run_playwright", fake_run)
     monkeypatch.setattr(cli, "_heal_file", _heal)
@@ -110,7 +118,9 @@ def test_suite_denies_external_path_but_keeps_it_visible(monkeypatch, tmp_path):
     assert outside.read_text() == "secret"
 
 
-def test_suite_denies_relative_external_path(monkeypatch, tmp_path):
+def test_suite_denies_relative_external_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     # A relative path that resolves outside the workspace is rejected too.
     inside = tmp_path / "a.spec.ts"
     inside.write_text("x")
@@ -119,16 +129,40 @@ def test_suite_denies_relative_external_path(monkeypatch, tmp_path):
     def fake_run(target=""):
         return (False, combined) if target == "" else (False, "focused")
 
+    def _heal(
+        path: Path, log: str, context: list[dict], dry_run: bool, memory: bool
+    ) -> RepairSummary:
+        return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
+
     monkeypatch.setattr(cli, "run_playwright", fake_run)
-    monkeypatch.setattr(
-        cli,
-        "_heal_file",
-        lambda p, log, ctx, dry: RepairSummary(
-            test_script_path=str(p), is_success=True, loop_count=1
-        ),
-    )
+    monkeypatch.setattr(cli, "_heal_file", _heal)
     summary = cli._heal_suite("", [], dry_run=False)
     assert (summary.total_failed, summary.healed, summary.is_success) == (2, 1, False)
     assert any(
         r.test_script_path == "../victim.spec.ts" and not r.is_success for r in summary.results
     )
+
+
+def test_suite_threads_no_memory_to_each_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    test_file = tmp_path / "a.spec.ts"
+    test_file.write_text("x")
+    seen_memory: list[bool] = []
+
+    def fake_run(target=""):
+        return (False, _combined(test_file)) if target == "" else (False, "focused")
+
+    def _heal(
+        path: Path, log: str, context: list[dict], dry_run: bool, memory_enabled: bool
+    ) -> RepairSummary:
+        seen_memory.append(memory_enabled)
+        return RepairSummary(test_script_path=str(path), is_success=True, loop_count=0)
+
+    monkeypatch.setattr(cli, "run_playwright", fake_run)
+    monkeypatch.setattr(cli, "_heal_file", _heal)
+
+    summary = cli._heal_suite("", [], dry_run=False, memory_enabled=False)
+
+    assert summary.is_success is True
+    assert seen_memory == [False]

@@ -26,6 +26,9 @@ def _rebase_instruction(code: str, instruction: PatchInstruction) -> PatchInstru
 
 def memory_lookup(state: AgentState) -> dict:
     """Attempt a high-confidence local repair before invoking any LLM."""
+    if not state.get("memory_enabled", True):
+        logger.info("memory_disabled")
+        return {"memory_report": {"attempted": False, "enabled": False}}
     record, score = find_match(state["error_log"], state["test_script_path"])
     if record is None:
         logger.info("memory_miss", score=score)
