@@ -11,6 +11,7 @@ from app.shadow.config import MissPolicy
 from app.shadow.interfaces import IMockInjector
 from app.shadow.match_options import MatchOptions
 from app.shadow.matcher import NoMatchError, SnapshotMatcher
+from app.shadow.redaction import redact_url
 from app.shadow.schemas import CapturedRequest, CapturedResponse, NetworkSnapshot
 
 logger = structlog.get_logger(__name__)
@@ -167,7 +168,7 @@ class MockInjector(IMockInjector):
         if self.miss_policy is MissPolicy.LENIENT:
             logger.warning(
                 "network_mock_miss_fallback_live",
-                url=captured_req.url,
+                url=redact_url(captured_req.url),
                 method=captured_req.method,
                 policy=self.miss_policy.value,
             )
@@ -177,7 +178,7 @@ class MockInjector(IMockInjector):
         if self.miss_policy is MissPolicy.RECORD_AND_AUGMENT:
             logger.warning(
                 "network_mock_miss_recording",
-                url=captured_req.url,
+                url=redact_url(captured_req.url),
                 method=captured_req.method,
                 policy=self.miss_policy.value,
             )
@@ -192,7 +193,7 @@ class MockInjector(IMockInjector):
         # Default: strict — fail on miss.
         logger.warning(
             "network_mock_no_match",
-            url=captured_req.url,
+            url=redact_url(captured_req.url),
             method=captured_req.method,
             policy=self.miss_policy.value,
         )
@@ -205,7 +206,7 @@ class MockInjector(IMockInjector):
         if self.miss_policy is MissPolicy.LENIENT:
             logger.warning(
                 "network_mock_miss_fallback_live",
-                url=captured_req.url,
+                url=redact_url(captured_req.url),
                 method=captured_req.method,
                 policy=self.miss_policy.value,
             )
@@ -215,7 +216,7 @@ class MockInjector(IMockInjector):
         if self.miss_policy is MissPolicy.RECORD_AND_AUGMENT:
             logger.warning(
                 "network_mock_miss_recording",
-                url=captured_req.url,
+                url=redact_url(captured_req.url),
                 method=captured_req.method,
                 policy=self.miss_policy.value,
             )
@@ -230,7 +231,7 @@ class MockInjector(IMockInjector):
         # Default: strict — fail on miss.
         logger.warning(
             "network_mock_no_match",
-            url=captured_req.url,
+            url=redact_url(captured_req.url),
             method=captured_req.method,
             policy=self.miss_policy.value,
         )
