@@ -158,7 +158,7 @@ class MockInjector(IMockInjector):
         snapshot = NetworkSnapshot(request=request, response=response)
         self.recorded_snapshots.append(snapshot)
         if self.matcher is not None:
-            self.matcher.snapshots.append(snapshot)
+            self.matcher.add_snapshot(snapshot)
 
     def _handle_miss_sync(self, route: Any, captured_req: CapturedRequest) -> None:
         """Apply the configured miss policy to an unmatched request (sync API)."""

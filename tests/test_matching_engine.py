@@ -1,4 +1,5 @@
 import pytest
+from concurrent.futures import ThreadPoolExecutor
 
 from app.shadow.normalizer import RequestNormalizer
 from app.shadow.scoring import MatchScorer, ScoringWeights
@@ -194,6 +195,73 @@ def test_matching_engine_url_vs_path_tie_breaker():
     incoming = CapturedRequest(method="GET", url="http://test.com/users?tab=all")
     resp = matcher.match(incoming)
     assert resp.body == "all-users"
+
+
+def test_matching_engine_replays_repeated_requests_in_captured_sequence_order():
+    request = CapturedRequest(method="GET", url="http://test.com/api/poll")
+    matcher = SnapshotMatcher(
+        [
+            NetworkSnapshot(
+                request=request, response=CapturedResponse(status=200, body="complete"), sequence=2
+            ),
+            NetworkSnapshot(
+                request=request, response=CapturedResponse(status=200, body="pending"), sequence=1
+            ),
+        ]
+    )
+
+    assert matcher.match(request).body == "pending"
+    assert matcher.match(request).body == "complete"
+
+    with pytest.raises(NoMatchError, match="queue exhausted"):
+        matcher.match(request)
+
+
+def test_matching_engine_keeps_replay_cursors_independent_per_request_signature():
+    poll = CapturedRequest(method="GET", url="http://test.com/api/poll")
+    page = CapturedRequest(method="GET", url="http://test.com/api/page")
+    matcher = SnapshotMatcher(
+        [
+            NetworkSnapshot(
+                request=poll, response=CapturedResponse(status=200, body="pending"), sequence=0
+            ),
+            NetworkSnapshot(
+                request=page, response=CapturedResponse(status=200, body="first-page"), sequence=1
+            ),
+            NetworkSnapshot(
+                request=poll, response=CapturedResponse(status=200, body="complete"), sequence=2
+            ),
+            NetworkSnapshot(
+                request=page, response=CapturedResponse(status=200, body="second-page"), sequence=3
+            ),
+        ]
+    )
+
+    assert matcher.match(poll).body == "pending"
+    assert matcher.match(page).body == "first-page"
+    assert matcher.match(poll).body == "complete"
+    assert matcher.match(page).body == "second-page"
+
+
+def test_matching_engine_reserves_repeated_responses_safely_across_threads():
+    request = CapturedRequest(method="GET", url="http://test.com/api/poll")
+    matcher = SnapshotMatcher(
+        [
+            NetworkSnapshot(
+                request=request,
+                response=CapturedResponse(status=200, body=str(sequence)),
+                sequence=sequence,
+            )
+            for sequence in range(20)
+        ]
+    )
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        responses = list(executor.map(lambda _: matcher.match(request).body, range(20)))
+
+    assert sorted(int(response) for response in responses if response is not None) == list(
+        range(20)
+    )
 
 
 def test_custom_scoring_weights():
