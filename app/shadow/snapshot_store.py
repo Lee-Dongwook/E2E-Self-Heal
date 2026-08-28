@@ -10,6 +10,7 @@ from typing import Any
 import structlog
 
 from app.shadow.interfaces import ISnapshotStore
+from app.shadow.redaction import redact_snapshot
 from app.shadow.schemas import ShadowSnapshot
 from app.shadow.workspace import ShadowWorkspace
 
@@ -71,6 +72,7 @@ class SnapshotStore(ISnapshotStore):
         fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
+                os.fchmod(f.fileno(), 0o600)
                 f.write(text)
                 f.flush()
                 os.fsync(f.fileno())
@@ -93,7 +95,7 @@ class SnapshotStore(ISnapshotStore):
                     f"Key/model id mismatch: key={snapshot_id!r}, "
                     f"model.snapshot_id={data.snapshot_id!r}"
                 )
-            snapshot_dict = data.model_dump()
+            snapshot_dict = redact_snapshot(data).model_dump()
         elif isinstance(data, dict):
             # A dict without an embedded id adopts the save key; a supplied id
             # must match the key exactly.
@@ -108,7 +110,7 @@ class SnapshotStore(ISnapshotStore):
                     f"Key/model id mismatch: key={snapshot_id!r}, "
                     f"model.snapshot_id={snapshot.snapshot_id!r}"
                 )
-            snapshot_dict = snapshot.model_dump()
+            snapshot_dict = redact_snapshot(snapshot).model_dump()
         else:
             raise SnapshotStoreError("Unsupported data type; expected ShadowSnapshot or dict")
 

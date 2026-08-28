@@ -37,3 +37,4 @@ repair-summary.json
 
 .vscode/
 /settings.json
+.shadow_workspace/
