@@ -52,7 +52,7 @@ jobs:
         with:
           mode: review
           working-directory: examples
-          test-path: classname-scenario/classname.spec.ts
+          test-path: scenarios/classname-rename/spec.ts
           diff-base: ${{ github.event.pull_request.base.sha }}
           nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
 

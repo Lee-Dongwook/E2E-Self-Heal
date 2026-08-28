@@ -1,0 +1,13 @@
+diff --git a/examples/demo-app/src/components/CTAButton.tsx b/examples/demo-app/src/components/CTAButton.tsx
+index 1111111..2222222 100644
+--- a/examples/demo-app/src/components/CTAButton.tsx
++++ b/examples/demo-app/src/components/CTAButton.tsx
+@@ -5,7 +5,7 @@ type CTAButtonProps = {
+ // The className was renamed from "cta-button" to "cta-primary", breaking the scenario.
+ export function CTAButton({ onClick }: CTAButtonProps) {
+   return (
+-    <button className="cta-button" onClick={onClick} type="button">
++    <button className="cta-primary" onClick={onClick} type="button">
+       Get started
+     </button>
+   );
