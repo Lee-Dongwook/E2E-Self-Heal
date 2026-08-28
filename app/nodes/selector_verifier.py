@@ -9,12 +9,14 @@ Graceful by design — if verification is disabled, no app URL is set, there are
 edits, or the Node helper can't run, it passes through and lets the Test Runner arbitrate.
 """
 
+from pathlib import Path
+
 import structlog
 
 from app.config import settings
 from app.schemas import PatchInstruction
 from app.state import AgentState
-from app.utils.files import split_line_ending
+from app.utils.files import atomic_write, split_line_ending
 from app.verify.selector_check import check_selectors
 
 logger = structlog.get_logger(__name__)
@@ -64,15 +66,21 @@ def selector_verifier(state: AgentState) -> dict:
     bad = {sel: count for sel, count in counts.items() if count != 1}
     if not bad:
         logger.info("selector_verify_passed", counts=counts)
-        return {"verification_report": {"ok": True, "counts": counts}}
+        return {
+            "rollback_code": state["current_code"],
+            "verification_report": {"ok": True, "counts": counts},
+        }
 
+    rollback_code = state.get("rollback_code", state["original_code"])
+    atomic_write(Path(state["test_script_path"]), rollback_code)
     memory_candidate = state.get("memory_report", {}).get("active", False)
     if memory_candidate:
         logger.info("memory_candidate_rejected", stage="selector_verifier", bad=bad)
     next_count = state["loop_count"] if memory_candidate else state["loop_count"] + 1
     logger.info("selector_verify_failed", bad=bad, loop_count=next_count)
     return {
-        "current_code": _revert(state["current_code"], instructions),
+        "current_code": rollback_code,
+        "rollback_code": rollback_code,
         "analysis_report": state["analysis_report"] + _feedback(bad),
         "loop_count": next_count,
         "verification_report": {"ok": False, "counts": counts},
