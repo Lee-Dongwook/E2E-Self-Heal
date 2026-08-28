@@ -23,6 +23,15 @@ logger = structlog.get_logger(__name__)
 _TERMINATE_TIMEOUT_SECONDS = 10
 
 
+def process_group_kwargs() -> dict[str, Any]:
+    """Return ``Popen`` options that isolate a child process tree for cleanup."""
+    return (
+        {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+        if sys.platform == "win32"
+        else {"start_new_session": True}
+    )
+
+
 def _as_text(stream: str | bytes | None) -> str:
     """Coerce captured subprocess output to text (it is bytes when a timeout kills the run)."""
     if stream is None:
@@ -71,17 +80,12 @@ def run_playwright(test_path: str = "") -> tuple[bool, str]:
     # Launch in its own process group (POSIX) / group (Windows) so a timeout can reap the
     # entire tree — Playwright spawns browser and helper descendants that ``subprocess.run``
     # would otherwise leave orphaned.
-    group_kwargs: dict[str, Any] = (
-        {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-        if sys.platform == "win32"
-        else {"start_new_session": True}
-    )
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        **group_kwargs,
+        **process_group_kwargs(),
     )
     try:
         stdout, stderr = process.communicate(timeout=timeout)
