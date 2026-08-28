@@ -39,7 +39,7 @@ def test_reviewer_returns_findings(monkeypatch):
     assert findings[0]["recommended_selector"].startswith("getByRole")
 
 
-def test_reviewer_returns_empty_report_on_llm_failure(monkeypatch):
+def test_reviewer_marks_report_incomplete_on_llm_failure(monkeypatch):
     def boom(*args, **kwargs):
         raise RuntimeError("llm exploded")
 
@@ -47,4 +47,10 @@ def test_reviewer_returns_empty_report_on_llm_failure(monkeypatch):
 
     result = reviewer(BASE_STATE)
 
-    assert result == {"review_report": {"findings": []}}
+    assert result == {
+        "review_report": {
+            "findings": [],
+            "is_complete": False,
+            "error": "review provider failed to generate suggestions",
+        }
+    }

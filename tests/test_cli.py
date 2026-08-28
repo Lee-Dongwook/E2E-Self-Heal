@@ -124,6 +124,32 @@ def test_cli_review_emits_report_and_leaves_file_unmodified(
     assert test_file.read_text() == original
 
 
+def test_cli_review_fails_for_an_incomplete_provider_review(monkeypatch, tmp_path) -> None:
+    class MockGraph:
+        def invoke(self, state):
+            state["review_report"] = {
+                "findings": [],
+                "is_complete": False,
+                "error": "review provider failed to generate suggestions",
+            }
+            return state
+
+    monkeypatch.setattr(cli_module, "build_review_graph", lambda: MockGraph())
+    test_file = tmp_path / "test.spec.ts"
+    test_file.write_text("await page.click('#cta')")
+    log_file = tmp_path / "error.log"
+    log_file.write_text("Timeout error waiting for selector")
+
+    result = CliRunner().invoke(app, ["review", str(test_file), "--log", str(log_file), "--json"])
+
+    assert result.exit_code == 1
+    json_line = next(line for line in result.stdout.splitlines() if line.strip().startswith("{"))
+    data = json.loads(json_line)
+    assert data["is_complete"] is False
+    assert data["error"] == "review provider failed to generate suggestions"
+    assert "review incomplete:" in result.stderr
+
+
 def test_cli_review_test_path_not_exists() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["review", "nonexistent_file.spec.ts"])
