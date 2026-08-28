@@ -81,3 +81,9 @@ def test_review_report_kind_is_review() -> None:
     data = json.loads(_review(has_findings=True).model_dump_json())
     assert data["kind"] == "review"
     assert data["schema_version"] == SCHEMA_VERSION
+
+
+def test_review_report_marks_incomplete_provider_failures() -> None:
+    data = json.loads(_review(is_complete=False, error="review provider failed").model_dump_json())
+    assert data["is_complete"] is False
+    assert data["error"] == "review provider failed"

@@ -284,11 +284,16 @@ def _review_file(test_path: Path, raw_log: str, dom_diff_context: list[dict]) ->
     }
     logger.info("review_run_started", test_script_path=str(test_path))
     final_state = build_review_graph().invoke(initial_state)
-    findings = [ReviewFinding(**f) for f in final_state["review_report"].get("findings", [])]
+    review_result = final_state["review_report"]
+    findings = [ReviewFinding(**f) for f in review_result.get("findings", [])]
     report = ReviewReport(
-        test_script_path=str(test_path), findings=findings, has_findings=len(findings) > 0
+        test_script_path=str(test_path),
+        findings=findings,
+        has_findings=len(findings) > 0,
+        is_complete=review_result.get("is_complete", True),
+        error=review_result.get("error"),
     )
-    logger.info("review_run_finished", finding_count=len(findings))
+    logger.info("review_run_finished", finding_count=len(findings), is_complete=report.is_complete)
     return report
 
 
@@ -501,6 +506,9 @@ def review(
         report = _review_file(test_path, raw_log, dom_diff_context)
         if json_output:
             typer.echo(report.model_dump_json())
+        if not report.is_complete:
+            console.print(f"[red]review incomplete:[/red] {report.error}")
+            raise typer.Exit(code=1)
         _render_findings(report)
         console.print(f"[bold]{len(report.findings)}[/bold] source-level suggestion(s)")
         raise typer.Exit(code=0)

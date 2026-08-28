@@ -14,8 +14,8 @@ logger = structlog.get_logger(__name__)
 def reviewer(state: AgentState) -> dict:
     """Turn the diagnosis + DOM changes into source-level suggestions (never edits the test).
 
-    On any LLM/parse failure, log and return an empty report rather than crashing the graph
-    (Rule 10) — the CLI then reports "no findings" instead of failing the run.
+    On any LLM/parse failure, log and return an incomplete report. The CLI can then fail
+    the review instead of mistaking a provider outage for a completed review with no findings.
     """
     logger.info("reviewer_started")
     user_prompt = (
@@ -28,7 +28,13 @@ def reviewer(state: AgentState) -> dict:
         output = generate_review(SYSTEM_PROMPT, user_prompt)
     except Exception:
         logger.exception("review_generation_failed")
-        return {"review_report": {"findings": []}}
+        return {
+            "review_report": {
+                "findings": [],
+                "is_complete": False,
+                "error": "review provider failed to generate suggestions",
+            }
+        }
 
     logger.info("reviewer_finished", finding_count=len(output.findings))
     return {"review_report": output.model_dump()}

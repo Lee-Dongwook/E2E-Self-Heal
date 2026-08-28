@@ -127,6 +127,14 @@ class ReviewReport(BaseModel):
     test_script_path: str
     findings: list[ReviewFinding] = Field(default_factory=list)
     has_findings: bool = False
+    is_complete: bool = Field(
+        default=True,
+        description="whether the review provider completed successfully",
+    )
+    error: str | None = Field(
+        default=None,
+        description="safe, user-facing reason when the review could not complete",
+    )
 
 
 class SelectorHint(BaseModel):
