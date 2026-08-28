@@ -30,6 +30,9 @@ class AgentState(TypedDict):
     test_script_path: str  # path to the test file under repair
     original_code: str  # the original test script
     current_code: str  # test script as modified in the current loop
+    # Last candidate accepted by verification. Nodes use this single value for rollback
+    # instead of deriving a baseline from the mutable file on disk.
+    rollback_code: NotRequired[str]
     error_log: str  # latest Playwright error log (abstracted)
     dom_diff_context: list[dict]  # DOM changes from AST parsing
     dom_snapshot: str  # ARIA snapshot of the failing page (from error-context.md)

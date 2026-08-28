@@ -79,16 +79,23 @@ def test_passes_on_unique_match(monkeypatch):
     monkeypatch.setattr(verifier_node, "check_selectors", lambda url, sels: {"#new": 1})
     result = selector_verifier(_state("#new"))
     assert result["verification_report"] == {"ok": True, "counts": {"#new": 1}}
+    assert result["rollback_code"] == PATCHED
     assert "current_code" not in result  # nothing reverted
 
 
-def test_rejects_and_reverts_on_zero_match(monkeypatch):
+def test_rejects_and_reverts_on_zero_match(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "verify_selectors", True)
     monkeypatch.setattr(settings, "app_url", "http://localhost:4173")
     monkeypatch.setattr(verifier_node, "check_selectors", lambda url, sels: {"#new": 0})
-    result = selector_verifier(_state("#new"))
+    test_file = tmp_path / "t.spec.ts"
+    test_file.write_text(PATCHED)
+    result = selector_verifier(
+        _state("#new", test_script_path=str(test_file), rollback_code=ORIGINAL)
+    )
     assert result["verification_report"]["ok"] is False
     assert result["current_code"] == ORIGINAL  # patch reverted
+    assert result["rollback_code"] == ORIGINAL
+    assert test_file.read_text() == ORIGINAL
     assert result["loop_count"] == 1
     assert "VERIFICATION FEEDBACK" in result["analysis_report"]
 

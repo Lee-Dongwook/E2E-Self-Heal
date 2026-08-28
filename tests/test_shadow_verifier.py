@@ -167,6 +167,48 @@ def test_shadow_verifier_fails_and_reverts_on_failed_replay(tmp_path, monkeypatc
     )
 
 
+def test_shadow_verifier_uses_state_rollback_code_instead_of_stale_disk(tmp_path, monkeypatch):
+    test_file = tmp_path / "login.spec.ts"
+    stale_rejected_code = "console.log('rejected-by-live-verification');"
+    rollback_code = "console.log('last-accepted');"
+    test_file.write_text(stale_rejected_code, encoding="utf-8")
+
+    ws_dir = tmp_path / "shadow"
+    config = ShadowConfig(workspace_dir=str(ws_dir))
+    store = SnapshotStore(ShadowWorkspace(config))
+    store.save_snapshot(
+        "login.spec", ShadowSnapshot(snapshot_id="login.spec", network_snapshots=[])
+    )
+    monkeypatch.setattr("app.nodes.shadow_verifier.ShadowConfig", lambda: config)
+    monkeypatch.setattr(
+        "app.nodes.shadow_verifier.run_shadow",
+        lambda *args, **kwargs: ShadowRunResult(
+            is_success=False, matched_count=0, missed_count=1, score=0.0
+        ),
+    )
+
+    state: AgentState = {
+        "test_script_path": str(test_file),
+        "original_code": "console.log('original');",
+        "current_code": "console.log('next-candidate');",
+        "rollback_code": rollback_code,
+        "error_log": "",
+        "dom_diff_context": [],
+        "dom_snapshot": "",
+        "analysis_report": "Original analysis report",
+        "patch_instructions": {},
+        "verification_report": {},
+        "loop_count": 1,
+        "is_success": False,
+    }
+
+    result = shadow_verifier(state)
+
+    assert result["current_code"] == rollback_code
+    assert result["rollback_code"] == rollback_code
+    assert test_file.read_text(encoding="utf-8") == rollback_code
+
+
 def test_shadow_verifier_reverts_on_placeholder_result(tmp_path, monkeypatch):
     test_file = tmp_path / "login.spec.ts"
     test_file.write_text("console.log('original');", encoding="utf-8")

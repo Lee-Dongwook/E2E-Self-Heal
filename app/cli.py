@@ -167,6 +167,7 @@ def _heal_file(
         "test_script_path": str(test_path),
         "original_code": original_code,
         "current_code": original_code,
+        "rollback_code": original_code,
         "error_log": parsed_error_log,
         "dom_diff_context": dom_diff_context,
         "dom_snapshot": read_failure_snapshot(Path(settings.test_results_dir)),
