@@ -2,6 +2,7 @@ import subprocess
 from unittest.mock import MagicMock
 import pytest
 
+from app.config import settings
 from app.shadow import (
     CapturedRequest,
     CapturedResponse,
@@ -170,14 +171,16 @@ def test_run_shadow_with_mock_playwright_and_snapshots(
     test_file = tmp_path / "test.spec.ts"
     test_file.write_text("console.log('test');")
 
-    # Mock subprocess.run
+    # Mock subprocess.Popen
     subprocess_called = []
 
-    def mock_subprocess_run(cmd, **kwargs):
+    def mock_subprocess_popen(cmd, **kwargs):
         subprocess_called.append(cmd)
-        return MagicMock(returncode=0)
+        process = MagicMock(returncode=0)
+        process.communicate.return_value = ("", "")
+        return process
 
-    monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
+    monkeypatch.setattr(subprocess, "Popen", mock_subprocess_popen)
 
     # Turn off sandbox so the tmp config write is allowed during the test
     monkeypatch.setattr(
@@ -238,3 +241,49 @@ def test_run_shadow_with_mock_playwright_and_snapshots(
     assert ws.snapshots_dir.is_dir()
     assert not ws.cache_dir.exists()
     assert not ws.tmp_dir.exists()
+
+
+def test_run_shadow_timeout_terminates_the_full_process_tree(tmp_path, monkeypatch):
+    ws_dir = tmp_path / "shadow"
+    config = ShadowConfig(workspace_dir=str(ws_dir))
+    ws = ShadowWorkspace(config)
+    SnapshotStore(ws).save_snapshot("test_snap", ShadowSnapshot(snapshot_id="test_snap"))
+    test_file = tmp_path / "test.spec.ts"
+    test_file.write_text("console.log('test');")
+
+    process = MagicMock()
+    process.communicate.side_effect = [
+        subprocess.TimeoutExpired("npx", 7, output="partial out", stderr="partial err"),
+        ("", ""),
+    ]
+    process.poll.return_value = None
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr("app.shadow.runtime._terminate_process_tree", lambda child: child.kill())
+    monkeypatch.setattr(settings, "test_timeout_seconds", 7)
+    monkeypatch.setattr("app.shadow.runtime.assert_write_allowed", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.shadow.runtime.assert_command_allowed", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.shadow.runtime._get_free_port", lambda: 19999)
+    monkeypatch.setattr("app.shadow.runtime._fetch_ws_endpoint", lambda *args: "ws://example")
+
+    context = MagicMock()
+    browser = MagicMock()
+    browser.new_context.return_value = context
+    playwright = MagicMock()
+    playwright.chromium.launch.return_value = browser
+
+    class MockSyncPlaywright:
+        def __enter__(self):
+            return playwright
+
+        def __exit__(self, *args):
+            return None
+
+    monkeypatch.setattr("app.shadow.runtime.sync_playwright", MockSyncPlaywright)
+
+    result = run_shadow(test_path=test_file, snapshot_id="test_snap", config=config)
+
+    assert isinstance(result, ShadowRunResult)
+    assert result.is_success is False
+    process.kill.assert_called_once()
+    assert process.communicate.call_args_list[0].kwargs["timeout"] == 7
+    assert process.communicate.call_args_list[1].kwargs["timeout"] == 5

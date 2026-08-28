@@ -18,6 +18,7 @@ import structlog
 from playwright.sync_api import sync_playwright
 
 from app.config import settings
+from app.runner import _as_text, _terminate_process_tree, process_group_kwargs
 from app.sandbox import assert_command_allowed, assert_read_allowed, assert_write_allowed
 from app.shadow.browser_state import to_playwright_storage_state
 from app.shadow.config import ShadowConfig
@@ -226,13 +227,51 @@ def run_shadow(
                 env["PLAYWRIGHT_WS_ENDPOINT"] = ws_endpoint
 
                 logger.info("shadow_playwright_run_started", cmd=cmd)
-                proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
-                is_success = proc.returncode == 0
-                logger.info(
-                    "shadow_playwright_run_finished",
-                    passed=is_success,
-                    returncode=proc.returncode,
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    env=env,
+                    **process_group_kwargs(),
                 )
+                try:
+                    stdout, stderr = process.communicate(timeout=settings.test_timeout_seconds)
+                except subprocess.TimeoutExpired as exc:
+                    _terminate_process_tree(process)
+                    try:
+                        drained_stdout, drained_stderr = process.communicate(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        drained_stdout, drained_stderr = "", ""
+                    logger.warning(
+                        "shadow_playwright_timeout",
+                        timeout=settings.test_timeout_seconds,
+                        path=str(test_path),
+                    )
+                    logger.info(
+                        "shadow_playwright_run_finished",
+                        passed=False,
+                        timed_out=True,
+                    )
+                    is_success = False
+                    # Keep partial output available to debuggers without changing the
+                    # public ShadowRunResult schema.
+                    logger.debug(
+                        "shadow_playwright_timeout_output",
+                        output=(
+                            _as_text(exc.stdout)
+                            + _as_text(exc.stderr)
+                            + _as_text(drained_stdout)
+                            + _as_text(drained_stderr)
+                        ),
+                    )
+                else:
+                    is_success = process.returncode == 0
+                    logger.info(
+                        "shadow_playwright_run_finished",
+                        passed=is_success,
+                        returncode=process.returncode,
+                    )
             finally:
                 context.close()
         finally:
