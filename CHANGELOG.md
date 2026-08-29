@@ -6,11 +6,25 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-29
+
 ### Added
 - **Self-describing JSON contract** — every `--json` summary (`RepairSummary`, `SuiteSummary`,
   `ReviewReport`) now carries a `schema_version` (currently `"1.0"`) and a `kind`
   discriminator (`"repair"` / `"suite"` / `"review"`) so CI wrappers can detect breaking
   changes and dispatch on the payload without guessing keys (#189).
+- **Healing-history memory** — successful, verified selector repairs are stored locally in
+  `.e2e-healer/healing-history.json` and consulted before invoking the LLM. Matching remains
+  guarded by the test path, selector context, and selector verification; pass `--no-memory`
+  to bypass both lookup and storage (#208).
+- **Offline token benchmark** — `e2e-healer benchmark` compares full-file and JSX-context
+  diagnoser prompts against checked-in scenarios, making the context-reduction benefit
+  measurable without an API key or a live Playwright run.
+- **DeepSeek provider** — `E2E_HEALER_LLM_PROVIDER=deepseek` supports the DeepSeek Responses
+  API with structured output. It uses `E2E_HEALER_LLM_API_KEY` or `DEEPSEEK_API_KEY` and
+  defaults to `deepseek-v4-flash`.
+- **DOM-diff line locations** — extracted JSX/TSX DOM changes now include the line numbers in
+  the new file, improving the context supplied to diagnosis and patch generation (#224).
 
 ### Fixed
 - **Settings validation** — `E2E_HEALER_MAX_LOOPS` is now bounded to `1..3` (Commandment #3:
@@ -22,11 +36,42 @@ All notable changes to this project are documented here. The format is based on
 - **Fail-fast provider configuration** — selecting a provider without a model name
   (`E2E_HEALER_LLM_MODEL`) now errors at config load rather than surfacing deep inside the
   provider SDK on the first LLM call. NVIDIA keeps its legacy default model (#184).
+- **Repair guardrail coverage** — patch validation now ignores Playwright-like calls in
+  comments, strings, regular-expression literals, and template-expression text; it also
+  rejects edits to action option objects and preserves original input data. This closes paths
+  that could otherwise allow changes beyond selectors and wait conditions (#256, #260, #261).
+- **Rollback and file safety** — the original test is restored after graph exceptions, atomic
+  writes preserve existing permissions and line endings, reject symlink/special-file targets
+  and symlinked parents, and fsync both replacement and parent directory (#210, #257).
+- **Shadow replay reliability** — replay URLs must be absolute and origin-compatible, scoring
+  is averaged across matches, workspaces are cleaned up safely, and execution has a bounded
+  timeout so replay cannot hang indefinitely (#213, #214).
+- **Shadow snapshot confidentiality and integrity** — sensitive values are redacted before
+  snapshots are persisted; snapshot identity, corruption handling, and content validation are
+  hardened (#219).
+- **Review and CLI outcomes** — incomplete provider reviews are reported rather than treated
+  as complete, missing provider configuration exits nonzero, and failed healing no longer
+  leaves a stale summary path (#221, #222).
+- **Verification consistency** — every verification rollback path now restores the same
+  original test state (#218).
+- **Examples and integration** — the class-name rename scenario is runnable again, and the
+  composite GitHub Action installs the healer from the action path with tighter consumer
+  permissions (#192).
+
+### Changed
+- **Healer graph flow** — guarded healing-history lookup runs before diagnosis and can short-
+  circuit LLM work only after the remembered repair passes selector verification.
+- Documentation, examples, and GitHub Action smoke coverage now reflect the current CLI,
+  JSON summaries, exit-code contract, and sandbox behavior.
+
+### Security
+- Shadow snapshot redaction removes sensitive headers, cookies, query values, and JSON fields
+  before persisted replay data can be exposed (#213).
 
 ## [0.5.0-pre] - 2026-07-28
 
-Preview release. Everything below is shipped and tested, but the surfaces added here
-(registry, notifications, selector hints, Shadow extensions) may still change before `0.5.0`.
+Preview release. Everything below is shipped and tested; the surfaces added here
+(registry, notifications, selector hints, Shadow extensions) were finalized in `0.5.0`.
 
 ### Added
 - **Failed Test Registry** (`app/registry.py`) — aggregate failure statistics for the heal
@@ -196,7 +241,8 @@ Preview release. Everything below is shipped and tested, but the surfaces added 
 - LLM provider migrated from OpenAI to NVIDIA NIM (`openai/gpt-oss-120b`) via the
   OpenAI-compatible endpoint; Structured Outputs guardrail retained.
 
-[Unreleased]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5-pre...HEAD
+[Unreleased]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5-pre...v0.5.0
 [0.5.0-pre]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.4.0...v0.5-pre
 [0.4.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.2.2...v0.3.0
