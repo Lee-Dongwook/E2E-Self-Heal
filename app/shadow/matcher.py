@@ -59,11 +59,17 @@ class SnapshotMatcher:
         queue = self._snapshot_queues[signature]
         queue.append((self._sequence_key(snapshot, index), snapshot))
         queue.sort(key=lambda item: item[0])
+        # Reserved items are removed from the queue in ``_best``.  Keep the
+        # cursor at the start so re-sorting after an augmentation cannot make
+        # it point past (or at a different) pending item.
+        self._queue_positions[signature] = 0
 
     @staticmethod
     def _sequence_key(snapshot: NetworkSnapshot, index: int) -> tuple[int, int]:
-        """Order captured entries by sequence, using list position when it is absent."""
-        return (snapshot.sequence if snapshot.sequence is not None else index, index)
+        """Order sequenced entries first, then unsequenced entries by insertion order."""
+        if snapshot.sequence is not None:
+            return (0, snapshot.sequence)
+        return (1, index)
 
     def _request_signature(self, request: CapturedRequest) -> str:
         """Return a stable key for requests equivalent after normalisation.
@@ -131,8 +137,8 @@ class SnapshotMatcher:
             if position >= len(queue):
                 raise NoMatchError(request, "Matching network snapshot queue exhausted")
 
-            _, snapshot = queue[position]
-            self._queue_positions[signature] += 1
+            _, snapshot = queue.pop(position)
+            self._queue_positions[signature] = 0
             return snapshot, score
 
     def match(self, request: CapturedRequest) -> CapturedResponse:
