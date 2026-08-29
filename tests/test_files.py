@@ -1,6 +1,7 @@
 import os
 import socket
 import stat
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -238,12 +239,16 @@ def test_atomic_write_rejects_existing_socket_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(settings, "sandbox_mode", "off")
-    target = tmp_path / "socket.spec.ts"
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    try:
-        server.bind(str(target))
-        with pytest.raises(SandboxViolation, match="non-regular"):
-            atomic_write(target, "new")
-    finally:
-        server.close()
-        target.unlink(missing_ok=True)
+    # macOS limits AF_UNIX paths to 104 bytes; pytest's default temporary
+    # directory under /private/var/folders can exceed that limit. Use the
+    # real /private/tmp path because /tmp is a symlink on macOS.
+    with tempfile.TemporaryDirectory(dir="/private/tmp", prefix="e2e-") as directory:
+        target = Path(directory) / "socket.spec.ts"
+        try:
+            server.bind(str(target))
+            with pytest.raises(SandboxViolation, match="non-regular"):
+                atomic_write(target, "new")
+        finally:
+            server.close()
+            target.unlink(missing_ok=True)
