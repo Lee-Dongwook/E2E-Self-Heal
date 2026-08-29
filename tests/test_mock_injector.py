@@ -61,6 +61,49 @@ def test_snapshot_matcher_no_match():
         matcher.match(req_other_path)
 
 
+def test_snapshot_matcher_consumes_queue_entries_before_resorting_on_augmentation():
+    request = CapturedRequest(method="GET", url="https://api.example.com/events")
+    snapshots = [
+        NetworkSnapshot(
+            request=request, response=CapturedResponse(status=200, body="first"), sequence=10
+        ),
+        NetworkSnapshot(
+            request=request, response=CapturedResponse(status=200, body="third"), sequence=30
+        ),
+    ]
+    matcher = SnapshotMatcher(snapshots)
+
+    assert matcher.match(request).body == "first"
+
+    matcher.add_snapshot(
+        NetworkSnapshot(
+            request=request, response=CapturedResponse(status=200, body="second"), sequence=20
+        )
+    )
+
+    assert matcher.match(request).body == "second"
+    assert matcher.match(request).body == "third"
+
+
+def test_snapshot_matcher_replays_unsequenced_augmentations_after_captured_sequences():
+    request = CapturedRequest(method="GET", url="https://api.example.com/events")
+    snapshots = [
+        NetworkSnapshot(
+            request=request, response=CapturedResponse(status=200, body="third"), sequence=30
+        ),
+        NetworkSnapshot(
+            request=request, response=CapturedResponse(status=200, body="first"), sequence=10
+        ),
+    ]
+    matcher = SnapshotMatcher(snapshots)
+
+    matcher.add_snapshot(
+        NetworkSnapshot(request=request, response=CapturedResponse(status=200, body="live"))
+    )
+
+    assert [matcher.match(request).body for _ in range(3)] == ["first", "third", "live"]
+
+
 def test_mock_injector_applies_match_options_to_snapshot_lists():
     snapshot = NetworkSnapshot(
         request=CapturedRequest(method="GET", url="https://captured.example/data"),
