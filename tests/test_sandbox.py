@@ -107,6 +107,29 @@ def test_strict_allows_selector_verifier_temp_helper(monkeypatch, tmp_path):
     assert_write_allowed(root / ".e2e-healer-verify.mjs", reason="selector_verifier_helper")
 
 
+@pytest.mark.parametrize("suffix", [".mjs", ".cjs"])
+def test_strict_allows_shadow_replay_temp_helper(monkeypatch, tmp_path, suffix):
+    root = tmp_path / "repo"
+    root.mkdir()
+    _strict(monkeypatch, root)
+    monkeypatch.setattr(settings, "allow_temp_helper", True)
+
+    assert_write_allowed(
+        root / f".e2e-healer-shadow-unique{suffix}",
+        reason="shadow_replay_helper",
+    )
+
+
+def test_shadow_replay_helper_reason_rejects_unexpected_name(monkeypatch, tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    _strict(monkeypatch, root)
+    monkeypatch.setattr(settings, "write_globs", "**/*")
+
+    with pytest.raises(SandboxViolation, match="unexpected Shadow helper"):
+        assert_write_allowed(root / "arbitrary.mjs", reason="shadow_replay_helper")
+
+
 def _relaxed(monkeypatch, root: Path) -> None:
     monkeypatch.setattr(settings, "sandbox_mode", "relaxed")
     monkeypatch.setattr(settings, "workspace_root", str(root))

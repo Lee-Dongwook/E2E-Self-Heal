@@ -79,6 +79,18 @@ jobs:
         working-directory: examples
         run: pnpm exec playwright install chromium
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install Python dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Verify cross-process Shadow replay
+        run: uv run pytest tests/test_shadow_runtime_integration.py -v
+
       - name: Verify demo is green on a clean checkout
         working-directory: examples
         run: pnpm exec playwright test scenarios/id-rename

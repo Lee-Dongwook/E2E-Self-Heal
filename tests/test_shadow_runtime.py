@@ -1,5 +1,9 @@
+import json
 import subprocess
+import urllib.request
+from pathlib import Path
 from unittest.mock import MagicMock
+
 import pytest
 
 from app.config import settings
@@ -17,6 +21,7 @@ from app.shadow import (
     ShadowWorkspace,
 )
 from app.shadow.context import ShadowContext
+from app.shadow.replay_bridge import create_shadow_test_artifacts
 from app.shadow.runtime import SHADOW_PLACEHOLDER_MESSAGE, _build_run_result, run_shadow
 from app.shadow.snapshot_store import SnapshotStore
 
@@ -89,6 +94,24 @@ def test_run_shadow_exercises_lifecycle_and_returns_message():
     assert run_shadow() == SHADOW_PLACEHOLDER_MESSAGE
 
 
+def test_shadow_test_artifacts_support_commonjs_and_cleanup(tmp_path, monkeypatch):
+    test_file = tmp_path / "replay.spec.js"
+    test_file.write_text(
+        "const { test } = require('@playwright/test');\ntest('shadow', async () => {});\n"
+    )
+    monkeypatch.setattr(settings, "sandbox_mode", "off")
+
+    artifacts = create_shadow_test_artifacts(test_file, storage_state=None)
+
+    assert artifacts.fixture_path.suffix == ".cjs"
+    assert f'require("./{artifacts.fixture_path.name}")' in artifacts.test_path.read_text()
+    assert "module.exports = { ...playwright, test };" in artifacts.fixture_path.read_text()
+
+    artifacts.cleanup()
+    assert not artifacts.fixture_path.exists()
+    assert not artifacts.test_path.exists()
+
+
 @pytest.mark.parametrize(
     ("matched_scores", "missed_count", "expected_score"),
     [
@@ -123,9 +146,9 @@ def test_build_run_result_averages_only_matched_requests(
 
 
 @pytest.mark.parametrize(
-    ("state_snapshots", "expected_context_kwargs"),
+    ("state_snapshots", "expected_storage_fragment"),
     [
-        ([], {}),
+        ([], None),
         (
             [
                 LocalStorageSnapshot(
@@ -133,23 +156,13 @@ def test_build_run_result_averages_only_matched_requests(
                     items={"theme": "dark"},
                 )
             ],
-            {
-                "storage_state": {
-                    "cookies": [],
-                    "origins": [
-                        {
-                            "origin": "https://app.example.com",
-                            "localStorage": [{"name": "theme", "value": "dark"}],
-                        }
-                    ],
-                }
-            },
+            '"origin":"https://app.example.com","localStorage":[{"name":"theme","value":"dark"}]',
         ),
     ],
     ids=["legacy-http-only", "local-storage"],
 )
 def test_run_shadow_with_mock_playwright_and_snapshots(
-    tmp_path, monkeypatch, state_snapshots, expected_context_kwargs
+    tmp_path, monkeypatch, state_snapshots, expected_storage_fragment
 ):
     ws_dir = tmp_path / "shadow"
     config = ShadowConfig(workspace_dir=str(ws_dir))
@@ -169,63 +182,54 @@ def test_run_shadow_with_mock_playwright_and_snapshots(
     store.save_snapshot("test_snap", snapshot)
 
     test_file = tmp_path / "test.spec.ts"
-    test_file.write_text("console.log('test');")
+    original_source = "import { test } from '@playwright/test';\ntest('shadow', async () => {});\n"
+    test_file.write_text(original_source)
 
-    # Mock subprocess.Popen
-    subprocess_called = []
+    subprocess_called: list[list[str]] = []
+    generated_fixture_sources: list[str] = []
 
     def mock_subprocess_popen(cmd, **kwargs):
         subprocess_called.append(cmd)
+        generated_test = Path(cmd[-1])
+        assert generated_test != test_file
+        assert ".e2e-healer-shadow-" in generated_test.name
+        assert "@playwright/test" not in generated_test.read_text(encoding="utf-8")
+
+        fixture_paths = list(tmp_path.glob(".e2e-healer-shadow-*.mjs"))
+        assert len(fixture_paths) == 1
+        generated_fixture_sources.append(fixture_paths[0].read_text(encoding="utf-8"))
+
+        request = urllib.request.Request(
+            f"{kwargs['env']['E2E_HEALER_SHADOW_CONTROL_URL']}/route",
+            data=json.dumps(
+                {
+                    "method": "GET",
+                    "url": "https://api.example.com/data",
+                    "headers": {},
+                    "body": None,
+                }
+            ).encode("utf-8"),
+            headers={
+                "Authorization": (f"Bearer {kwargs['env']['E2E_HEALER_SHADOW_CONTROL_TOKEN']}"),
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(request) as response:  # noqa: S310
+            decision = json.loads(response.read())
+        assert decision["action"] == "fulfill"
+        assert decision["response"]["body"] == "mocked_body"
+
         process = MagicMock(returncode=0)
         process.communicate.return_value = ("", "")
         return process
 
     monkeypatch.setattr(subprocess, "Popen", mock_subprocess_popen)
 
-    # Turn off sandbox so the tmp config write is allowed during the test
-    monkeypatch.setattr(
-        "app.shadow.runtime.assert_write_allowed", lambda path, reason="write": None
-    )
+    monkeypatch.setattr(settings, "sandbox_mode", "off")
     monkeypatch.setattr(
         "app.shadow.runtime.assert_command_allowed", lambda cmd, reason="subprocess": None
     )
-
-    # Mock _get_free_port and _fetch_ws_endpoint
-    monkeypatch.setattr("app.shadow.runtime._get_free_port", lambda: 19999)
-    monkeypatch.setattr(
-        "app.shadow.runtime._fetch_ws_endpoint",
-        lambda port, timeout=10.0: "ws://localhost:19999/devtools/browser/test-id",
-    )
-
-    # Build mock playwright context, browser
-    mock_context = MagicMock()
-    matched_route = MagicMock()
-    matched_request = MagicMock()
-    matched_request.method = "GET"
-    matched_request.url = "https://api.example.com/data"
-    matched_request.headers = {}
-    matched_request.post_data = None
-
-    # When route() is called on the context, simulate the handler being triggered
-    def fake_route(pattern, handler):
-        handler(matched_route, matched_request)
-
-    mock_context.route = fake_route
-
-    mock_browser = MagicMock()
-    mock_browser.new_context.return_value = mock_context
-
-    mock_playwright = MagicMock()
-    mock_playwright.chromium.launch.return_value = mock_browser
-
-    class MockSyncPlaywright:
-        def __enter__(self):
-            return mock_playwright
-
-        def __exit__(self, *args):
-            pass
-
-    monkeypatch.setattr("app.shadow.runtime.sync_playwright", MockSyncPlaywright)
 
     result = run_shadow(test_path=test_file, snapshot_id="test_snap", config=config)
 
@@ -235,8 +239,14 @@ def test_run_shadow_with_mock_playwright_and_snapshots(
     assert result.missed_count == 0
     assert result.score > 0
     assert len(subprocess_called) == 1
-    assert "--config" in subprocess_called[0]
-    mock_browser.new_context.assert_called_once_with(**expected_context_kwargs)
+    assert "--config" not in subprocess_called[0]
+    assert test_file.read_text(encoding="utf-8") == original_source
+    assert not list(tmp_path.glob(".e2e-healer-shadow-*"))
+    fixture_source = generated_fixture_sources[0]
+    if expected_storage_fragment is None:
+        assert "storageState:" not in fixture_source
+    else:
+        assert expected_storage_fragment in fixture_source
     assert store.get_snapshot("test_snap").snapshot_id == "test_snap"
     assert ws.snapshots_dir.is_dir()
     assert not ws.cache_dir.exists()
@@ -249,7 +259,9 @@ def test_run_shadow_timeout_terminates_the_full_process_tree(tmp_path, monkeypat
     ws = ShadowWorkspace(config)
     SnapshotStore(ws).save_snapshot("test_snap", ShadowSnapshot(snapshot_id="test_snap"))
     test_file = tmp_path / "test.spec.ts"
-    test_file.write_text("console.log('test');")
+    test_file.write_text(
+        "import { test } from '@playwright/test';\ntest('shadow', async () => {});\n"
+    )
 
     process = MagicMock()
     process.communicate.side_effect = [
@@ -260,25 +272,8 @@ def test_run_shadow_timeout_terminates_the_full_process_tree(tmp_path, monkeypat
     monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: process)
     monkeypatch.setattr("app.shadow.runtime._terminate_process_tree", lambda child: child.kill())
     monkeypatch.setattr(settings, "test_timeout_seconds", 7)
-    monkeypatch.setattr("app.shadow.runtime.assert_write_allowed", lambda *args, **kwargs: None)
+    monkeypatch.setattr(settings, "sandbox_mode", "off")
     monkeypatch.setattr("app.shadow.runtime.assert_command_allowed", lambda *args, **kwargs: None)
-    monkeypatch.setattr("app.shadow.runtime._get_free_port", lambda: 19999)
-    monkeypatch.setattr("app.shadow.runtime._fetch_ws_endpoint", lambda *args: "ws://example")
-
-    context = MagicMock()
-    browser = MagicMock()
-    browser.new_context.return_value = context
-    playwright = MagicMock()
-    playwright.chromium.launch.return_value = browser
-
-    class MockSyncPlaywright:
-        def __enter__(self):
-            return playwright
-
-        def __exit__(self, *args):
-            return None
-
-    monkeypatch.setattr("app.shadow.runtime.sync_playwright", MockSyncPlaywright)
 
     result = run_shadow(test_path=test_file, snapshot_id="test_snap", config=config)
 
@@ -287,3 +282,4 @@ def test_run_shadow_timeout_terminates_the_full_process_tree(tmp_path, monkeypat
     process.kill.assert_called_once()
     assert process.communicate.call_args_list[0].kwargs["timeout"] == 7
     assert process.communicate.call_args_list[1].kwargs["timeout"] == 5
+    assert not list(tmp_path.glob(".e2e-healer-shadow-*"))

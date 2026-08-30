@@ -12,6 +12,8 @@ _SHELL_TOKEN_FRAGMENTS = ("$(", "`")
 
 _TEMP_HELPER_PREFIX = ".e2e-healer-verify-"
 _TEMP_HELPER_SUFFIX = ".mjs"
+_SHADOW_HELPER_PREFIX = ".e2e-healer-shadow-"
+_SHADOW_HELPER_SUFFIXES = (".cjs", ".mjs")
 _HEALING_HISTORY_RELATIVE_PATH = ".e2e-healer/healing-history.json"
 
 
@@ -62,10 +64,15 @@ def assert_write_allowed(path: Path, reason: str = "write") -> None:
     if _is_allowed_temp_helper(resolved):
         return
 
+    if reason == "shadow_replay_helper" and _is_allowed_shadow_helper(resolved):
+        return
+
     if not _matches_any(_write_match_value(resolved), _patterns(settings.write_globs)):
         raise SandboxViolation(f"write denied by sandbox globs: {path}")
     if reason == "selector_verifier_helper" and not _is_allowed_temp_helper(resolved):
         raise SandboxViolation(f"unexpected helper write target: {path}")
+    if reason == "shadow_replay_helper" and not _is_allowed_shadow_helper(resolved):
+        raise SandboxViolation(f"unexpected Shadow helper write target: {path}")
 
 
 def assert_auto_discovered_target(path: Path) -> Path:
@@ -178,3 +185,11 @@ def _is_allowed_temp_helper(path: Path) -> bool:
         return True
     # Accept new unique filenames
     return name.startswith(_TEMP_HELPER_PREFIX) and name.endswith(_TEMP_HELPER_SUFFIX)
+
+
+def _is_allowed_shadow_helper(path: Path) -> bool:
+    """Allow only uniquely named CommonJS/ESM helpers used by Shadow replay."""
+    if not settings.allow_temp_helper:
+        return False
+    name = path.name
+    return name.startswith(_SHADOW_HELPER_PREFIX) and name.endswith(_SHADOW_HELPER_SUFFIXES)
