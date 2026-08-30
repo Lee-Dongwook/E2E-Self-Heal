@@ -6,9 +6,12 @@ from pathlib import Path
 from app.config import settings
 
 _MODES = {"strict", "relaxed", "off"}
+
 _SHELL_TOKENS = {"&&", "||", ";", "|", ">", ">>", "<", "$(", "`"}
 _SHELL_TOKEN_FRAGMENTS = ("$(", "`")
-_TEMP_HELPER = ".e2e-healer-verify.mjs"
+
+_TEMP_HELPER_PREFIX = ".e2e-healer-verify-"
+_TEMP_HELPER_SUFFIX = ".mjs"
 _HEALING_HISTORY_RELATIVE_PATH = ".e2e-healer/healing-history.json"
 
 
@@ -33,7 +36,6 @@ def assert_read_allowed(path: Path) -> None:
     """Allow reads unless strict root checks or deny globs reject the path."""
     if sandbox_mode() == "off":
         return
-
     resolved = _resolve(path)
     _assert_not_denied(resolved)
     if sandbox_mode() == "strict":
@@ -44,9 +46,9 @@ def assert_write_allowed(path: Path, reason: str = "write") -> None:
     """Allow writes only inside the configured policy."""
     if sandbox_mode() == "off":
         return
-
     resolved = _resolve(path)
     _assert_not_denied(resolved)
+
     if reason == "healing_history":
         _assert_inside_workspace(resolved)
         if _relative_to_workspace(resolved) != _HEALING_HISTORY_RELATIVE_PATH:
@@ -56,8 +58,10 @@ def assert_write_allowed(path: Path, reason: str = "write") -> None:
     mode = sandbox_mode()
     if mode == "strict":
         _assert_inside_workspace(resolved)
+
     if _is_allowed_temp_helper(resolved):
         return
+
     if not _matches_any(_write_match_value(resolved), _patterns(settings.write_globs)):
         raise SandboxViolation(f"write denied by sandbox globs: {path}")
     if reason == "selector_verifier_helper" and not _is_allowed_temp_helper(resolved):
@@ -159,4 +163,18 @@ def _matches_any(value: str, patterns: list[str]) -> bool:
 
 
 def _is_allowed_temp_helper(path: Path) -> bool:
-    return settings.allow_temp_helper and path.name == _TEMP_HELPER
+    """Check if path is an allowed temp helper file.
+
+    Accepts:
+    - The legacy exact filename: .e2e-healer-verify.mjs (for backward compatibility)
+    - New unique filenames matching pattern: .e2e-healer-verify-*.mjs
+    This allows unique filenames per run while still being sandbox-safe.
+    """
+    if not settings.allow_temp_helper:
+        return False
+    name = path.name
+    # Accept legacy exact filename
+    if name == ".e2e-healer-verify.mjs":
+        return True
+    # Accept new unique filenames
+    return name.startswith(_TEMP_HELPER_PREFIX) and name.endswith(_TEMP_HELPER_SUFFIX)

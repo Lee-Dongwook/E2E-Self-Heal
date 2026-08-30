@@ -7,7 +7,9 @@ each candidate selector resolves to; the caller treats "exactly one" as verified
 """
 
 import json
+import os
 import subprocess
+import uuid
 from pathlib import Path
 
 import structlog
@@ -28,34 +30,49 @@ const selectors = JSON.parse(process.argv[3]);
 
 const browser = await chromium.launch();
 try {
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
-  const counts = {};
-  for (const selector of selectors) {
-    try {
-      counts[selector] = await page.locator(selector).count();
-    } catch (err) {
-      counts[selector] = -1;
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+    const counts = {};
+    for (const selector of selectors) {
+        try {
+            counts[selector] = await page.locator(selector).count();
+        } catch (err) {
+            counts[selector] = -1;
+        }
     }
-  }
-  process.stdout.write(JSON.stringify(counts));
+    process.stdout.write(JSON.stringify(counts));
 } finally {
-  await browser.close();
+    await browser.close();
 }
 """
 
-_HELPER_FILENAME = ".e2e-healer-verify.mjs"
+# Use a unique suffix to prevent concurrent runs from colliding
+_HELPER_FILENAME_PREFIX = ".e2e-healer-verify-"
+
+
+def _get_helper_path() -> Path:
+    """Generate a unique helper path in cwd to prevent concurrent run collisions."""
+    # Include PID and random suffix to ensure uniqueness across concurrent runs
+    unique_id = f"{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    return Path.cwd() / f"{_HELPER_FILENAME_PREFIX}{unique_id}.mjs"
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=8))
 def _run_helper(url: str, selectors: list[str]) -> dict[str, int]:
     """Run the Node helper once and parse its JSON output. Retries on transient failure."""
-    script_path = Path.cwd() / _HELPER_FILENAME  # in cwd so node resolves @playwright/test
+    script_path = _get_helper_path()
+
+    # Verify the path is allowed by sandbox
     assert_write_allowed(script_path, reason="selector_verifier_helper")
-    script_path.write_text(_HELPER_SCRIPT)
+
     try:
+        # Write the helper script (use write_text for simplicity - atomic not critical here)
+        script_path.write_text(_HELPER_SCRIPT)
+
         cmd = [settings.node_cmd, str(script_path), url, json.dumps(selectors)]
         assert_command_allowed(cmd, reason="selector_verifier")
+
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -63,20 +80,33 @@ def _run_helper(url: str, selectors: list[str]) -> dict[str, int]:
             timeout=90,
         )
     finally:
-        script_path.unlink(missing_ok=True)
+        # Clean up only our specific helper file
+        # Use missing_ok=True to handle race conditions
+        try:
+            script_path.unlink(missing_ok=True)
+        except (PermissionError, OSError) as e:
+            # On Windows, unlinking an in-use file raises PermissionError.
+            # Log but don't fail - the file will be cleaned up by the OS or
+            # left behind (which is acceptable for a temp file).
+            logger.warning(
+                "selector_helper_cleanup_failed",
+                path=str(script_path),
+                error=str(e),
+            )
 
     if result.returncode != 0:
         logger.warning(
             "selector_helper_nonzero", returncode=result.returncode, stderr=result.stderr[:500]
         )
         raise RuntimeError("selector_helper_failed")
+
     return json.loads(result.stdout)
 
 
 def check_selectors(url: str, selectors: list[str]) -> dict[str, int] | None:
-    """Return ``{selector: match_count}`` for each candidate, or ``None`` if it can't run.
+    """Return `{selector: match_count}` for each candidate, or `None` if it can't run.
 
-    ``None`` signals a graceful skip (Node/Playwright missing, page unreachable, bad JSON):
+    `None` signals a graceful skip (Node/Playwright missing, page unreachable, bad JSON):
     verification degrades to "unverified" so the repair loop is never blocked by tooling.
     """
     if not selectors:
