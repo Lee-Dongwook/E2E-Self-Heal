@@ -25,7 +25,11 @@ _ALLOWED_PATCH_CALL = re.compile(
     r"getByTitle|getByTestId|click|dblclick|fill|type|check|uncheck|selectOption|"
     r"setInputFiles|press|hover|focus|waitFor[A-Za-z]*)\s*\("
 )
-_ASSERTION_CALL = re.compile(r"(?:\b(?:expect|assert)\s*\(|\.(?:toBe|toHave|toEqual)\w*\s*\()")
+_ASSERTION_CALL = re.compile(
+    r"(?:\b(?:expect|assert)(?:\.[A-Za-z_$][\w$]*)?\s*\(|"
+    r"\.(?:(?:toBe|toHave|toEqual|toMatch|toContain|toThrow)\w*|"
+    r"(?:resolves|rejects)(?:\.[A-Za-z_$][\w$]*)*)\s*\()"
+)
 # "Action" calls: Playwright methods whose selector is the only editable argument —
 # data values (fill/type/...) and options (click/hover/...) must stay byte-for-byte.
 _ACTION_CALL = re.compile(
