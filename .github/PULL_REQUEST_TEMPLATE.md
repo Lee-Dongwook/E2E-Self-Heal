@@ -4,7 +4,7 @@ Describe the change and the motivation.
 
 ## How verified
 
-- [ ] `make check` (ruff + pyright) passes
+- [ ] `make check` (ruff lint + format check + pyright) passes
 - [ ] `make test` passes
 - [ ] Added/updated tests for behavior changes
 

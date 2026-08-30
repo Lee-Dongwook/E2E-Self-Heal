@@ -9,12 +9,10 @@ jobs:
   check:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref || github.ref }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -28,27 +26,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --extra dev
 
-      - name: Lint
-        run: uv run ruff check .
-
-      - name: Auto-format
-        run: uv run ruff format .
-
-      - name: Commit formatting changes
-        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "style: auto-format code with ruff"
-          file_pattern: "*.py"
-
-      - name: Verify formatting changes were committed
-        run: git diff --exit-code -- "*.py"
-
-      - name: Typecheck
-        run: uv run pyright
+      - name: Check lint, formatting, and types
+        run: make check
 
       - name: Test with coverage
-        run: uv run pytest --cov=app --cov-report=term-missing --cov-report=xml
+        run: make coverage
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

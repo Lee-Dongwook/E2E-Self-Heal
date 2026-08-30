@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install lint format typecheck check test run clean
+.PHONY: help install lint format format-check typecheck check test coverage run clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -16,13 +16,19 @@ lint: ## Lint with ruff
 format: ## Format with ruff
 	uv run ruff format .
 
+format-check: ## Check formatting with ruff without modifying files
+	uv run ruff format --check .
+
 typecheck: ## Static type check with pyright
 	uv run pyright
 
-check: lint typecheck ## Lint + typecheck
+check: lint format-check typecheck ## Lint + format check + typecheck
 
 test: ## Run tests with pytest
 	uv run pytest
+
+coverage: ## Run tests with coverage and enforce the configured floor
+	uv run pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=90
 
 run: ## Run the healer, e.g. make run ARGS="tests/example.spec.ts --log playwright.log"
 	uv run e2e-healer $(ARGS)

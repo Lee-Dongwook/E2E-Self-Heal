@@ -390,7 +390,8 @@ PY
 
 ```bash
 make install    # uv sync --extra dev
-make check      # ruff + pyright
+make check      # ruff lint + format check + pyright
+make coverage   # pytest with a 90% coverage floor
 make test       # pytest
 ```
 

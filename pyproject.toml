@@ -83,6 +83,7 @@ source = ["app"]
 branch = true
 
 [tool.coverage.report]
+fail_under = 90
 show_missing = true
 skip_empty = true
 
