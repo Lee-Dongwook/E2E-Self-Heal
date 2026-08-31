@@ -125,6 +125,44 @@ def test_rejects_assertion_edit() -> None:
         _apply("await expect(page.locator('#old')).toBeVisible()\n", [instruction])
 
 
+@pytest.mark.parametrize(
+    "assertion",
+    [
+        "assert.equal(actual, expected)",
+        "assert.ok(value)",
+        "assert.deepStrictEqual(actual, expected)",
+        "expect.soft(value).toBeVisible()",
+        "expect.poll(check).toBe(true)",
+        "expect(value).toMatch(/text/)",
+        "expect(value).toContain('text')",
+        "expect(value).toThrow()",
+        "expect(value).resolves.toEqual(expected)",
+        "expect(value).rejects.toThrow()",
+    ],
+)
+def test_rejects_known_assertion_forms(assertion: str) -> None:
+    instruction = _instruction(1, assertion, assertion.replace("value", "other"))
+
+    with pytest.raises(PatchApplicationError, match="targets an assertion"):
+        _apply(f"{assertion}\n", [instruction])
+
+
+def test_masks_assertion_tokens_in_comments_and_strings() -> None:
+    comment = _instruction(
+        1,
+        "await page.locator('#old').click() // expect.soft(value).toMatch('text')",
+        "await page.locator('#new').click() // expect.soft(value).toMatch('text')",
+    )
+    string = _instruction(
+        1,
+        'await page.fill("#old", "assert.deepStrictEqual(actual, expected)")',
+        'await page.fill("#new", "assert.deepStrictEqual(actual, expected)")',
+    )
+
+    assert _apply(comment.original + "\n", [comment]) == comment.replacement + "\n"
+    assert _apply(string.original + "\n", [string]) == string.replacement + "\n"
+
+
 def test_rejects_unrelated_code_edit() -> None:
     instruction = _instruction(1, "const retries = 3;", "const retries = 4;", selector="")
     with pytest.raises(PatchApplicationError, match="not limited to a locator or wait"):
