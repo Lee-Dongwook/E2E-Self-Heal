@@ -102,7 +102,7 @@ def _chdir_root(root: Path | None) -> None:
     if root is None:
         return
     if not root.is_dir():
-        console.print(f"[red]--root is not a directory:[/red] {root}")
+        console.print(f"[red]--root is not a directory:[/red] {escape(root)}")
         raise typer.Exit(code=2)
     os.chdir(root)
 
