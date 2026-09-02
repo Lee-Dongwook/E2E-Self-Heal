@@ -85,6 +85,7 @@ function runHealer(
   failure: Failure,
   logFile: string,
   opts: E2EHealerReporterOptions,
+  cwd: string,
 ): ReviewReport | null {
   const args = ["review", failure.testPath, "--log", logFile];
   if (opts.diffFile) {
@@ -99,7 +100,7 @@ function runHealer(
     env.E2E_HEALER_TEST_RESULTS_DIR = opts.resultsDir;
   }
 
-  const result = spawnSync(command, args, { encoding: "utf8", env });
+  const result = spawnSync(command, args, { encoding: "utf8", env, cwd });
   if (result.error) {
     process.stderr.write(`[e2e-healer] launch failed for ${command}: ${result.error.message}\n`);
     return null;
@@ -169,7 +170,7 @@ export default class E2EHealerReporter implements Reporter {
       for (const failure of this.failures) {
         const logFile = join(tmp, `${basename(failure.testPath)}.log`);
         writeFileSync(logFile, buildRawLog(failure), "utf8");
-        const report = runHealer(this.command, failure, logFile, this.opts);
+        const report = runHealer(this.command, failure, logFile, this.opts, this.rootDir);
         if (report) {
           reports.push(report);
         }
