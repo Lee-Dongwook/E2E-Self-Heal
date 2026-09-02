@@ -1,0 +1,20 @@
+{
+  "name": "@e2e-healer/playwright",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Spike prototype: a Playwright Reporter that shells out to the Python e2e-healer review engine (issue #299).",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.3"
+  },
+  "peerDependencies": {
+    "@playwright/test": "^1.40.0"
+  }
+}

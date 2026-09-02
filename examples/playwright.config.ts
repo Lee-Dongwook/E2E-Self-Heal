@@ -18,4 +18,11 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
+  reporter: [
+    ["list"],
+    [
+      "../integrations/playwright-reporter/src/index.ts",
+      { diffFile: "scenarios/classname-rename/change.patch" },
+    ],
+  ],
 });
