@@ -9,6 +9,7 @@ from pathlib import Path
 import structlog
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
@@ -135,7 +136,7 @@ def _read_diff(diff_file: Path | None, diff_base: str | None) -> str:
         )
         console.print(
             Panel(
-                f"{detail}\n\n"
+                f"{escape(detail)}\n\n"
                 "Check that --diff-base is a valid ref and that this is a git repository.",
                 title="Cannot read git diff",
                 border_style="red",

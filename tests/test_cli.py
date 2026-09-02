@@ -197,6 +197,25 @@ def test_heal_resolves_relative_paths_against_root(
     assert data["schema_version"] == SCHEMA_VERSION
 
 
+def test_git_diff_failure_renders_error_without_markup_crash(monkeypatch, tmp_path) -> None:
+    # `git diff` fails in a non-repo root; the error handler must render untrusted git
+    # stderr safely instead of raising a rich MarkupError on `[`/`]` characters.
+    root = tmp_path / "not-a-repo"
+    root.mkdir()
+    (root / "spec.ts").write_text("await page.click('#cta')")
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["review", "spec.ts", "--root", str(root), "--json"])
+    # A markup crash (rich MarkupError) surfaces as exit 1 with an exception; a clean
+    # `typer.Exit(2)` means the error handler rendered the git stderr safely.
+    assert result.exit_code == 2
+    assert "Cannot read git diff" in result.stderr
+
+
 def test_cli_review_fails_for_an_incomplete_provider_review(monkeypatch, tmp_path) -> None:
     class MockGraph:
         def invoke(self, state):
