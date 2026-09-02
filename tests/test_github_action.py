@@ -35,3 +35,12 @@ def test_ci_runs_the_action_from_the_separate_consumer_fixture() -> None:
     assert 'git -C "$GITHUB_WORKSPACE/consumer" init' in workflow
     assert "uses: ./action" in workflow
     assert "working-directory: consumer" in workflow
+
+
+def test_ci_uses_non_mutating_quality_gates() -> None:
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "run: make check" in workflow
+    assert "run: make coverage" in workflow
+    assert "git-auto-commit-action" not in workflow
+    assert "ruff format ." not in workflow
