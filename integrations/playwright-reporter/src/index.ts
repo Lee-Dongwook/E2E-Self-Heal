@@ -12,7 +12,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve, basename } from "node:path";
+import { join, resolve, basename, dirname, relative, isAbsolute } from "node:path";
 import type {
   FullConfig,
   Reporter,
@@ -140,15 +140,20 @@ export default class E2EHealerReporter implements Reporter {
   }
 
   onBegin(config: FullConfig): void {
-    this.rootDir = config.rootDir;
+    // Run the engine from the config file's directory — the base all relative
+    // paths (specs, diff files, test-results) resolve against. Note `config.rootDir`
+    // is actually the *testDir*, not the project dir, so it can't be used as the base.
+    this.rootDir = config.configFile ? dirname(resolve(config.configFile)) : process.cwd();
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
     if (result.status === "passed" || result.status === "skipped") {
       return;
     }
-    const absFile = resolve(this.rootDir, test.location.file);
-    const relPath = absFile.replace(resolve(this.rootDir), "").replace(/^[/\\]/, "");
+    const absFile = isAbsolute(test.location.file)
+      ? test.location.file
+      : resolve(this.rootDir, test.location.file);
+    const relPath = relative(this.rootDir, absFile);
     this.failures.push({
       title: test.titlePath().join(" › "),
       testPath: relPath || test.location.file,
