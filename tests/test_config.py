@@ -9,8 +9,8 @@ from app.config import Settings
 
 
 def make_settings(**overrides: Any) -> Settings:
-    """Build Settings ignoring any local .env so tests stay hermetic."""
-    return Settings(_env_file=None, **overrides)  # type: ignore[call-arg]
+    """Build Settings isolated from local .env files and shell variables."""
+    return Settings(_env_file=None, _env_prefix="E2E_HEALER_TEST_", **overrides)  # type: ignore[call-arg]
 
 
 def test_defaults_to_nvidia_provider():
