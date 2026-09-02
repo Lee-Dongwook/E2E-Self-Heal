@@ -2,6 +2,7 @@
 
 import difflib
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -87,6 +88,22 @@ def main(
         renderable = result
     console.print(Panel(renderable, title="Shadow Testing", border_style="yellow"))
     raise typer.Exit(code=0)
+
+
+def _chdir_root(root: Path | None) -> None:
+    """Anchor relative path resolution and subprocess cwd to ``root`` when provided.
+
+    Programmatic integrators (e.g. a Playwright Reporter) may invoke the CLI from an
+    arbitrary working directory; ``--root`` is the explicit equivalent of the shell
+    wrapper's ``cd $working-directory`` (Issue #301). When omitted, the current directory
+    is used, preserving existing behavior.
+    """
+    if root is None:
+        return
+    if not root.is_dir():
+        console.print(f"[red]--root is not a directory:[/red] {root}")
+        raise typer.Exit(code=2)
+    os.chdir(root)
 
 
 def _read_diff(diff_file: Path | None, diff_base: str | None) -> str:
@@ -346,6 +363,11 @@ def heal(
     test_path: Path | None = typer.Argument(
         None, help="failing test file; a directory or omitting it heals the whole suite"
     ),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="project root anchoring relative paths and subprocess cwd; defaults to the current directory",
+    ),
     log_file: Path | None = typer.Option(
         None, "--log", help="raw Playwright failure log (single-file mode); else the test is run"
     ),
@@ -383,6 +405,7 @@ def heal(
     ``workspace_root`` in every mode except ``off`` (Issue #211).
     """
     configure_logging(settings.log_level)
+    _chdir_root(root)
     try:
         if app_url is not None:
             settings.app_url = app_url
@@ -473,6 +496,11 @@ def heal(
 @app.command()
 def review(
     test_path: Path = typer.Argument(..., help="failing test file to review (never modified)"),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="project root anchoring relative paths and subprocess cwd; defaults to the current directory",
+    ),
     log_file: Path | None = typer.Option(
         None, "--log", help="raw Playwright failure log; else the test is run to produce one"
     ),
@@ -488,6 +516,7 @@ def review(
 ) -> None:
     """Review a failing test and suggest source-level fixes as PR comments — never edits it."""
     configure_logging(settings.log_level)
+    _chdir_root(root)
     try:
         assert_read_allowed(test_path)
         if not test_path.exists():

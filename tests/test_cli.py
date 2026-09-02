@@ -124,6 +124,79 @@ def test_cli_review_emits_report_and_leaves_file_unmodified(
     assert test_file.read_text() == original
 
 
+def test_review_resolves_relative_paths_against_root(
+    mock_review_graph, monkeypatch, tmp_path
+) -> None:
+    # --root must anchor relative spec/diff/log paths so an integrator can invoke the CLI
+    # from an unrelated cwd (Issue #301).
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "spec.ts").write_text("await page.click('#cta')")
+    (root / "error.log").write_text("Timeout error waiting for selector")
+    (root / "change.patch").write_text("dummy diff")
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "review",
+            "spec.ts",
+            "--root",
+            str(root),
+            "--log",
+            "error.log",
+            "--diff",
+            "change.patch",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0
+    json_line = next(line for line in result.stdout.splitlines() if line.strip().startswith("{"))
+    data = json.loads(json_line)
+    assert data["kind"] == "review"
+    assert data["findings"][0]["file"] == "components/CTAButton.tsx"
+
+
+def test_heal_resolves_relative_paths_against_root(
+    mock_graph_success, monkeypatch, tmp_path
+) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "test.spec.ts").write_text("await page.click('#old')")
+    (root / "error.log").write_text("Timeout error waiting for selector")
+    (root / "change.patch").write_text("dummy diff")
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "heal",
+            "test.spec.ts",
+            "--root",
+            str(root),
+            "--log",
+            "error.log",
+            "--diff",
+            "change.patch",
+            "--no-memory",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0
+    json_line = next(line for line in result.stdout.splitlines() if line.strip().startswith("{"))
+    data = json.loads(json_line)
+    assert data["kind"] == "repair"
+    assert data["schema_version"] == SCHEMA_VERSION
+
+
 def test_cli_review_fails_for_an_incomplete_provider_review(monkeypatch, tmp_path) -> None:
     class MockGraph:
         def invoke(self, state):

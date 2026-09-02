@@ -233,6 +233,10 @@ uv run e2e-healer review tests/example.spec.ts --log playwright.log --diff-base 
 uv run e2e-healer benchmark
 ```
 
+Pass `--root <dir>` to anchor all relative paths (the spec, `--diff`, `test-results/`, and the
+`git diff`/Playwright subprocess cwd) to a project root — useful when invoking the CLI from a
+directory other than the project root (e.g. from a Playwright Reporter).
+
 Exit code is `0` when the test is healed, non-zero otherwise. `--json` prints a
 machine-readable summary to stdout (human output goes to stderr) so CI can branch on it:
 a `RepairSummary` for single-file heals, a `SuiteSummary` for suite mode, and a
