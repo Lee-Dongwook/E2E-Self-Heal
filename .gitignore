@@ -27,6 +27,7 @@ playwright.log
 
 # Repair-run outputs
 repair-summary.json
+e2e-healer-review.json
 
 # Logs
 *.jsonl
