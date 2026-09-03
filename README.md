@@ -188,7 +188,7 @@ cp .env.example .env    # set E2E_HEALER_LLM_API_KEY (or your provider's key)
 e2e-healer tests/login.spec.ts
 ```
 
-Works with **NVIDIA NIM (default), OpenAI, Anthropic (Claude), DeepSeek, or a local Ollama model** —
+Works with **NVIDIA NIM (default), OpenAI, Anthropic (Claude), DeepSeek, OrcaRouter, or a local Ollama model** —
 see [Configuration](#configuration) to pick one. For the default, get a free NVIDIA NIM API
 key at [build.nvidia.com](https://build.nvidia.com/) (default model `openai/gpt-oss-120b`).
 
@@ -274,6 +274,7 @@ changes.
 | `anthropic` | `ai-driven-e2e[anthropic]` | `E2E_HEALER_LLM_API_KEY` **or** `ANTHROPIC_API_KEY`   | tool-use                      | No OpenAI `response_format`; schema enforced via Claude tool-use. |
 | `ollama`    | `ai-driven-e2e[ollama]`    | none (local)                                          | native JSON-schema `format`   | Fully offline; smaller models are less reliable at strict JSON.   |
 | `deepseek`  | built-in                   | `E2E_HEALER_LLM_API_KEY` **or** `DEEPSEEK_API_KEY`    | Responses API `json_schema`   | Stateless Responses API; default `deepseek-v4-flash`.             |
+| `orcarouter`| built-in                   | `E2E_HEALER_LLM_API_KEY` **or** `ORCAROUTER_API_KEY`  | LangChain default             | OpenAI-compatible endpoint; default base URL is `https://api.orcarouter.ai/v1`. |
 
 All providers read the generic `E2E_HEALER_LLM_MODEL` / `E2E_HEALER_LLM_MAX_TOKENS` /
 `E2E_HEALER_LLM_BASE_URL`. On a structured-output parse failure the engine retries
@@ -291,6 +292,20 @@ OpenAI-compatible endpoint to override the default.
 E2E_HEALER_LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-...            # or E2E_HEALER_LLM_API_KEY=sk-...
 E2E_HEALER_LLM_MODEL=gpt-4o-mini
+```
+
+### Using OrcaRouter
+
+OrcaRouter is an optional OpenAI-compatible provider. Select it explicitly; it never
+changes the default NVIDIA configuration. Supply either the generic
+`E2E_HEALER_LLM_API_KEY` or `ORCAROUTER_API_KEY`. `ORCAROUTER_BASE_URL` defaults to
+`https://api.orcarouter.ai/v1`, and can be overridden without changing application code.
+
+```bash
+E2E_HEALER_LLM_PROVIDER=orcarouter
+ORCAROUTER_API_KEY=your_orcarouter_api_key_here
+E2E_HEALER_LLM_MODEL=your_structured_output_model
+# ORCAROUTER_BASE_URL=https://api.orcarouter.ai/v1
 ```
 
 ### Using Anthropic (Claude)
@@ -363,7 +378,7 @@ PY
 
 | Variable                       | Default                               | Purpose                                                |
 | ------------------------------ | ------------------------------------- | ------------------------------------------------------ |
-| `E2E_HEALER_LLM_PROVIDER`      | `nvidia`                              | LLM backend: `nvidia`, `openai`, `anthropic`, `ollama`, `deepseek` |
+| `E2E_HEALER_LLM_PROVIDER`      | `nvidia`                              | LLM backend: `nvidia`, `openai`, `anthropic`, `ollama`, `deepseek`, `orcarouter` |
 | `E2E_HEALER_LLM_API_KEY`       | —                                     | API key for the selected provider                      |
 | `E2E_HEALER_LLM_BASE_URL`      | —                                     | OpenAI-compatible endpoint (empty = SDK default)       |
 | `E2E_HEALER_LLM_MODEL`         | —                                     | Structured-Outputs-capable model                       |
@@ -372,6 +387,8 @@ PY
 | `E2E_HEALER_NVIDIA_BASE_URL`   | `https://integrate.api.nvidia.com/v1` | OpenAI-compatible endpoint (legacy)                    |
 | `E2E_HEALER_NVIDIA_MODEL`      | `openai/gpt-oss-120b`                 | Structured-Outputs-capable model (legacy)              |
 | `E2E_HEALER_NVIDIA_MAX_TOKENS` | `4096`                                | Completion token cap (legacy)                          |
+| `ORCAROUTER_API_KEY`            | —                                     | OrcaRouter API key (used when provider is `orcarouter`) |
+| `ORCAROUTER_BASE_URL`           | `https://api.orcarouter.ai/v1`        | OrcaRouter OpenAI-compatible endpoint                  |
 | `E2E_HEALER_MAX_LOOPS`         | `3`                                   | Repair loop cap                                        |
 | `E2E_HEALER_PLAYWRIGHT_CMD`    | `npx playwright test`                 | Playwright invocation                                  |
 | `E2E_HEALER_VERIFY_SELECTORS`  | `true`                                | Toggle live-DOM selector verification                  |

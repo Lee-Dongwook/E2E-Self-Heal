@@ -24,6 +24,7 @@ from pydantic import BaseModel, ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import LLMProvider, settings
+from app.providers.orcarouter import OrcaRouterProvider
 from app.schemas import PatchOutput, ReviewOutput
 
 # Anthropic and Ollama are optional dependencies: users who don't use them shouldn't have to
@@ -295,6 +296,13 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
             "max_tokens": settings.llm_max_tokens,
         }
         return ChatOpenAI(**params)
+    if provider == "orcarouter":
+        return OrcaRouterProvider(
+            api_key=_require_key(),
+            base_url=settings.llm_base_url,
+            model=settings.llm_model,
+            max_tokens=settings.llm_max_tokens,
+        ).build_chat_model()
     # nvidia: OpenAI-compatible NIM endpoint driven by the OpenAI SDK; needs an explicit
     # base_url (folded in from the legacy nvidia_* settings by the config layer).
     params = {

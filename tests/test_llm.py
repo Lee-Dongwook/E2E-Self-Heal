@@ -44,6 +44,28 @@ def test_factory_builds_openai_compatible_client_for_nvidia(monkeypatch):
     assert str(model.openai_api_base) == "https://integrate.api.nvidia.com/v1"
 
 
+def test_factory_builds_orcarouter_openai_compatible_client(monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "orcarouter")
+    monkeypatch.setattr(settings, "llm_api_key", "router-key")
+    monkeypatch.setattr(settings, "llm_base_url", "https://api.orcarouter.ai/v1")
+    monkeypatch.setattr(settings, "llm_model", "router-model")
+
+    model = llm._build_chat_model("orcarouter")
+
+    assert isinstance(model, ChatOpenAI)
+    assert model.model_name == "router-model"
+    assert str(model.openai_api_base) == "https://api.orcarouter.ai/v1"
+
+
+def test_orcarouter_missing_key_raises(monkeypatch):
+    monkeypatch.setattr(settings, "llm_provider", "orcarouter")
+    monkeypatch.setattr(settings, "llm_api_key", "")
+    monkeypatch.setattr(settings, "llm_model", "router-model")
+
+    with pytest.raises(RuntimeError, match="E2E_HEALER_LLM_API_KEY"):
+        llm._build_chat_model("orcarouter")
+
+
 def test_factory_builds_anthropic_client(monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "anthropic")
     monkeypatch.setattr(settings, "llm_api_key", "test-key")
