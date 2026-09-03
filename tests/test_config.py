@@ -48,7 +48,7 @@ def test_non_nvidia_provider_ignores_legacy_fields():
     assert settings.llm_model == "gpt-4o-mini"
 
 
-@pytest.mark.parametrize("provider", ["nvidia", "openai", "anthropic", "ollama"])
+@pytest.mark.parametrize("provider", ["nvidia", "openai", "anthropic", "ollama", "orcarouter"])
 def test_known_providers_are_accepted(provider):
     assert make_settings(llm_provider=provider, llm_model="test-model").llm_provider == provider
 
@@ -102,7 +102,7 @@ def test_token_limits_accept_positive_values(field):
 # --- fail-fast model requirement --------------------------------------------------
 
 
-@pytest.mark.parametrize("provider", ["openai", "anthropic", "ollama", "deepseek"])
+@pytest.mark.parametrize("provider", ["openai", "anthropic", "ollama", "deepseek", "orcarouter"])
 def test_provider_without_model_is_rejected(provider):
     # NVIDIA is excluded: its legacy nvidia_model default is backfilled, so no explicit
     # model is required there (see test_nvidia_provider_gets_legacy_default_model).
@@ -119,3 +119,38 @@ def test_blank_model_is_rejected(blank):
 def test_nvidia_provider_gets_legacy_default_model():
     # NVIDIA is the one provider with a back-compat default, so no explicit model is needed.
     assert make_settings().llm_model == "openai/gpt-oss-120b"
+
+
+def test_orcarouter_specific_settings_map_to_generic_fields():
+    settings = make_settings(
+        llm_provider="orcarouter",
+        llm_model="router-model",
+        orcarouter_api_key="router-key",
+    )
+
+    assert settings.llm_api_key == "router-key"
+    assert settings.llm_base_url == "https://api.orcarouter.ai/v1"
+
+
+def test_orcarouter_generic_settings_override_specific_fields():
+    settings = make_settings(
+        llm_provider="orcarouter",
+        llm_api_key="generic-key",
+        llm_base_url="https://proxy.example.com/v1",
+        llm_model="router-model",
+        orcarouter_api_key="router-key",
+        orcarouter_base_url="https://ignored.example.com/v1",
+    )
+
+    assert settings.llm_api_key == "generic-key"
+    assert settings.llm_base_url == "https://proxy.example.com/v1"
+
+
+def test_orcarouter_standard_environment_variables_are_supported(monkeypatch):
+    monkeypatch.setenv("ORCAROUTER_API_KEY", "router-key")
+    monkeypatch.setenv("ORCAROUTER_BASE_URL", "https://router.example.com/v1")
+
+    settings = make_settings(llm_provider="orcarouter", llm_model="router-model")
+
+    assert settings.llm_api_key == "router-key"
+    assert settings.llm_base_url == "https://router.example.com/v1"
