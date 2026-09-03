@@ -9,6 +9,14 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Powered by OrcaRouter](https://img.shields.io/badge/Powered_by-OrcaRouter-2563eb)](https://www.orcarouter.ai/ref/ref_210b976a004fb5022f5f)
 
+> **Using LLM APIs?** This project optionally supports
+> [OrcaRouter](https://www.orcarouter.ai/ref/ref_210b976a004fb5022f5f): one API for 200+
+> models with zero markup and cost-aware routing. Using this referral link supports the
+> project with a 5% commission at no additional cost to you.
+
+**OrcaRouter is an optional LLM provider for this project.** See
+[Using OrcaRouter](#using-orcarouter) for the configuration.
+
 A **self-healing** engine that automatically repairs broken **Playwright** E2E tests with an
 **AI agent** built on **LangGraph**. When a UI change renames or restructures
 an element and a test's selector breaks, the engine diagnoses the failure, patches the
