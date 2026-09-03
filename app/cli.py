@@ -8,6 +8,7 @@ from pathlib import Path
 import structlog
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
@@ -389,7 +390,7 @@ def heal(
         if test_path is not None:
             assert_read_allowed(test_path)
             if not test_path.exists():
-                console.print(f"[red]path not found:[/red] {test_path}")
+                console.print(f"[red]path not found:[/red] {escape(str(test_path))}")
                 raise typer.Exit(code=2)
 
         # Parse and validate selector hint FIRST (Issue #119)
@@ -404,7 +405,7 @@ def heal(
                     original=parsed_hint.original,
                 )
             except Exception as e:
-                console.print(f"[red]Invalid --selector-hint JSON:[/red] {e}")
+                console.print(f"[red]Invalid --selector-hint JSON:[/red] {escape(str(e))}")
                 raise typer.Exit(code=2)
 
         dom_diff_context = [d.model_dump() for d in analyze_diff(_read_diff(diff_file, diff_base))]
@@ -466,7 +467,7 @@ def heal(
         console.print(f"[bold]{suite.healed}/{suite.total_failed}[/bold] test(s) healed")
         raise typer.Exit(code=0 if suite.is_success else 1)
     except SandboxViolation as exc:
-        console.print(f"[red]sandbox denied:[/red] {exc}")
+        console.print(f"[red]sandbox denied:[/red] {escape(str(exc))}")
         raise typer.Exit(code=2) from exc
 
 
@@ -491,7 +492,7 @@ def review(
     try:
         assert_read_allowed(test_path)
         if not test_path.exists():
-            console.print(f"[red]path not found:[/red] {test_path}")
+            console.print(f"[red]path not found:[/red] {escape(str(test_path))}")
             raise typer.Exit(code=2)
 
         dom_diff_context = [d.model_dump() for d in analyze_diff(_read_diff(diff_file, diff_base))]
@@ -508,13 +509,13 @@ def review(
         if json_output:
             typer.echo(report.model_dump_json())
         if not report.is_complete:
-            console.print(f"[red]review incomplete:[/red] {report.error}")
+            console.print(f"[red]review incomplete:[/red] {escape(str(report.error))}")
             raise typer.Exit(code=1)
         _render_findings(report)
         console.print(f"[bold]{len(report.findings)}[/bold] source-level suggestion(s)")
         raise typer.Exit(code=0)
     except SandboxViolation as exc:
-        console.print(f"[red]sandbox denied:[/red] {exc}")
+        console.print(f"[red]sandbox denied:[/red] {escape(str(exc))}")
         raise typer.Exit(code=2) from exc
 
 
@@ -673,7 +674,7 @@ jobs:
                     f"[green]Successfully scaffolded starter workflow at {WORKFLOW_TARGET_PATH}![/green]"
                 )
             except Exception as e:
-                console.print(f"[red]Failed to write workflow file: {e}[/red]")
+                console.print(f"[red]Failed to write workflow file: {escape(str(e))}[/red]")
                 raise typer.Exit(code=1)
 
     raise typer.Exit(code=exit_code)

@@ -157,6 +157,16 @@ def test_cli_review_test_path_not_exists() -> None:
     assert "path not found:" in result.stderr
 
 
+def test_cli_review_path_with_brackets_does_not_crash() -> None:
+    # Untrusted path text must be escaped before rich renders it as markup (Issue #303):
+    # a `[` would otherwise raise a MarkupError instead of printing "path not found".
+    runner = CliRunner()
+    result = runner.invoke(app, ["review", "foo[1].spec.ts"])
+    assert result.exit_code == 2
+    assert "path not found:" in result.stderr
+    assert "foo[1].spec.ts" in result.stderr
+
+
 def test_cli_test_path_not_exists() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["nonexistent_file.spec.ts"])
