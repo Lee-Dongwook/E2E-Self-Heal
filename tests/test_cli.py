@@ -8,6 +8,7 @@ import pytest
 from typer.testing import CliRunner
 import app.cli as cli_module
 from app.cli import app
+from app.config import settings
 from app.healing_history import load_history
 from app.sandbox import SandboxViolation
 from app.schemas import SCHEMA_VERSION, RepairSummary, SuiteSummary
@@ -214,6 +215,25 @@ def test_git_diff_failure_renders_error_without_markup_crash(monkeypatch, tmp_pa
     # `typer.Exit(2)` means the error handler rendered the git stderr safely.
     assert result.exit_code == 2
     assert "Cannot read git diff" in result.stderr
+
+
+def test_root_does_not_redefine_strict_workspace_boundary(monkeypatch, tmp_path) -> None:
+    # --root must anchor paths but NOT move the strict sandbox boundary: a relative
+    # workspace_root (default ".") resolves against the original cwd, not the external root.
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    external = tmp_path / "external"
+    external.mkdir()
+    (external / "spec.ts").write_text("await page.click('#cta')")
+
+    monkeypatch.chdir(workspace)
+    monkeypatch.setattr(settings, "sandbox_mode", "strict")
+    monkeypatch.setattr(settings, "workspace_root", ".")
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["review", "spec.ts", "--root", str(external), "--json"])
+    assert result.exit_code == 2
+    assert "sandbox denied" in result.stderr
 
 
 def test_cli_review_fails_for_an_incomplete_provider_review(monkeypatch, tmp_path) -> None:

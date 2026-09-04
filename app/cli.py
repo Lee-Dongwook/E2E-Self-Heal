@@ -104,6 +104,10 @@ def _chdir_root(root: Path | None) -> None:
     if not root.is_dir():
         console.print(f"[red]--root is not a directory:[/red] {escape(str(root))}")
         raise typer.Exit(code=2)
+    # Resolve the sandbox boundary against the ORIGINAL cwd before chdir, so a relative
+    # workspace_root (the default ".") is not silently redefined to --root (Issue #301
+    # review): the boundary must stay where the process started, not follow --root.
+    settings.workspace_root = str(Path(settings.workspace_root).expanduser().resolve())
     os.chdir(root)
 
 
