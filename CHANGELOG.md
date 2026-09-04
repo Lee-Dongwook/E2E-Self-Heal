@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **`--root` path anchor** — `e2e-healer heal` / `review` accept `--root <dir>` to anchor all
+  relative-path resolution (test spec, diff file, test-results dir, and the `git diff` /
+  Playwright subprocess cwd) to a project root. This lets programmatic integrators (e.g. a
+  Playwright Reporter) invoke the CLI from an arbitrary working directory — the explicit
+  equivalent of the shell wrapper's `cd $working-directory` (#301).
+
 ## [0.5.0] - 2026-08-29
 
 ### Added
