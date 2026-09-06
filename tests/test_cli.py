@@ -8,6 +8,7 @@ import pytest
 from typer.testing import CliRunner
 import app.cli as cli_module
 from app.cli import app
+from app.config import settings
 from app.healing_history import load_history
 from app.sandbox import SandboxViolation
 from app.schemas import SCHEMA_VERSION, RepairSummary, SuiteSummary
@@ -122,6 +123,117 @@ def test_cli_review_emits_report_and_leaves_file_unmodified(
     assert data["schema_version"] == SCHEMA_VERSION
     # review mode is advisory only — the test file must be untouched.
     assert test_file.read_text() == original
+
+
+def test_review_resolves_relative_paths_against_root(
+    mock_review_graph, monkeypatch, tmp_path
+) -> None:
+    # --root must anchor relative spec/diff/log paths so an integrator can invoke the CLI
+    # from an unrelated cwd (Issue #301).
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "spec.ts").write_text("await page.click('#cta')")
+    (root / "error.log").write_text("Timeout error waiting for selector")
+    (root / "change.patch").write_text("dummy diff")
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "review",
+            "spec.ts",
+            "--root",
+            str(root),
+            "--log",
+            "error.log",
+            "--diff",
+            "change.patch",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0
+    json_line = next(line for line in result.stdout.splitlines() if line.strip().startswith("{"))
+    data = json.loads(json_line)
+    assert data["kind"] == "review"
+    assert data["findings"][0]["file"] == "components/CTAButton.tsx"
+
+
+def test_heal_resolves_relative_paths_against_root(
+    mock_graph_success, monkeypatch, tmp_path
+) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "test.spec.ts").write_text("await page.click('#old')")
+    (root / "error.log").write_text("Timeout error waiting for selector")
+    (root / "change.patch").write_text("dummy diff")
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "heal",
+            "test.spec.ts",
+            "--root",
+            str(root),
+            "--log",
+            "error.log",
+            "--diff",
+            "change.patch",
+            "--no-memory",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0
+    json_line = next(line for line in result.stdout.splitlines() if line.strip().startswith("{"))
+    data = json.loads(json_line)
+    assert data["kind"] == "repair"
+    assert data["schema_version"] == SCHEMA_VERSION
+
+
+def test_git_diff_failure_renders_error_without_markup_crash(monkeypatch, tmp_path) -> None:
+    # `git diff` fails in a non-repo root; the error handler must render untrusted git
+    # stderr safely instead of raising a rich MarkupError on `[`/`]` characters.
+    root = tmp_path / "not-a-repo"
+    root.mkdir()
+    (root / "spec.ts").write_text("await page.click('#cta')")
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["review", "spec.ts", "--root", str(root), "--json"])
+    # A markup crash (rich MarkupError) surfaces as exit 1 with an exception; a clean
+    # `typer.Exit(2)` means the error handler rendered the git stderr safely.
+    assert result.exit_code == 2
+    assert "Cannot read git diff" in result.stderr
+
+
+def test_root_does_not_redefine_strict_workspace_boundary(monkeypatch, tmp_path) -> None:
+    # --root must anchor paths but NOT move the strict sandbox boundary: a relative
+    # workspace_root (default ".") resolves against the original cwd, not the external root.
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    external = tmp_path / "external"
+    external.mkdir()
+    (external / "spec.ts").write_text("await page.click('#cta')")
+
+    monkeypatch.chdir(workspace)
+    monkeypatch.setattr(settings, "sandbox_mode", "strict")
+    monkeypatch.setattr(settings, "workspace_root", ".")
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["review", "spec.ts", "--root", str(external), "--json"])
+    assert result.exit_code == 2
+    assert "sandbox denied" in result.stderr
 
 
 def test_cli_review_fails_for_an_incomplete_provider_review(monkeypatch, tmp_path) -> None:
