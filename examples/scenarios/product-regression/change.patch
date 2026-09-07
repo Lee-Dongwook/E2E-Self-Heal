@@ -1,0 +1,27 @@
+diff --git a/examples/demo-app/src/App.tsx b/examples/demo-app/src/App.tsx
+index 0efb854..2fd6145 100644
+--- a/examples/demo-app/src/App.tsx
++++ b/examples/demo-app/src/App.tsx
+@@ -1,4 +1,4 @@
+-import { useState, type FormEvent } from "react";
++import { useState } from "react";
+ 
+ import { SubmitButton } from "./components/SubmitButton";
+ import { CTAButton } from "./components/CTAButton";
+@@ -7,15 +7,10 @@ export function App() {
+   const [submitted, setSubmitted] = useState(false);
+   const [started, setStarted] = useState(false);
+ 
+-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+-    event.preventDefault();
+-    setSubmitted(true);
+-  }
+-
+   return (
+     <main>
+       <h1>Sign up</h1>
+-      <form onSubmit={handleSubmit}>
++      <form>
+         <label>
+           Name
+           <input name="name" defaultValue="Ada" />
