@@ -224,3 +224,24 @@ def test_suite_final_rerun_reveals_new_failure(monkeypatch, tmp_path):
     assert summary.healed == 1  # a genuinely healed; b is a new unresolved failure
     assert summary.is_success is False
     assert any(r.test_script_path == str(b) and not r.is_success for r in summary.results)
+
+
+def test_suite_unparseable_final_failure_marks_all_unresolved(monkeypatch, tmp_path):
+    # The final full-suite rerun fails with no parseable test entries (config error, global
+    # setup failure, or timeout): no repair can be confirmed, so healed must be 0 (#212).
+    a = tmp_path / "a.spec.ts"
+    a.write_text("x")
+
+    def _heal(path, log, context, dry_run, memory_enabled):
+        return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
+
+    monkeypatch.setattr(cli, "_heal_file", _heal)
+    # Focused rerun heals; the final rerun fails with an empty (unparseable) log.
+    monkeypatch.setattr(
+        cli, "run_playwright", _suite_runner((a,), lambda t: (False, "focused"), False, ())
+    )
+    summary = cli._heal_suite("", [], dry_run=False)
+    assert summary.total_failed == 1
+    assert summary.healed == 0
+    assert summary.is_success is False
+    assert all(not r.is_success for r in summary.results)

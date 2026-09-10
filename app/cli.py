@@ -299,13 +299,21 @@ def _heal_suite(
     if not dry_run and results:
         final_passed, final_log = run_playwright(suite_target)
         if not final_passed:
-            for rel in scan_failing_tests(final_log):
-                if rel in result_by_rel:
-                    result_by_rel[rel].is_success = False
-                else:
-                    result = RepairSummary(test_script_path=rel, is_success=False, loop_count=0)
-                    results.append(result)
-                    result_by_rel[rel] = result
+            final_failing = set(scan_failing_tests(final_log))
+            if final_failing:
+                for rel in final_failing:
+                    if rel in result_by_rel:
+                        result_by_rel[rel].is_success = False
+                    else:
+                        result = RepairSummary(test_script_path=rel, is_success=False, loop_count=0)
+                        results.append(result)
+                        result_by_rel[rel] = result
+            else:
+                # The final rerun failed without parseable test entries (config error, global
+                # setup failure, or timeout): no repair can be confirmed, so mark every result
+                # unresolved rather than report a heal the full suite did not verify (#212).
+                for result in results:
+                    result.is_success = False
 
     healed = sum(1 for r in results if r.is_success)
     return SuiteSummary(
@@ -506,14 +514,17 @@ def heal(
             dry_run,
             memory_enabled,
         )
+        # Emit the JSON summary before any early exit so `--json` consumers always receive a
+        # machine-readable result, even when the suite fails before a test file is parsed (#212).
+        if json_output:
+            typer.echo(suite.model_dump_json())
+
         if suite.total_failed == 0 and suite.is_success:
             console.print("[green]suite passes[/green] — nothing to heal")
             raise typer.Exit(code=0)
         if suite.total_failed == 0:
             console.print("[yellow]suite failed but no test files could be parsed/found[/yellow]")
             raise typer.Exit(code=1)
-        if json_output:
-            typer.echo(suite.model_dump_json())
 
         # Notify Slack for each result in suite (Issue #124)
         for res in suite.results:

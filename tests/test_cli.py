@@ -740,6 +740,20 @@ def test_cli_suite_failure_no_tests(monkeypatch) -> None:
     assert "suite failed but no test files could be parsed/found" in result.stderr
 
 
+def test_cli_suite_failure_no_tests_emits_json(monkeypatch) -> None:
+    # `--json` must emit the SuiteSummary even when the suite fails before any test file is
+    # parsed (Issue #212): aggregate failures "exit nonzero and appear in JSON".
+    monkeypatch.setattr(cli_module, "run_playwright", lambda path: (False, "Failure log"))
+    monkeypatch.setattr(cli_module, "scan_failing_tests", lambda log: [])
+    runner = CliRunner()
+    result = runner.invoke(app, ["heal", "--json"])
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["kind"] == "suite"
+    assert payload["total_failed"] == 0
+    assert payload["is_success"] is False
+
+
 def test_cli_suite_healing_success(mock_graph_success, monkeypatch, tmp_path) -> None:
     test_file = tmp_path / "test.spec.ts"
     test_file.write_text("await page.click('#old')")
