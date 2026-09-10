@@ -24,12 +24,7 @@ def _suite_runner(
     final_passed: bool,
     final_failures: tuple[FailureTarget, ...] = (),
 ) -> FocusedRunner:
-    """Stateful ``run_playwright`` fake: initial fail -> focused reruns -> final full-suite.
-
-    ``focused(target)`` returns ``(passed, log)`` for a per-file rerun. The first
-    ``suite_target`` call returns the initial failure log; the second returns the final
-    verification result — pass, or the still-failing tests (Issue #212).
-    """
+    """Fake initial suite, focused reruns, and final verification."""
     suite_calls = {"n": 0}
 
     def fake(target: str = "") -> PlaywrightResult:
@@ -91,7 +86,7 @@ def test_suite_partial_heal_is_not_success(monkeypatch: pytest.MonkeyPatch, tmp_
         )
 
     monkeypatch.setattr(cli, "_heal_file", _heal)
-    # a heals, b does not; the final full-suite rerun still fails on b.
+    # `a` heals; final verification still fails on `b`.
     monkeypatch.setattr(
         cli, "run_playwright", _suite_runner((a, b), lambda t: (False, "f"), False, (b,))
     )
@@ -106,7 +101,7 @@ def test_suite_skips_heal_when_file_passes_on_rerun(monkeypatch, tmp_path):
     def _must_not_heal(*args, **kwargs):
         raise AssertionError("_heal_file should not run when the rerun passes")
 
-    # Focused rerun passes, so no heal; the final full-suite rerun also passes.
+    # The focused and final reruns pass.
     monkeypatch.setattr(cli, "run_playwright", _suite_runner((a,), lambda t: (True, ""), True))
     monkeypatch.setattr(cli, "_heal_file", _must_not_heal)
     summary = cli._heal_suite("", [], dry_run=False)
@@ -131,7 +126,7 @@ def test_suite_denies_external_path_but_keeps_it_visible(
         return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
 
     monkeypatch.setattr(cli, "_heal_file", _heal)
-    # The denied external path still fails in the final rerun; the in-workspace file heals.
+    # The denied path remains unresolved; the in-workspace file heals.
     monkeypatch.setattr(
         cli,
         "run_playwright",
@@ -201,8 +196,7 @@ def test_suite_threads_no_memory_to_each_file(
 
 
 def test_suite_keeps_missing_file_visible(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    # A failing test whose file no longer exists must remain in the summary (Issue #212).
-    missing = tmp_path / "gone.spec.ts"  # intentionally not created
+    missing = tmp_path / "gone.spec.ts"
     monkeypatch.setattr(
         cli,
         "run_playwright",
@@ -218,8 +212,7 @@ def test_suite_keeps_missing_file_visible(monkeypatch: pytest.MonkeyPatch, tmp_p
 def test_suite_final_rerun_reveals_new_failure(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    # A focused fix to `a` regresses `b` (which passed the initial run): the final
-    # full-suite rerun must catch it and surface `b` as unresolved (Issue #212).
+    # `a` heals; final verification reveals new failure `b`.
     a, b = tmp_path / "a.spec.ts", tmp_path / "b.spec.ts"
     a.write_text("x")
     b.write_text("y")
@@ -234,13 +227,12 @@ def test_suite_final_rerun_reveals_new_failure(
         return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
 
     monkeypatch.setattr(cli, "_heal_file", _heal)
-    # Initial run fails only on `a`; `a` heals; the final rerun fails on `b` (new).
     monkeypatch.setattr(
         cli, "run_playwright", _suite_runner((a,), lambda t: (False, "focused"), False, (b,))
     )
     summary = cli._heal_suite("", [], dry_run=False)
-    assert summary.total_failed == 2  # a (initial) + b (revealed by final rerun)
-    assert summary.healed == 1  # a genuinely healed; b is a new unresolved failure
+    assert summary.total_failed == 2
+    assert summary.healed == 1
     assert summary.is_success is False
     assert any(r.test_script_path == str(b) and not r.is_success for r in summary.results)
 
@@ -248,8 +240,7 @@ def test_suite_final_rerun_reveals_new_failure(
 def test_suite_unparseable_final_failure_marks_all_unresolved(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    # The final full-suite rerun fails with no parseable test entries (config error, global
-    # setup failure, or timeout): no repair can be confirmed, so healed must be 0 (#212).
+    # An unparseable final failure invalidates all repairs.
     a = tmp_path / "a.spec.ts"
     a.write_text("x")
 
@@ -263,7 +254,6 @@ def test_suite_unparseable_final_failure_marks_all_unresolved(
         return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
 
     monkeypatch.setattr(cli, "_heal_file", _heal)
-    # Focused rerun heals; the final rerun fails with an empty (unparseable) log.
     monkeypatch.setattr(
         cli, "run_playwright", _suite_runner((a,), lambda t: (False, "focused"), False, ())
     )
@@ -277,8 +267,7 @@ def test_suite_unparseable_final_failure_marks_all_unresolved(
 def test_suite_dry_run_reports_non_successful_preview(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    # --dry-run commits nothing, so the final full-suite rerun cannot verify a heal: the
-    # aggregate must be a non-successful preview even when focused repairs succeed (#212).
+    # Dry runs have no final verification.
     a = tmp_path / "a.spec.ts"
     a.write_text("x")
 
@@ -297,15 +286,14 @@ def test_suite_dry_run_reports_non_successful_preview(
     )
     summary = cli._heal_suite("", [], dry_run=True)
     assert summary.total_failed == 1
-    assert summary.healed == 1  # the focused preview still shows what would heal
-    assert summary.is_success is False  # but no final verification -> not success
+    assert summary.healed == 1
+    assert summary.is_success is False
 
 
 def test_suite_final_rerun_reveals_failures_in_scanner_order(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    # Newly-revealed final-rerun failures must be appended in first-seen order (the scanner's
-    # dedup contract), not hash-randomized set order (#212).
+    # Append new final failures in scanner order.
     a = tmp_path / "a.spec.ts"
     a.write_text("x")
     b = tmp_path / "b.spec.ts"
@@ -323,7 +311,6 @@ def test_suite_final_rerun_reveals_failures_in_scanner_order(
         return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
 
     monkeypatch.setattr(cli, "_heal_file", _heal)
-    # Initial fails only on `a`; the final rerun reveals `b` then `c` (both new).
     monkeypatch.setattr(
         cli, "run_playwright", _suite_runner((a,), lambda t: (False, "focused"), False, (b, c))
     )

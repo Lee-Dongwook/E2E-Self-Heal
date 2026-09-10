@@ -741,8 +741,6 @@ def test_cli_suite_failure_no_tests(monkeypatch) -> None:
 
 
 def test_cli_suite_failure_no_tests_emits_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    # `--json` must emit the SuiteSummary even when the suite fails before any test file is
-    # parsed (Issue #212): aggregate failures "exit nonzero and appear in JSON".
     monkeypatch.setattr(cli_module, "run_playwright", lambda path: (False, "Failure log"))
     monkeypatch.setattr(cli_module, "scan_failing_tests", lambda log: [])
     runner = CliRunner()
@@ -765,9 +763,7 @@ def test_cli_suite_healing_success(mock_graph_success, monkeypatch, tmp_path) ->
     def mock_run_playwright(path):
         nonlocal run_count, suite_calls
         run_count += 1
-        # The directory target is invoked twice: the initial suite run (fails) and the
-        # final full-suite verification (passes). Focused per-file reruns also fail so the
-        # healer patches them (Issue #212).
+        # Model initial failure, focused failure, then final success.
         if path == str(tmp_path):
             suite_calls += 1
             return (False, "Failure log") if suite_calls == 1 else (True, "")
@@ -780,7 +776,7 @@ def test_cli_suite_healing_success(mock_graph_success, monkeypatch, tmp_path) ->
     assert result.exit_code == 0
     assert "1/1 test(s) healed" in result.stderr
     assert test_file.read_text() == "await page.click('#new')"
-    assert run_count == 3  # initial + focused rerun + final full-suite verification
+    assert run_count == 3  # initial + focused + final
 
 
 def test_cli_init_scaffolds_workflow_successfully(monkeypatch, tmp_path) -> None:

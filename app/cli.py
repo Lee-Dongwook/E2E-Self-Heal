@@ -276,8 +276,7 @@ def _heal_suite(
         # workspace-relative value only for logging/display.
         if not resolved.exists():
             logger.warning("failing_test_not_found", path=rel)
-            # A deleted/failed-to-parse test is still an unresolved failure: keep it in the
-            # summary so total_failed is not silently undercounted (Issue #212).
+            # Keep missing targets unresolved so suite totals remain accurate (#212).
             result = RepairSummary(test_script_path=rel, is_success=False, loop_count=0)
             results.append(result)
             result_by_rel[rel] = result
@@ -292,16 +291,12 @@ def _heal_suite(
         results.append(result)
         result_by_rel[rel] = result
 
-    # The success gate is a final full-suite rerun, not focused per-file reruns: a fix that
-    # passes alone can regress another test through shared helpers, overlapping selectors, or
-    # inter-test ordering (Issue #212). In --dry-run nothing is committed, so the final rerun
-    # cannot verify a heal — report a non-successful preview rather than claim success.
+    # Require a full-suite pass; dry runs are unverified previews (#212).
     final_passed = not dry_run
     if final_passed and results:
         final_passed, final_log = run_playwright(suite_target)
         if not final_passed:
-            # scan_failing_tests already deduplicates in first-seen order; keep that order so
-            # JSON output and per-result notifications are deterministic across processes.
+            # Preserve scanner order for deterministic JSON and notifications.
             final_failing = scan_failing_tests(final_log)
             if final_failing:
                 for rel in final_failing:
@@ -312,9 +307,7 @@ def _heal_suite(
                         results.append(result)
                         result_by_rel[rel] = result
             else:
-                # The final rerun failed without parseable test entries (config error, global
-                # setup failure, or timeout): no repair can be confirmed, so mark every result
-                # unresolved rather than report a heal the full suite did not verify (#212).
+                # An unparseable final failure invalidates all repairs (#212).
                 for result in results:
                     result.is_success = False
 
@@ -517,8 +510,7 @@ def heal(
             dry_run,
             memory_enabled,
         )
-        # Emit the JSON summary before any early exit so `--json` consumers always receive a
-        # machine-readable result, even when the suite fails before a test file is parsed (#212).
+        # Emit JSON before early exits.
         if json_output:
             typer.echo(suite.model_dump_json())
 

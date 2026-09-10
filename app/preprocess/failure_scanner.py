@@ -19,11 +19,7 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-# A numbered failure entry; capture the first test-file path on the line. The path character
-# class includes spaces, `@`, and `%` so paths like `tests/my suite/login.spec.ts` are not
-# truncated to a suffix; `[`, `›`, and `:` still delimit it from the project tag and location.
-# A literal space (not ``\s``) keeps the match on one line; the captured path is stripped to
-# drop the separator space after a ``[project] ›`` prefix.
+# Capture numbered failure paths, including spaces, `@`, and `%`.
 _FAILURE_RE = re.compile(
     r"^\s*\d+\)\s+.*?((?:[a-zA-Z]:)?[-\w./\\ @%]+\.(?:spec|test)\.[jt]sx?):\d+",
     re.MULTILINE,
