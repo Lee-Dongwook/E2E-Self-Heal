@@ -245,3 +245,22 @@ def test_suite_unparseable_final_failure_marks_all_unresolved(monkeypatch, tmp_p
     assert summary.healed == 0
     assert summary.is_success is False
     assert all(not r.is_success for r in summary.results)
+
+
+def test_suite_dry_run_reports_non_successful_preview(monkeypatch, tmp_path):
+    # --dry-run commits nothing, so the final full-suite rerun cannot verify a heal: the
+    # aggregate must be a non-successful preview even when focused repairs succeed (#212).
+    a = tmp_path / "a.spec.ts"
+    a.write_text("x")
+
+    def _heal(path, log, context, dry_run, memory_enabled):
+        return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
+
+    monkeypatch.setattr(cli, "_heal_file", _heal)
+    monkeypatch.setattr(
+        cli, "run_playwright", _suite_runner((a,), lambda t: (False, "focused"), True)
+    )
+    summary = cli._heal_suite("", [], dry_run=True)
+    assert summary.total_failed == 1
+    assert summary.healed == 1  # the focused preview still shows what would heal
+    assert summary.is_success is False  # but no final verification -> not success

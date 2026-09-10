@@ -294,9 +294,10 @@ def _heal_suite(
 
     # The success gate is a final full-suite rerun, not focused per-file reruns: a fix that
     # passes alone can regress another test through shared helpers, overlapping selectors, or
-    # inter-test ordering (Issue #212). Skipped in --dry-run, where nothing is committed.
-    final_passed = True
-    if not dry_run and results:
+    # inter-test ordering (Issue #212). In --dry-run nothing is committed, so the final rerun
+    # cannot verify a heal — report a non-successful preview rather than claim success.
+    final_passed = not dry_run
+    if final_passed and results:
         final_passed, final_log = run_playwright(suite_target)
         if not final_passed:
             final_failing = set(scan_failing_tests(final_log))
