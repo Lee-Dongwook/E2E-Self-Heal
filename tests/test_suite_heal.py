@@ -1,18 +1,29 @@
 """Suite-mode orchestration, with Playwright and per-file healing mocked out."""
 
-import pytest
+from collections.abc import Callable
 from pathlib import Path
+
+import pytest
 
 import app.cli as cli
 from app.config import settings
 from app.schemas import RepairSummary
 
+type FailureTarget = Path | str
+type PlaywrightResult = tuple[bool, str]
+type FocusedRunner = Callable[[str], PlaywrightResult]
 
-def _combined(*paths) -> str:
+
+def _combined(*paths: FailureTarget) -> str:
     return "".join(f"  {i + 1}) {p}:1:1 › t\n" for i, p in enumerate(paths))
 
 
-def _suite_runner(initial_failures, focused, final_passed, final_failures=()):
+def _suite_runner(
+    initial_failures: tuple[FailureTarget, ...],
+    focused: FocusedRunner,
+    final_passed: bool,
+    final_failures: tuple[FailureTarget, ...] = (),
+) -> FocusedRunner:
     """Stateful ``run_playwright`` fake: initial fail -> focused reruns -> final full-suite.
 
     ``focused(target)`` returns ``(passed, log)`` for a per-file rerun. The first
@@ -21,7 +32,7 @@ def _suite_runner(initial_failures, focused, final_passed, final_failures=()):
     """
     suite_calls = {"n": 0}
 
-    def fake(target=""):
+    def fake(target: str = "") -> PlaywrightResult:
         if target != "":
             return focused(target)
         suite_calls["n"] += 1
@@ -189,7 +200,7 @@ def test_suite_threads_no_memory_to_each_file(
     assert seen_memory == [False]
 
 
-def test_suite_keeps_missing_file_visible(monkeypatch, tmp_path):
+def test_suite_keeps_missing_file_visible(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     # A failing test whose file no longer exists must remain in the summary (Issue #212).
     missing = tmp_path / "gone.spec.ts"  # intentionally not created
     monkeypatch.setattr(
@@ -204,14 +215,22 @@ def test_suite_keeps_missing_file_visible(monkeypatch, tmp_path):
     assert any(r.test_script_path == str(missing) and not r.is_success for r in summary.results)
 
 
-def test_suite_final_rerun_reveals_new_failure(monkeypatch, tmp_path):
+def test_suite_final_rerun_reveals_new_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     # A focused fix to `a` regresses `b` (which passed the initial run): the final
     # full-suite rerun must catch it and surface `b` as unresolved (Issue #212).
     a, b = tmp_path / "a.spec.ts", tmp_path / "b.spec.ts"
     a.write_text("x")
     b.write_text("y")
 
-    def _heal(path, log, context, dry_run, memory_enabled):
+    def _heal(
+        path: Path,
+        log: str,
+        context: list[dict],
+        dry_run: bool,
+        memory_enabled: bool,
+    ) -> RepairSummary:
         return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
 
     monkeypatch.setattr(cli, "_heal_file", _heal)
@@ -226,13 +245,21 @@ def test_suite_final_rerun_reveals_new_failure(monkeypatch, tmp_path):
     assert any(r.test_script_path == str(b) and not r.is_success for r in summary.results)
 
 
-def test_suite_unparseable_final_failure_marks_all_unresolved(monkeypatch, tmp_path):
+def test_suite_unparseable_final_failure_marks_all_unresolved(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     # The final full-suite rerun fails with no parseable test entries (config error, global
     # setup failure, or timeout): no repair can be confirmed, so healed must be 0 (#212).
     a = tmp_path / "a.spec.ts"
     a.write_text("x")
 
-    def _heal(path, log, context, dry_run, memory_enabled):
+    def _heal(
+        path: Path,
+        log: str,
+        context: list[dict],
+        dry_run: bool,
+        memory_enabled: bool,
+    ) -> RepairSummary:
         return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
 
     monkeypatch.setattr(cli, "_heal_file", _heal)
@@ -247,13 +274,21 @@ def test_suite_unparseable_final_failure_marks_all_unresolved(monkeypatch, tmp_p
     assert all(not r.is_success for r in summary.results)
 
 
-def test_suite_dry_run_reports_non_successful_preview(monkeypatch, tmp_path):
+def test_suite_dry_run_reports_non_successful_preview(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     # --dry-run commits nothing, so the final full-suite rerun cannot verify a heal: the
     # aggregate must be a non-successful preview even when focused repairs succeed (#212).
     a = tmp_path / "a.spec.ts"
     a.write_text("x")
 
-    def _heal(path, log, context, dry_run, memory_enabled):
+    def _heal(
+        path: Path,
+        log: str,
+        context: list[dict],
+        dry_run: bool,
+        memory_enabled: bool,
+    ) -> RepairSummary:
         return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
 
     monkeypatch.setattr(cli, "_heal_file", _heal)
@@ -266,7 +301,9 @@ def test_suite_dry_run_reports_non_successful_preview(monkeypatch, tmp_path):
     assert summary.is_success is False  # but no final verification -> not success
 
 
-def test_suite_final_rerun_reveals_failures_in_scanner_order(monkeypatch, tmp_path):
+def test_suite_final_rerun_reveals_failures_in_scanner_order(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     # Newly-revealed final-rerun failures must be appended in first-seen order (the scanner's
     # dedup contract), not hash-randomized set order (#212).
     a = tmp_path / "a.spec.ts"
@@ -276,7 +313,13 @@ def test_suite_final_rerun_reveals_failures_in_scanner_order(monkeypatch, tmp_pa
     c = tmp_path / "c.spec.ts"
     c.write_text("z")
 
-    def _heal(path, log, context, dry_run, memory_enabled):
+    def _heal(
+        path: Path,
+        log: str,
+        context: list[dict],
+        dry_run: bool,
+        memory_enabled: bool,
+    ) -> RepairSummary:
         return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
 
     monkeypatch.setattr(cli, "_heal_file", _heal)

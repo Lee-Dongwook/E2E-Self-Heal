@@ -740,7 +740,7 @@ def test_cli_suite_failure_no_tests(monkeypatch) -> None:
     assert "suite failed but no test files could be parsed/found" in result.stderr
 
 
-def test_cli_suite_failure_no_tests_emits_json(monkeypatch) -> None:
+def test_cli_suite_failure_no_tests_emits_json(monkeypatch: pytest.MonkeyPatch) -> None:
     # `--json` must emit the SuiteSummary even when the suite fails before any test file is
     # parsed (Issue #212): aggregate failures "exit nonzero and appear in JSON".
     monkeypatch.setattr(cli_module, "run_playwright", lambda path: (False, "Failure log"))

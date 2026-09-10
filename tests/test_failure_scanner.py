@@ -33,16 +33,16 @@ def test_empty_when_no_failures():
     assert scan_failing_tests("Running 1 test\n  1 passed") == []
 
 
-def test_path_with_space_is_not_truncated():
+def test_path_with_space_is_not_truncated() -> None:
     log = "  1) [chromium] › tests/my suite/login.spec.ts:12:3 › user can log in\n"
     assert scan_failing_tests(log) == ["tests/my suite/login.spec.ts"]
 
 
-def test_path_with_at_sign_is_not_truncated():
+def test_path_with_at_sign_is_not_truncated() -> None:
     log = "  1) tests/@smoke/login.spec.ts:12:3 › smoke test\n"
     assert scan_failing_tests(log) == ["tests/@smoke/login.spec.ts"]
 
 
-def test_path_with_percent_is_not_truncated():
+def test_path_with_percent_is_not_truncated() -> None:
     log = "  1) tests/100%/login.spec.ts:12:3 › pct test\n"
     assert scan_failing_tests(log) == ["tests/100%/login.spec.ts"]
