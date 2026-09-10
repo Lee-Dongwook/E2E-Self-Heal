@@ -256,6 +256,7 @@ def _heal_suite(
     if passed:
         return SuiteSummary(total_failed=0, healed=0, is_success=True)
     results: list[RepairSummary] = []
+    result_by_rel: dict[str, RepairSummary] = {}
     for rel in scan_failing_tests(raw_log):
         path = Path(rel)
         # Targets parsed from reporter output are untrusted: require them to resolve inside
@@ -267,23 +268,50 @@ def _heal_suite(
             logger.warning("failing_test_sandbox_denied", path=rel, error=str(exc))
             # Keep the denied failure visible as an unresolved suite result rather than
             # silently dropping it, so the suite is not reported as fully healed.
-            results.append(RepairSummary(test_script_path=rel, is_success=False, loop_count=0))
+            result = RepairSummary(test_script_path=rel, is_success=False, loop_count=0)
+            results.append(result)
+            result_by_rel[rel] = result
             continue
         # Use the validated canonical path for all filesystem access; keep the
         # workspace-relative value only for logging/display.
         if not resolved.exists():
             logger.warning("failing_test_not_found", path=rel)
+            # A deleted/failed-to-parse test is still an unresolved failure: keep it in the
+            # summary so total_failed is not silently undercounted (Issue #212).
+            result = RepairSummary(test_script_path=rel, is_success=False, loop_count=0)
+            results.append(result)
+            result_by_rel[rel] = result
             continue
         rerun_passed, focused_log = run_playwright(str(resolved))
         if rerun_passed:
-            results.append(RepairSummary(test_script_path=rel, is_success=True, loop_count=0))
+            result = RepairSummary(test_script_path=rel, is_success=True, loop_count=0)
+            results.append(result)
+            result_by_rel[rel] = result
             continue
-        results.append(_heal_file(resolved, focused_log, dom_diff_context, dry_run, memory_enabled))
+        result = _heal_file(resolved, focused_log, dom_diff_context, dry_run, memory_enabled)
+        results.append(result)
+        result_by_rel[rel] = result
+
+    # The success gate is a final full-suite rerun, not focused per-file reruns: a fix that
+    # passes alone can regress another test through shared helpers, overlapping selectors, or
+    # inter-test ordering (Issue #212). Skipped in --dry-run, where nothing is committed.
+    final_passed = True
+    if not dry_run and results:
+        final_passed, final_log = run_playwright(suite_target)
+        if not final_passed:
+            for rel in scan_failing_tests(final_log):
+                if rel in result_by_rel:
+                    result_by_rel[rel].is_success = False
+                else:
+                    result = RepairSummary(test_script_path=rel, is_success=False, loop_count=0)
+                    results.append(result)
+                    result_by_rel[rel] = result
+
     healed = sum(1 for r in results if r.is_success)
     return SuiteSummary(
         total_failed=len(results),
         healed=healed,
-        is_success=len(results) > 0 and healed == len(results),
+        is_success=len(results) > 0 and healed == len(results) and final_passed,
         results=results,
     )
 

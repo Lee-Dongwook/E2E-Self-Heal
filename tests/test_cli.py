@@ -746,10 +746,17 @@ def test_cli_suite_healing_success(mock_graph_success, monkeypatch, tmp_path) ->
     # Auto-discovered targets must resolve under workspace_root (Issue #211).
     monkeypatch.setattr(cli_module.settings, "workspace_root", str(tmp_path))
     run_count = 0
+    suite_calls = 0
 
     def mock_run_playwright(path):
-        nonlocal run_count
+        nonlocal run_count, suite_calls
         run_count += 1
+        # The directory target is invoked twice: the initial suite run (fails) and the
+        # final full-suite verification (passes). Focused per-file reruns also fail so the
+        # healer patches them (Issue #212).
+        if path == str(tmp_path):
+            suite_calls += 1
+            return (False, "Failure log") if suite_calls == 1 else (True, "")
         return (False, "Failure log")
 
     monkeypatch.setattr(cli_module, "run_playwright", mock_run_playwright)
@@ -759,7 +766,7 @@ def test_cli_suite_healing_success(mock_graph_success, monkeypatch, tmp_path) ->
     assert result.exit_code == 0
     assert "1/1 test(s) healed" in result.stderr
     assert test_file.read_text() == "await page.click('#new')"
-    assert run_count == 2
+    assert run_count == 3  # initial + focused rerun + final full-suite verification
 
 
 def test_cli_init_scaffolds_workflow_successfully(monkeypatch, tmp_path) -> None:
