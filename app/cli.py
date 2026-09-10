@@ -300,7 +300,9 @@ def _heal_suite(
     if final_passed and results:
         final_passed, final_log = run_playwright(suite_target)
         if not final_passed:
-            final_failing = set(scan_failing_tests(final_log))
+            # scan_failing_tests already deduplicates in first-seen order; keep that order so
+            # JSON output and per-result notifications are deterministic across processes.
+            final_failing = scan_failing_tests(final_log)
             if final_failing:
                 for rel in final_failing:
                     if rel in result_by_rel:

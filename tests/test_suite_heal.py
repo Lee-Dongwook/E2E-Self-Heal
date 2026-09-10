@@ -264,3 +264,26 @@ def test_suite_dry_run_reports_non_successful_preview(monkeypatch, tmp_path):
     assert summary.total_failed == 1
     assert summary.healed == 1  # the focused preview still shows what would heal
     assert summary.is_success is False  # but no final verification -> not success
+
+
+def test_suite_final_rerun_reveals_failures_in_scanner_order(monkeypatch, tmp_path):
+    # Newly-revealed final-rerun failures must be appended in first-seen order (the scanner's
+    # dedup contract), not hash-randomized set order (#212).
+    a = tmp_path / "a.spec.ts"
+    a.write_text("x")
+    b = tmp_path / "b.spec.ts"
+    b.write_text("y")
+    c = tmp_path / "c.spec.ts"
+    c.write_text("z")
+
+    def _heal(path, log, context, dry_run, memory_enabled):
+        return RepairSummary(test_script_path=str(path), is_success=True, loop_count=1)
+
+    monkeypatch.setattr(cli, "_heal_file", _heal)
+    # Initial fails only on `a`; the final rerun reveals `b` then `c` (both new).
+    monkeypatch.setattr(
+        cli, "run_playwright", _suite_runner((a,), lambda t: (False, "focused"), False, (b, c))
+    )
+    summary = cli._heal_suite("", [], dry_run=False)
+    revealed = [r.test_script_path for r in summary.results if not r.is_success]
+    assert revealed == [str(b), str(c)]
