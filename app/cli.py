@@ -256,6 +256,7 @@ def _heal_suite(
     if passed:
         return SuiteSummary(total_failed=0, healed=0, is_success=True)
     results: list[RepairSummary] = []
+    result_by_rel: dict[str, RepairSummary] = {}
     for rel in scan_failing_tests(raw_log):
         path = Path(rel)
         # Targets parsed from reporter output are untrusted: require them to resolve inside
@@ -267,23 +268,54 @@ def _heal_suite(
             logger.warning("failing_test_sandbox_denied", path=rel, error=str(exc))
             # Keep the denied failure visible as an unresolved suite result rather than
             # silently dropping it, so the suite is not reported as fully healed.
-            results.append(RepairSummary(test_script_path=rel, is_success=False, loop_count=0))
+            result = RepairSummary(test_script_path=rel, is_success=False, loop_count=0)
+            results.append(result)
+            result_by_rel[rel] = result
             continue
         # Use the validated canonical path for all filesystem access; keep the
         # workspace-relative value only for logging/display.
         if not resolved.exists():
             logger.warning("failing_test_not_found", path=rel)
+            # Keep missing targets unresolved so suite totals remain accurate (#212).
+            result = RepairSummary(test_script_path=rel, is_success=False, loop_count=0)
+            results.append(result)
+            result_by_rel[rel] = result
             continue
         rerun_passed, focused_log = run_playwright(str(resolved))
         if rerun_passed:
-            results.append(RepairSummary(test_script_path=rel, is_success=True, loop_count=0))
+            result = RepairSummary(test_script_path=rel, is_success=True, loop_count=0)
+            results.append(result)
+            result_by_rel[rel] = result
             continue
-        results.append(_heal_file(resolved, focused_log, dom_diff_context, dry_run, memory_enabled))
+        result = _heal_file(resolved, focused_log, dom_diff_context, dry_run, memory_enabled)
+        results.append(result)
+        result_by_rel[rel] = result
+
+    # Require a full-suite pass; dry runs are unverified previews (#212).
+    final_passed = not dry_run
+    if final_passed and results:
+        final_passed, final_log = run_playwright(suite_target)
+        if not final_passed:
+            # Preserve scanner order for deterministic JSON and notifications.
+            final_failing = scan_failing_tests(final_log)
+            if final_failing:
+                for rel in final_failing:
+                    if rel in result_by_rel:
+                        result_by_rel[rel].is_success = False
+                    else:
+                        result = RepairSummary(test_script_path=rel, is_success=False, loop_count=0)
+                        results.append(result)
+                        result_by_rel[rel] = result
+            else:
+                # An unparseable final failure invalidates all repairs (#212).
+                for result in results:
+                    result.is_success = False
+
     healed = sum(1 for r in results if r.is_success)
     return SuiteSummary(
         total_failed=len(results),
         healed=healed,
-        is_success=len(results) > 0 and healed == len(results),
+        is_success=len(results) > 0 and healed == len(results) and final_passed,
         results=results,
     )
 
@@ -478,14 +510,16 @@ def heal(
             dry_run,
             memory_enabled,
         )
+        # Emit JSON before early exits.
+        if json_output:
+            typer.echo(suite.model_dump_json())
+
         if suite.total_failed == 0 and suite.is_success:
             console.print("[green]suite passes[/green] — nothing to heal")
             raise typer.Exit(code=0)
         if suite.total_failed == 0:
             console.print("[yellow]suite failed but no test files could be parsed/found[/yellow]")
             raise typer.Exit(code=1)
-        if json_output:
-            typer.echo(suite.model_dump_json())
 
         # Notify Slack for each result in suite (Issue #124)
         for res in suite.results:

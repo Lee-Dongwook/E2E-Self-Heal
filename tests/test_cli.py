@@ -750,16 +750,33 @@ def test_cli_suite_failure_no_tests(monkeypatch) -> None:
     assert "suite failed but no test files could be parsed/found" in result.stderr
 
 
+def test_cli_suite_failure_no_tests_emits_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli_module, "run_playwright", lambda path: (False, "Failure log"))
+    monkeypatch.setattr(cli_module, "scan_failing_tests", lambda log: [])
+    runner = CliRunner()
+    result = runner.invoke(app, ["heal", "--json"])
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    assert payload["kind"] == "suite"
+    assert payload["total_failed"] == 0
+    assert payload["is_success"] is False
+
+
 def test_cli_suite_healing_success(mock_graph_success, monkeypatch, tmp_path) -> None:
     test_file = tmp_path / "test.spec.ts"
     test_file.write_text("await page.click('#old')")
     # Auto-discovered targets must resolve under workspace_root (Issue #211).
     monkeypatch.setattr(cli_module.settings, "workspace_root", str(tmp_path))
     run_count = 0
+    suite_calls = 0
 
     def mock_run_playwright(path):
-        nonlocal run_count
+        nonlocal run_count, suite_calls
         run_count += 1
+        # Model initial failure, focused failure, then final success.
+        if path == str(tmp_path):
+            suite_calls += 1
+            return (False, "Failure log") if suite_calls == 1 else (True, "")
         return (False, "Failure log")
 
     monkeypatch.setattr(cli_module, "run_playwright", mock_run_playwright)
@@ -769,7 +786,7 @@ def test_cli_suite_healing_success(mock_graph_success, monkeypatch, tmp_path) ->
     assert result.exit_code == 0
     assert "1/1 test(s) healed" in result.stderr
     assert test_file.read_text() == "await page.click('#new')"
-    assert run_count == 2
+    assert run_count == 3  # initial + focused + final
 
 
 def test_cli_init_scaffolds_workflow_successfully(monkeypatch, tmp_path) -> None:
