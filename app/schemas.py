@@ -1,5 +1,6 @@
 """Pydantic models: structured LLM output and machine-readable CI results."""
 
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -47,6 +48,38 @@ class PatchOutput(BaseModel):
     """Structured Output schema the LLM is forced to return (no free-form rewrites)."""
 
     instructions: list[PatchInstruction]
+
+
+class RefusalReason(str, Enum):
+    """Closed taxonomy for why the repair workflow declined to make a change."""
+
+    AMBIGUOUS_TARGET = "ambiguous_target"
+    LIKELY_PRODUCT_REGRESSION = "likely_product_regression"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    GUARDRAIL_VIOLATION = "guardrail_violation"
+    LOOP_CAP_REACHED = "loop_cap_reached"
+    PROVIDER_ERROR = "provider_error"
+
+
+class RefusalReport(BaseModel):
+    """Machine-readable outcome when the repair workflow refuses to change a test."""
+
+    schema_version: Literal["1.0"] = Field(
+        default=SCHEMA_VERSION,
+        description="version of this machine-readable contract; bump on breaking changes",
+    )
+    kind: Literal["refusal"] = Field(
+        default="refusal",
+        description="discriminator so consumers can dispatch without guessing on keys",
+    )
+    test_script_path: str = Field(
+        ...,
+        description="workspace-relative path to the test script the workflow declined to change",
+    )
+    reason: RefusalReason = Field(
+        ...,
+        description="closed taxonomy value explaining why the workflow refused the repair",
+    )
 
 
 class RepairSummary(BaseModel):

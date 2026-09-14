@@ -7,9 +7,16 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from app.schemas import SCHEMA_VERSION, RepairSummary, ReviewReport, SuiteSummary
+from app.schemas import (
+    RefusalReason,
+    RefusalReport,
+    SCHEMA_VERSION,
+    RepairSummary,
+    ReviewReport,
+    SuiteSummary,
+)
 
-_AnySummary = RepairSummary | SuiteSummary | ReviewReport
+_AnySummary = RefusalReport | RepairSummary | SuiteSummary | ReviewReport
 
 
 def _repair(**overrides: Any) -> RepairSummary:
@@ -20,6 +27,15 @@ def _repair(**overrides: Any) -> RepairSummary:
     }
     fields.update(overrides)
     return RepairSummary(**fields)
+
+
+def _refusal(**overrides: Any) -> RefusalReport:
+    fields: dict[str, Any] = {
+        "test_script_path": "tests/login.spec.ts",
+        "reason": RefusalReason.AMBIGUOUS_TARGET,
+    }
+    fields.update(overrides)
+    return RefusalReport(**fields)
 
 
 def _suite(**overrides: Any) -> SuiteSummary:
@@ -36,7 +52,7 @@ def _review(**overrides: Any) -> ReviewReport:
     return ReviewReport(test_script_path="tests/login.spec.ts", **overrides)
 
 
-@pytest.mark.parametrize("summary", [_repair(), _suite(), _review()])
+@pytest.mark.parametrize("summary", [_repair(), _refusal(), _suite(), _review()])
 def test_all_output_models_share_one_schema_version(summary: _AnySummary) -> None:
     assert summary.schema_version == SCHEMA_VERSION
 
@@ -45,6 +61,7 @@ def test_all_output_models_share_one_schema_version(summary: _AnySummary) -> Non
     ("summary", "expected_kind"),
     [
         (_repair(), "repair"),
+        (_refusal(), "refusal"),
         (_suite(), "suite"),
         (_review(), "review"),
     ],
@@ -59,6 +76,20 @@ def test_kind_is_a_fixed_literal() -> None:
     bad_kind: Any = "nope"
     with pytest.raises(ValidationError):
         _repair(kind=bad_kind)
+
+
+def test_refusal_report_round_trips_through_json() -> None:
+    report = _refusal(reason=RefusalReason.GUARDRAIL_VIOLATION)
+
+    restored = RefusalReport.model_validate_json(report.model_dump_json())
+
+    assert restored == report
+    assert json.loads(report.model_dump_json())["reason"] == "guardrail_violation"
+
+
+def test_refusal_report_rejects_unknown_reason() -> None:
+    with pytest.raises(ValidationError, match="reason"):
+        _refusal(reason="unknown_reason")
 
 
 @pytest.mark.parametrize("make", [_repair, _suite, _review])
