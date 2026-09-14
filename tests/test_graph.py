@@ -1,7 +1,17 @@
+import pytest
 from langgraph.graph import END
 
 from app.config import settings
-from app.graph import build_graph, route, route_after_memory, route_after_shadow, route_after_verify
+from app.graph import (
+    build_graph,
+    refusal_finalizer,
+    route,
+    route_after_memory,
+    route_after_patch,
+    route_after_shadow,
+    route_after_verify,
+)
+from app.schemas import RefusalReason
 from app.state import AgentState
 
 
@@ -28,7 +38,7 @@ def test_route_ends_on_success():
 
 
 def test_route_ends_on_loop_cap():
-    assert route(_state(loop_count=settings.max_loops)) == END
+    assert route(_state(loop_count=settings.max_loops)) == "refusal_finalizer"
 
 
 def test_route_continues_when_failing_under_cap():
@@ -50,3 +60,38 @@ def test_memory_hit_starts_verification_and_rejection_retries_diagnosis() -> Non
 
 def test_graph_compiles():
     assert build_graph() is not None
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_reason"),
+    [
+        (
+            {"boundary_report": {"ok": False}},
+            RefusalReason.ARCHITECTURE_BOUNDARY_VIOLATION,
+        ),
+        (
+            {"patch_application_report": {"ok": False, "guardrail_violation": True}},
+            RefusalReason.GUARDRAIL_VIOLATION,
+        ),
+        ({"patch_provider_report": {"ok": False}}, RefusalReason.PROVIDER_ERROR),
+        ({"verification_report": {"ok": False}}, RefusalReason.AMBIGUOUS_TARGET),
+        ({"dom_diff_context": []}, RefusalReason.INSUFFICIENT_EVIDENCE),
+        ({"dom_diff_context": [{"file": "src/Login.tsx"}]}, RefusalReason.LOOP_CAP_REACHED),
+    ],
+)
+def test_refusal_finalizer_selects_the_most_specific_reason(
+    overrides: dict, expected_reason: RefusalReason
+) -> None:
+    result = refusal_finalizer(_state(**overrides))
+
+    assert result["refusal_reason"] is expected_reason
+
+
+def test_provider_failure_takes_precedence_over_missing_context() -> None:
+    result = refusal_finalizer(_state(patch_provider_report={"ok": False}, dom_diff_context=[]))
+
+    assert result["refusal_reason"] is RefusalReason.PROVIDER_ERROR
+
+
+def test_route_after_patch_finalizes_permanent_boundary_rejections() -> None:
+    assert route_after_patch(_state(boundary_report={"ok": False})) == "refusal_finalizer"

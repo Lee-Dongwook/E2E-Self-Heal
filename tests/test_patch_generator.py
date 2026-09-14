@@ -1,7 +1,9 @@
 import pytest
 
 import app.nodes.patch_generator as patch_node
-from app.schemas import PatchOutput
+from app.config import settings
+from app.graph import refusal_finalizer
+from app.schemas import PatchInstruction, PatchOutput, RefusalReason
 from app.state import AgentState
 
 
@@ -55,3 +57,47 @@ def test_patch_generator_prefers_explicit_framework_hint(
     patch_node.patch_generator(_state(detected_framework="react"))
 
     assert "Detected framework: React" in prompts[0]
+
+
+def test_patch_generator_records_provider_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    def raise_provider_error(_system_prompt: str, _user_prompt: str) -> PatchOutput:
+        raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr(patch_node, "generate_patch", raise_provider_error)
+
+    result = patch_node.patch_generator(_state())
+
+    assert result["patch_provider_report"] == {"ok": False}
+
+
+def test_patch_generator_marks_guardrail_rejection(monkeypatch: pytest.MonkeyPatch) -> None:
+    output = PatchOutput(
+        instructions=[
+            PatchInstruction(
+                line=1,
+                original="await page.locator('#old').click()",
+                replacement="expect(page.locator('#new')).toBeVisible()",
+                reason="unsafe assertion change",
+            )
+        ]
+    )
+    monkeypatch.setattr(patch_node, "generate_patch", lambda _system, _user: output)
+
+    result = patch_node.patch_generator(_state())
+
+    assert result["patch_application_report"]["guardrail_violation"] is True
+
+
+def test_patch_generator_clears_stale_selector_verification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        patch_node, "generate_patch", lambda _system, _user: PatchOutput(instructions=[])
+    )
+    state = _state(verification_report={"ok": False}, loop_count=settings.max_loops)
+
+    result = patch_node.patch_generator(state)
+    state.update(result)
+
+    assert state["verification_report"] == {}
+    assert refusal_finalizer(state)["refusal_reason"] is RefusalReason.LOOP_CAP_REACHED

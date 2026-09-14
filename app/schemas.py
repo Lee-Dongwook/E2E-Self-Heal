@@ -56,6 +56,7 @@ class RefusalReason(str, Enum):
     AMBIGUOUS_TARGET = "ambiguous_target"
     LIKELY_PRODUCT_REGRESSION = "likely_product_regression"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    ARCHITECTURE_BOUNDARY_VIOLATION = "architecture_boundary_violation"
     GUARDRAIL_VIOLATION = "guardrail_violation"
     LOOP_CAP_REACHED = "loop_cap_reached"
     PROVIDER_ERROR = "provider_error"
