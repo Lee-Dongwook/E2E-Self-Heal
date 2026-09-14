@@ -1,4 +1,3 @@
-from langgraph.graph import END
 from app.graph import route_after_shadow
 from app.nodes.shadow_verifier import shadow_verifier
 from app.shadow.config import ShadowConfig
@@ -292,7 +291,7 @@ def test_route_after_shadow():
     }
     assert route_after_shadow(state_fail) == "patch_generator"
 
-    # 3. Failed, loop_count at cap -> END
+    # 3. Failed, loop_count at cap -> refusal finalizer
     state_cap: AgentState = {
         "test_script_path": "",
         "original_code": "",
@@ -307,4 +306,4 @@ def test_route_after_shadow():
         "loop_count": 3,
         "is_success": False,
     }
-    assert route_after_shadow(state_cap) == END
+    assert route_after_shadow(state_cap) == "refusal_finalizer"

@@ -79,12 +79,12 @@ def test_kind_is_a_fixed_literal() -> None:
 
 
 def test_refusal_report_round_trips_through_json() -> None:
-    report = _refusal(reason=RefusalReason.GUARDRAIL_VIOLATION)
+    report = _refusal(reason=RefusalReason.ARCHITECTURE_BOUNDARY_VIOLATION)
 
     restored = RefusalReport.model_validate_json(report.model_dump_json())
 
     assert restored == report
-    assert json.loads(report.model_dump_json())["reason"] == "guardrail_violation"
+    assert json.loads(report.model_dump_json())["reason"] == "architecture_boundary_violation"
 
 
 def test_refusal_report_rejects_unknown_reason() -> None:

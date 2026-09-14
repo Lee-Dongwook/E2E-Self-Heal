@@ -1,7 +1,5 @@
 """Selector Verifier node + its routing, with the Node/Playwright helper mocked out."""
 
-from langgraph.graph import END
-
 import app.nodes.selector_verifier as verifier_node
 from app.config import settings
 from app.graph import route_after_verify
@@ -111,4 +109,4 @@ def test_route_repatches_when_rejected_under_cap():
 
 def test_route_ends_when_rejected_at_cap():
     state = _state(verification_report={"ok": False}, loop_count=settings.max_loops)
-    assert route_after_verify(state) == END
+    assert route_after_verify(state) == "refusal_finalizer"

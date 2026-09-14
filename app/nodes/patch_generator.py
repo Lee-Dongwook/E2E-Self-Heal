@@ -372,7 +372,7 @@ def _validate_action_calls(instruction: PatchInstruction) -> None:
     original = _masked_selector_line(instruction.original)
     replacement = _masked_selector_line(instruction.replacement)
     if original is None or replacement is None or original != replacement:
-        raise PatchApplicationError(
+        raise PatchGuardrailViolation(
             f"line {instruction.line} changes an argument other than the selector "
             "of a Playwright action"
         )
@@ -380,6 +380,10 @@ def _validate_action_calls(instruction: PatchInstruction) -> None:
 
 class PatchApplicationError(ValueError):
     """Raised when generated instructions do not match the current test code."""
+
+
+class PatchGuardrailViolation(PatchApplicationError):
+    """Raised when a candidate attempts to leave the selector/wait-condition boundary."""
 
 
 def _validate_patch_scope(
@@ -403,11 +407,11 @@ def _validate_patch_scope(
     )
     replacement_code = _mask_js_non_code(instruction.replacement)
     if _ASSERTION_CALL.search(original_code) or _ASSERTION_CALL.search(replacement_code):
-        raise PatchApplicationError(f"line {instruction.line} targets an assertion")
+        raise PatchGuardrailViolation(f"line {instruction.line} targets an assertion")
     if not _ALLOWED_PATCH_CALL.search(original_code) or not _ALLOWED_PATCH_CALL.search(
         replacement_code
     ):
-        raise PatchApplicationError(
+        raise PatchGuardrailViolation(
             f"line {instruction.line} is not limited to a locator or wait condition"
         )
     if _ACTION_CALL.search(original_code) or _ACTION_CALL.search(replacement_code):
@@ -472,6 +476,7 @@ def patch_generator(state: AgentState) -> dict:
             "patch_instructions": {},
             "analysis_report": state["analysis_report"] + f"\n\n[BOUNDARY FEEDBACK] {exc}",
             "boundary_report": {"ok": False, "error": str(exc)},
+            "verification_report": {},
             "memory_report": {"active": False, "source": "llm"},
             "loop_count": state["loop_count"] + 1,
         }
@@ -493,6 +498,8 @@ def patch_generator(state: AgentState) -> dict:
             "current_code": state["current_code"],
             "patch_instructions": {},
             "patch_application_report": {"ok": True},
+            "patch_provider_report": {"ok": False},
+            "verification_report": {},
             "memory_report": {"active": False, "source": "llm"},
         }
 
@@ -509,7 +516,13 @@ def patch_generator(state: AgentState) -> dict:
             "current_code": state["current_code"],
             "patch_instructions": {},
             "analysis_report": state["analysis_report"] + feedback,
-            "patch_application_report": {"ok": False, "error": str(exc)},
+            "patch_application_report": {
+                "ok": False,
+                "error": str(exc),
+                "guardrail_violation": isinstance(exc, PatchGuardrailViolation),
+            },
+            "patch_provider_report": {"ok": True},
+            "verification_report": {},
             "memory_report": {"active": False, "source": "llm"},
             "loop_count": next_count,
         }
@@ -519,5 +532,7 @@ def patch_generator(state: AgentState) -> dict:
         "patch_instructions": output.model_dump(),
         "boundary_report": {"ok": True},
         "patch_application_report": {"ok": True},
+        "patch_provider_report": {"ok": True},
+        "verification_report": {},
         "memory_report": {"active": False, "source": "llm"},
     }

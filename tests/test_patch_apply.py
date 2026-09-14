@@ -1,5 +1,4 @@
 import pytest
-from langgraph.graph import END
 
 import app.nodes.patch_generator as patch_node
 from app.graph import route_after_patch
@@ -613,7 +612,7 @@ def test_boundary_violation_ends_immediately() -> None:
     state = _state()
     state["boundary_report"] = {"ok": False, "error": "outside architecture boundary"}
     state["patch_application_report"] = {"ok": True}
-    assert route_after_patch(state) == END
-    # Ends even well below the loop cap.
+    assert route_after_patch(state) == "refusal_finalizer"
+    # Finalizes even well below the loop cap.
     state["loop_count"] = 0
-    assert route_after_patch(state) == END
+    assert route_after_patch(state) == "refusal_finalizer"

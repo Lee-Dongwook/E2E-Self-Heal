@@ -7,7 +7,7 @@ from app.config import settings
 from app.graph import build_graph
 from app.healing_history import append_record, make_record
 from app.preprocess.error_log_parser import parse_error_log
-from app.schemas import PatchInstruction, PatchOutput
+from app.schemas import PatchInstruction, PatchOutput, RefusalReason
 from app.state import AgentState
 
 ORIGINAL = "await page.click('#old')\n"
@@ -79,6 +79,52 @@ def test_loop_gives_up_at_cap(monkeypatch, tmp_path):
 
     assert final["is_success"] is False
     assert final["loop_count"] == settings.max_loops
+    assert final["refusal_reason"] is RefusalReason.INSUFFICIENT_EVIDENCE
+
+
+def test_loop_reports_provider_error_after_patch_retries_are_exhausted(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    spec = tmp_path / "t.spec.ts"
+    spec.write_text(ORIGINAL)
+
+    monkeypatch.setattr(diagnoser_node, "generate_diagnosis", lambda s, u: "selector changed")
+    monkeypatch.setattr(
+        patch_node,
+        "generate_patch",
+        lambda s, u: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
+    )
+    monkeypatch.setattr(runner_node, "run_playwright", lambda path: (False, "Error: still failing"))
+
+    state = _initial_state()
+    state["test_script_path"] = str(spec)
+    final = build_graph().invoke(state)
+
+    assert final["refusal_reason"] is RefusalReason.PROVIDER_ERROR
+
+
+def test_loop_reports_guardrail_rejection_after_retries_are_exhausted(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    spec = tmp_path / "t.spec.ts"
+    spec.write_text(ORIGINAL)
+    unsafe_patch = PatchOutput(
+        instructions=[
+            PatchInstruction(
+                line=1,
+                original=ORIGINAL.strip(),
+                replacement="expect(page.locator('#new')).toBeVisible()",
+                reason="unsafe assertion change",
+            )
+        ]
+    )
+
+    monkeypatch.setattr(diagnoser_node, "generate_diagnosis", lambda s, u: "selector changed")
+    monkeypatch.setattr(patch_node, "generate_patch", lambda s, u: unsafe_patch)
+
+    state = _initial_state()
+    state["test_script_path"] = str(spec)
+    final = build_graph().invoke(state)
+
+    assert final["refusal_reason"] is RefusalReason.GUARDRAIL_VIOLATION
 
 
 def test_failed_memory_candidate_falls_back_to_llm_without_spending_a_loop(monkeypatch, tmp_path):

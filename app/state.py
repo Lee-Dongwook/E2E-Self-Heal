@@ -6,12 +6,21 @@ each node reads from it and returns a partial update dict.
 
 from typing import Literal, NotRequired, TypedDict
 
+from app.schemas import RefusalReason
+
 
 class PatchApplicationReport(TypedDict):
     """Result of validating generated patch instructions against current code."""
 
     ok: bool
     error: NotRequired[str]
+    guardrail_violation: NotRequired[bool]
+
+
+class PatchProviderReport(TypedDict):
+    """Outcome of the latest structured patch-generation provider call."""
+
+    ok: bool
 
 
 class MemoryReport(TypedDict):
@@ -43,8 +52,10 @@ class AgentState(TypedDict):
     verification_report: dict  # Selector Verifier's live-DOM match result
     boundary_report: NotRequired[dict]  # Architecture-boundary validation result
     patch_application_report: NotRequired[PatchApplicationReport]
+    patch_provider_report: NotRequired[PatchProviderReport]
     shadow_report: NotRequired[dict]  # Shadow Verifier's network replay result
     memory_report: NotRequired[MemoryReport]
     review_report: NotRequired[dict]  # Reviewer's source-level suggestions (review mode only)
+    refusal_reason: NotRequired[RefusalReason]  # exact reason for a terminal repair refusal
     loop_count: int  # infinite-loop guard (max: settings.max_loops)
     is_success: bool  # whether the test passed

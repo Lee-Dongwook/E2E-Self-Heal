@@ -2,6 +2,7 @@
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+import structlog
 
 from app.config import settings
 from app.nodes.diagnoser import diagnoser
@@ -11,13 +12,19 @@ from app.nodes.reviewer import reviewer
 from app.nodes.selector_verifier import selector_verifier
 from app.nodes.shadow_verifier import shadow_verifier
 from app.nodes.test_runner import test_runner
+from app.schemas import RefusalReason
 from app.state import AgentState
+
+logger = structlog.get_logger(__name__)
+_REFUSAL_FINALIZER = "refusal_finalizer"
 
 
 def route(state: AgentState) -> str:
     """Conditional edge: end on success or when the loop cap is hit, else re-diagnose."""
-    if state["is_success"] or state["loop_count"] >= settings.max_loops:
+    if state["is_success"]:
         return END
+    if state["loop_count"] >= settings.max_loops:
+        return _REFUSAL_FINALIZER
     return "diagnoser"
 
 
@@ -33,11 +40,40 @@ def route_after_shadow(state: AgentState) -> str:
     report = state.get("shadow_report", {})
     if report.get("ok", True):
         return "selector_verifier"
+    if state["loop_count"] >= settings.max_loops:
+        return _REFUSAL_FINALIZER
     if state.get("memory_report", {}).get("active", False):
         return "diagnoser"
-    if state["loop_count"] >= settings.max_loops:
-        return END
     return "patch_generator"
+
+
+def refusal_finalizer(state: AgentState) -> dict:
+    """Attach the most specific available reason to a terminal repair refusal."""
+    application = state.get("patch_application_report", {})
+    provider = state.get("patch_provider_report", {})
+    verification = state.get("verification_report", {})
+
+    if not state.get("boundary_report", {}).get("ok", True):
+        # The path-policy check runs before a candidate exists, so it cannot be reported
+        # as an assertion/control-flow guardrail rejection.
+        reason = RefusalReason.ARCHITECTURE_BOUNDARY_VIOLATION
+    elif application.get("guardrail_violation", False):
+        reason = RefusalReason.GUARDRAIL_VIOLATION
+    elif not provider.get("ok", True):
+        # Exhausted structured-output retries directly establish provider failure; absent
+        # diff context is weaker evidence and must not hide a known provider outage.
+        reason = RefusalReason.PROVIDER_ERROR
+    elif not verification.get("ok", True):
+        # A failed live-DOM check proves this candidate is unusable, but does not prove a
+        # product behavior change. Prefer the observed ambiguity over that speculation.
+        reason = RefusalReason.AMBIGUOUS_TARGET
+    elif not state["dom_diff_context"]:
+        reason = RefusalReason.INSUFFICIENT_EVIDENCE
+    else:
+        reason = RefusalReason.LOOP_CAP_REACHED
+
+    logger.info("repair_refused", reason=reason.value, loop_count=state["loop_count"])
+    return {"refusal_reason": reason}
 
 
 def route_after_patch(state: AgentState) -> str:
@@ -47,10 +83,10 @@ def route_after_patch(state: AgentState) -> str:
     # A boundary violation is permanent — the target path can't change mid-run, so retrying
     # the Patch Generator can never succeed. End immediately instead of burning loop budget.
     if not boundary_ok:
-        return END
+        return _REFUSAL_FINALIZER
     if not application_ok:
         if state["loop_count"] >= settings.max_loops:
-            return END
+            return _REFUSAL_FINALIZER
         return "patch_generator"
     return "shadow_verifier"
 
@@ -63,10 +99,10 @@ def route_after_verify(state: AgentState) -> str:
     """
     if state["verification_report"].get("ok", True):
         return "test_runner"
+    if state["loop_count"] >= settings.max_loops:
+        return _REFUSAL_FINALIZER
     if state.get("memory_report", {}).get("active", False):
         return "diagnoser"
-    if state["loop_count"] >= settings.max_loops:
-        return END
     return "patch_generator"
 
 
@@ -79,6 +115,7 @@ def build_graph() -> CompiledStateGraph:
     graph.add_node("shadow_verifier", shadow_verifier)
     graph.add_node("selector_verifier", selector_verifier)
     graph.add_node("test_runner", test_runner)
+    graph.add_node(_REFUSAL_FINALIZER, refusal_finalizer)
 
     graph.add_edge(START, "memory_lookup")
     graph.add_conditional_edges(
@@ -90,7 +127,11 @@ def build_graph() -> CompiledStateGraph:
     graph.add_conditional_edges(
         "patch_generator",
         route_after_patch,
-        {"shadow_verifier": "shadow_verifier", "patch_generator": "patch_generator", END: END},
+        {
+            "shadow_verifier": "shadow_verifier",
+            "patch_generator": "patch_generator",
+            _REFUSAL_FINALIZER: _REFUSAL_FINALIZER,
+        },
     )
     graph.add_conditional_edges(
         "shadow_verifier",
@@ -99,7 +140,7 @@ def build_graph() -> CompiledStateGraph:
             "selector_verifier": "selector_verifier",
             "patch_generator": "patch_generator",
             "diagnoser": "diagnoser",
-            END: END,
+            _REFUSAL_FINALIZER: _REFUSAL_FINALIZER,
         },
     )
     graph.add_conditional_edges(
@@ -109,10 +150,15 @@ def build_graph() -> CompiledStateGraph:
             "test_runner": "test_runner",
             "patch_generator": "patch_generator",
             "diagnoser": "diagnoser",
-            END: END,
+            _REFUSAL_FINALIZER: _REFUSAL_FINALIZER,
         },
     )
-    graph.add_conditional_edges("test_runner", route, {"diagnoser": "diagnoser", END: END})
+    graph.add_conditional_edges(
+        "test_runner",
+        route,
+        {"diagnoser": "diagnoser", _REFUSAL_FINALIZER: _REFUSAL_FINALIZER, END: END},
+    )
+    graph.add_edge(_REFUSAL_FINALIZER, END)
 
     return graph.compile()
 
