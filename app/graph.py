@@ -40,10 +40,10 @@ def route_after_shadow(state: AgentState) -> str:
     report = state.get("shadow_report", {})
     if report.get("ok", True):
         return "selector_verifier"
-    if state.get("memory_report", {}).get("active", False):
-        return "diagnoser"
     if state["loop_count"] >= settings.max_loops:
         return _REFUSAL_FINALIZER
+    if state.get("memory_report", {}).get("active", False):
+        return "diagnoser"
     return "patch_generator"
 
 
@@ -99,10 +99,10 @@ def route_after_verify(state: AgentState) -> str:
     """
     if state["verification_report"].get("ok", True):
         return "test_runner"
-    if state.get("memory_report", {}).get("active", False):
-        return "diagnoser"
     if state["loop_count"] >= settings.max_loops:
         return _REFUSAL_FINALIZER
+    if state.get("memory_report", {}).get("active", False):
+        return "diagnoser"
     return "patch_generator"
 
 

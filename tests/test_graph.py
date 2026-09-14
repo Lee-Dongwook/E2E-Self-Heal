@@ -58,6 +58,22 @@ def test_memory_hit_starts_verification_and_rejection_retries_diagnosis() -> Non
     )
 
 
+def test_capped_memory_verification_failures_finalize_immediately() -> None:
+    shadow_state = _state(
+        loop_count=settings.max_loops,
+        memory_report={"active": True},
+        shadow_report={"ok": False},
+    )
+    selector_state = _state(
+        loop_count=settings.max_loops,
+        memory_report={"active": True},
+        verification_report={"ok": False},
+    )
+
+    assert route_after_shadow(shadow_state) == "refusal_finalizer"
+    assert route_after_verify(selector_state) == "refusal_finalizer"
+
+
 def test_graph_compiles():
     assert build_graph() is not None
 
