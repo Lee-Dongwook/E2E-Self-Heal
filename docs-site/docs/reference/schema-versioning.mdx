@@ -1,0 +1,118 @@
+---
+title: "Schema versioning & deprecation policy"
+description: "Compatibility rules for e2e-healer machine-readable JSON output."
+---
+
+# Schema versioning & deprecation policy
+
+This policy governs every machine-readable JSON document emitted by `e2e-healer --json`.
+It applies to `RepairSummary`, `SuiteSummary`, and `ReviewReport` today, and to any future
+repair or refusal result type.
+
+## Status and scope
+
+`schema_version: "1.0"` is the current published baseline. It is emitted by the CLI,
+documented for GitHub Action workflows, and consumed by the bundled Playwright Reporter and
+review-bot examples. A schema change is evaluated against this published contract, not merely
+against direct runtime checks in this repository.
+
+The schema version identifies the JSON payload contract. It is independent from the
+`e2e-healer` package or GitHub Action release version.
+
+## Version format
+
+Schema versions use `MAJOR.MINOR`:
+
+- A **major** version signals a change that a conforming consumer cannot safely process
+  without an update.
+- A **minor** version signals a backwards-compatible addition that a conforming consumer may
+  safely ignore until it is ready to use it.
+
+The producer emits one schema version for each result. Nested result documents, such as
+`SuiteSummary.results`, use the same schema version as their enclosing summary.
+
+## Compatibility rules
+
+The following changes are compatible and require a minor version bump:
+
+- Adding an optional field with a documented default or absence behavior.
+- Adding an optional member to an existing object when its absence does not change the meaning
+  of existing fields.
+- Adding a new optional detail object whose presence consumers may ignore.
+- Clarifying documentation without changing the payload's meaning.
+
+The following changes are breaking and require a major version bump:
+
+- Removing, renaming, or changing the type of an existing field.
+- Making an optional field required, or changing a field's default or absence behavior.
+- Changing the meaning of an existing field, including the success semantics of
+  `is_success` or an Action `outcome`.
+- Adding or removing a top-level `kind` discriminator value.
+- Adding, removing, or changing a value in a closed enum, including `RefusalReason`.
+- Changing result nesting, ordering guarantees, or whether a document is emitted for an
+  existing command outcome.
+
+Closed enums and `kind` values are deliberately treated as breaking: consumers commonly use
+exhaustive dispatch, and accepting an unknown outcome can hide an unsafe repair decision.
+
+## Consumer requirements
+
+Consumers must read `schema_version` before interpreting the payload:
+
+1. Reject an unsupported **major** version with a clear error that includes the received and
+   supported versions. Do not infer behavior from unrecognized keys or `kind` values.
+2. Accept a newer **minor** version within a supported major version by ignoring unknown
+   optional fields.
+3. Reject an unknown `kind` or closed-enum value even when the major version appears
+   supported. Such a payload indicates a producer or policy violation and must not be silently
+   treated as a successful repair.
+4. Branch on documented fields only. Consumers must not depend on JSON key ordering or on
+   undocumented fields.
+
+The current composite Action forwards summary JSON to a workflow-provided file path rather
+than parsing it. Workflow authors and programmatic wrappers that read that file are responsible
+for these checks.
+
+## Producer requirements
+
+Before emitting a new schema version, maintainers must:
+
+1. Classify every proposed change using the compatibility rules above.
+2. Update the Pydantic output models, contract tests, CLI documentation, and Action examples
+   together.
+3. Add consumer coverage for every newly emitted `kind` and every rejection path.
+4. Record the schema change, compatibility classification, and migration instructions in the
+   release notes.
+
+A major-version release must not reuse an earlier major version for a different payload shape.
+
+## Deprecation and migration
+
+When a new major version ships:
+
+- Announce the change and its migration guide in the release notes and documentation before
+  recommending the new major to Action users.
+- Keep the previous major's documentation, examples, and versioned Action/CLI release
+  available for **at least 12 months** after the successor ships.
+- Maintain the previous major for critical compatibility or security fixes during that window
+  when feasible. Consumers needing fixed old behavior should pin the corresponding Action tag
+  or package release.
+- After the window, mark the old major unsupported. It remains available by its immutable
+  release tag, but new releases need not emit or test it.
+
+The CLI does not currently provide a `--schema-version` compatibility mode. Until such a mode
+exists, preserving an older output contract means pinning the prior Action or package release.
+
+## Applying this policy to repair refusals
+
+`RefusalReport` and `RefusalReason` are modeled internally, but refusal payloads are not yet
+emitted by the CLI. Before a refusal becomes public output, its integration must choose one of
+these compatible designs:
+
+- Add refusal details as optional fields to an existing result without changing the meaning of
+  its `kind` or `is_success`; this is a minor change.
+- Introduce `kind: "refusal"` or expose the closed `RefusalReason` enum; this is a major
+  change under this policy and requires consumer migration guidance.
+
+This rule prevents a refusal from being mistaken for an ordinary unsuccessful repair by a
+workflow that has not been updated to recognize it.
