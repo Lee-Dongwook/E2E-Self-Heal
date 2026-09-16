@@ -18,7 +18,8 @@ How CI branches on the result: exit codes plus the RepairSummary / SuiteSummary 
 
 Every machine-readable summary is self-describing: it carries a `schema_version` and a `kind`
 discriminator so consumers can dispatch without guessing on keys. Bump `schema_version` on any
-breaking change to the payload.
+breaking change to the payload. See the [schema versioning and deprecation
+policy](./schema-versioning) for compatibility rules, consumer behavior, and migration windows.
 
 | Field              | `RepairSummary` | `SuiteSummary` | `ReviewReport` |
 | ------------------ | --------------- | -------------- | -------------- |
