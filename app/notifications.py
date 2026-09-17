@@ -9,7 +9,7 @@ import structlog
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from app.config import settings
-from app.schemas import RepairSummary
+from app.schemas import HealResult, RepairSummary
 
 logger = structlog.get_logger(__name__)
 
@@ -69,19 +69,30 @@ def _post_to_slack(payload: SlackPayload) -> None:
     logger.info("notification_sent", status="success")
 
 
-def _build_payload(summary: RepairSummary) -> SlackPayload:
+def _build_payload(summary: HealResult) -> SlackPayload:
     """Build a typed Slack payload from a repair summary."""
-    outcome = "✅ Healed" if summary.is_success else "❌ Failed"
+    is_repair = isinstance(summary, RepairSummary)
+    outcome = (
+        "✅ Healed"
+        if is_repair and summary.is_success
+        else "❌ Failed"
+        if is_repair
+        else "❌ Refused"
+    )
+    loop_count = summary.loop_count
 
     selector_changes = []
-    for instr in summary.instructions:
-        before = instr.original.strip()
-        after = instr.replacement.strip()
-        selector_changes.append(f"• *Line {instr.line}:* {instr.reason}")
-        selector_changes.append(f"  _Before:_ `{before}`")
-        selector_changes.append(f"  _After:_ `{after}`")
-        if instr.selector:
-            selector_changes.append(f"  _New Selector:_ `{instr.selector}`")
+    if is_repair:
+        for instr in summary.instructions:
+            before = instr.original.strip()
+            after = instr.replacement.strip()
+            selector_changes.append(f"• *Line {instr.line}:* {instr.reason}")
+            selector_changes.append(f"  _Before:_ `{before}`")
+            selector_changes.append(f"  _After:_ `{after}`")
+            if instr.selector:
+                selector_changes.append(f"  _New Selector:_ `{instr.selector}`")
+    else:
+        selector_changes.append(f"*Reason:* `{summary.reason.value}`")
 
     changes_text = (
         "\n".join(selector_changes) if selector_changes else "_No selector changes recorded_"
@@ -90,7 +101,7 @@ def _build_payload(summary: RepairSummary) -> SlackPayload:
     text = (
         f"*{outcome} E2E Self-Healing Run*\n"
         f"*File:* `{summary.test_script_path}`\n"
-        f"*Loops:* {summary.loop_count}\n"
+        f"*Loops:* {loop_count}\n"
         f"*Changes:*\n{changes_text}"
     )
 
@@ -109,7 +120,7 @@ def _build_payload(summary: RepairSummary) -> SlackPayload:
                 "type": "section",
                 "fields": [
                     {"type": "mrkdwn", "text": f"*File:*\n`{summary.test_script_path}`"},
-                    {"type": "mrkdwn", "text": f"*Loops:*\n{summary.loop_count}"},
+                    {"type": "mrkdwn", "text": f"*Loops:*\n{loop_count}"},
                 ],
             },
             {
@@ -120,7 +131,7 @@ def _build_payload(summary: RepairSummary) -> SlackPayload:
     }
 
 
-def notify_heal_outcome(summary: RepairSummary) -> None:
+def notify_heal_outcome(summary: HealResult) -> None:
     """Post a concise summary of a heal run to Slack, if configured."""
     if not settings.slack_webhook_url:
         return

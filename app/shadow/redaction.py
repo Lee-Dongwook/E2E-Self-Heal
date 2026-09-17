@@ -1,6 +1,7 @@
 """Default redaction for sensitive data persisted by the Shadow runtime."""
 
 import json
+import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from app.shadow.schemas import (
@@ -31,6 +32,21 @@ SENSITIVE_KEYS = frozenset(
         "credential",
     }
 )
+_URL_RE = re.compile(r"https?://[^\s'\"<>]+")
+
+
+def redact_value(value: object) -> object:
+    """Recursively redact structured values before they are persisted or emitted."""
+    if isinstance(value, dict):
+        return {
+            str(key): REDACTED if str(key).casefold() in SENSITIVE_KEYS else redact_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact_value(item) for item in value]
+    if isinstance(value, str):
+        return _URL_RE.sub(lambda match: redact_url(match.group(0)), value)
+    return value
 
 
 def redact_url(url: str) -> str:
@@ -58,17 +74,7 @@ def _redact_json_body(body: str | None) -> str | None:
     except json.JSONDecodeError:
         return body
 
-    def redact(value: object) -> object:
-        if isinstance(value, dict):
-            return {
-                key: REDACTED if key.casefold() in SENSITIVE_KEYS else redact(item)
-                for key, item in value.items()
-            }
-        if isinstance(value, list):
-            return [redact(item) for item in value]
-        return value
-
-    return json.dumps(redact(value), sort_keys=True, separators=(",", ":"))
+    return json.dumps(redact_value(value), sort_keys=True, separators=(",", ":"))
 
 
 def _redact_request(request: CapturedRequest) -> CapturedRequest:

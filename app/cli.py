@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import cast
 
 import structlog
 import typer
@@ -16,11 +17,12 @@ from rich.table import Table
 from typer.core import TyperGroup
 
 from app.config import settings
+from app.evidence import build_evidence_bundle, build_unavailable_evidence
 from app.graph import build_graph, build_review_graph
 from app.healing_history import append_record, make_record
 from app.logging import configure_logging
 from app.notifications import notify_heal_outcome
-from app.preprocess.aria_snapshot import read_failure_snapshot
+from app.preprocess.aria_snapshot import read_failure_snapshot, read_failure_snapshot_with_source
 from app.preprocess.diff_ast_analyzer import analyze_diff
 from app.preprocess.error_log_parser import parse_error_log
 from app.preprocess.failure_scanner import scan_failing_tests
@@ -33,8 +35,11 @@ from app.sandbox import (
     assert_write_allowed,
 )
 from app.schemas import (
+    HealResult,
     PatchInstruction,
     RepairSummary,
+    RefusalReason,
+    RefusalReport,
     ReviewFinding,
     ReviewReport,
     SelectorHint,
@@ -180,11 +185,14 @@ def _heal_file(
     dom_diff_context: list[dict],
     dry_run: bool,
     memory_enabled: bool = True,
-) -> RepairSummary:
+) -> HealResult:
     assert_read_allowed(test_path)
     assert_write_allowed(test_path, reason="repair_target")
     original_code = test_path.read_text()
     parsed_error_log = parse_error_log(raw_log)
+    dom_snapshot, snapshot_source = read_failure_snapshot_with_source(
+        Path(settings.test_results_dir), test_path
+    )
     initial_state: AgentState = {
         "test_script_path": str(test_path),
         "original_code": original_code,
@@ -192,12 +200,15 @@ def _heal_file(
         "rollback_code": original_code,
         "error_log": parsed_error_log,
         "dom_diff_context": dom_diff_context,
-        "dom_snapshot": read_failure_snapshot(Path(settings.test_results_dir), test_path),
+        "dom_snapshot": dom_snapshot,
+        "dom_snapshot_source": str(snapshot_source) if snapshot_source else "",
         "analysis_report": "",
         "memory_enabled": memory_enabled,
         "patch_instructions": {},
         "verification_report": {},
         "review_report": {},
+        "evidence_candidates": [],
+        "evidence_history": [],
         "loop_count": 0,
         "is_success": False,
     }
@@ -206,19 +217,30 @@ def _heal_file(
     # post-write exception); commit only on a successful non-dry-run.
     committed = False
     try:
-        final_state = build_graph().invoke(initial_state)
+        final_state = cast(AgentState, build_graph().invoke(initial_state))
         _render_diff(original_code, final_state["current_code"], str(test_path))
         instructions = final_state["patch_instructions"] or {}
-        summary = RepairSummary(
-            test_script_path=final_state["test_script_path"],
-            is_success=final_state["is_success"],
-            loop_count=final_state["loop_count"],
-            instructions=[PatchInstruction(**i) for i in instructions.get("instructions", [])],
-        )
+        evidence = build_evidence_bundle(final_state, initial_error_log=parsed_error_log)
+        if final_state["is_success"]:
+            summary: HealResult = RepairSummary(
+                test_script_path=final_state["test_script_path"],
+                is_success=True,
+                loop_count=final_state["loop_count"],
+                instructions=[PatchInstruction(**i) for i in instructions.get("instructions", [])],
+                evidence=evidence,
+            )
+        else:
+            summary = RefusalReport(
+                test_script_path=final_state["test_script_path"],
+                reason=final_state.get("refusal_reason", RefusalReason.INSUFFICIENT_EVIDENCE),
+                loop_count=final_state["loop_count"],
+                evidence=evidence,
+            )
         committed = not dry_run and final_state["is_success"]
         if (
             memory_enabled
             and committed
+            and isinstance(summary, RepairSummary)
             and final_state.get("memory_report", {}).get("source") != "memory"
         ):
             record = make_record(
@@ -238,7 +260,9 @@ def _heal_file(
                         error=str(exc),
                     )
         logger.info(
-            "repair_run_finished", is_success=summary.is_success, loop_count=summary.loop_count
+            "repair_run_finished",
+            is_success=final_state["is_success"],
+            loop_count=final_state["loop_count"],
         )
         return summary
     finally:
@@ -255,8 +279,8 @@ def _heal_suite(
     passed, raw_log = run_playwright(suite_target)
     if passed:
         return SuiteSummary(total_failed=0, healed=0, is_success=True)
-    results: list[RepairSummary] = []
-    result_by_rel: dict[str, RepairSummary] = {}
+    results: list[HealResult] = []
+    result_by_rel: dict[str, HealResult] = {}
     for rel in scan_failing_tests(raw_log):
         path = Path(rel)
         # Targets parsed from reporter output are untrusted: require them to resolve inside
@@ -268,7 +292,12 @@ def _heal_suite(
             logger.warning("failing_test_sandbox_denied", path=rel, error=str(exc))
             # Keep the denied failure visible as an unresolved suite result rather than
             # silently dropping it, so the suite is not reported as fully healed.
-            result = RepairSummary(test_script_path=rel, is_success=False, loop_count=0)
+            result = RefusalReport(
+                test_script_path=rel,
+                reason=RefusalReason.INSUFFICIENT_EVIDENCE,
+                loop_count=0,
+                evidence=build_unavailable_evidence(parse_error_log(raw_log), dom_diff_context),
+            )
             results.append(result)
             result_by_rel[rel] = result
             continue
@@ -277,13 +306,23 @@ def _heal_suite(
         if not resolved.exists():
             logger.warning("failing_test_not_found", path=rel)
             # Keep missing targets unresolved so suite totals remain accurate (#212).
-            result = RepairSummary(test_script_path=rel, is_success=False, loop_count=0)
+            result = RefusalReport(
+                test_script_path=rel,
+                reason=RefusalReason.INSUFFICIENT_EVIDENCE,
+                loop_count=0,
+                evidence=build_unavailable_evidence(parse_error_log(raw_log), dom_diff_context),
+            )
             results.append(result)
             result_by_rel[rel] = result
             continue
         rerun_passed, focused_log = run_playwright(str(resolved))
         if rerun_passed:
-            result = RepairSummary(test_script_path=rel, is_success=True, loop_count=0)
+            result = RepairSummary(
+                test_script_path=rel,
+                is_success=True,
+                loop_count=0,
+                evidence=build_unavailable_evidence(parse_error_log(raw_log), dom_diff_context),
+            )
             results.append(result)
             result_by_rel[rel] = result
             continue
@@ -301,17 +340,26 @@ def _heal_suite(
             if final_failing:
                 for rel in final_failing:
                     if rel in result_by_rel:
-                        result_by_rel[rel].is_success = False
+                        if isinstance(result_by_rel[rel], RepairSummary):
+                            result_by_rel[rel].is_success = False
                     else:
-                        result = RepairSummary(test_script_path=rel, is_success=False, loop_count=0)
+                        result = RefusalReport(
+                            test_script_path=rel,
+                            reason=RefusalReason.INSUFFICIENT_EVIDENCE,
+                            loop_count=0,
+                            evidence=build_unavailable_evidence(
+                                parse_error_log(final_log), dom_diff_context
+                            ),
+                        )
                         results.append(result)
                         result_by_rel[rel] = result
             else:
                 # An unparseable final failure invalidates all repairs (#212).
                 for result in results:
-                    result.is_success = False
+                    if isinstance(result, RepairSummary):
+                        result.is_success = False
 
-    healed = sum(1 for r in results if r.is_success)
+    healed = sum(1 for result in results if isinstance(result, RepairSummary) and result.is_success)
     return SuiteSummary(
         total_failed=len(results),
         healed=healed,
@@ -500,9 +548,11 @@ def heal(
             # Notify Slack (Issue #124)
             notify_heal_outcome(summary)
 
-            status = "fixed" if summary.is_success else "not fixed"
-            console.print(f"[bold]{status}[/bold] after {summary.loop_count} loop(s)")
-            raise typer.Exit(code=0 if summary.is_success else 1)
+            is_success = isinstance(summary, RepairSummary) and summary.is_success
+            status = "fixed" if is_success else "not fixed"
+            loop_count = summary.loop_count
+            console.print(f"[bold]{status}[/bold] after {loop_count} loop(s)")
+            raise typer.Exit(code=0 if is_success else 1)
 
         suite = _heal_suite(
             str(test_path) if test_path is not None else "",

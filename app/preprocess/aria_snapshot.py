@@ -136,3 +136,14 @@ def read_failure_snapshot(results_dir: Path, test_path: Path | None = None) -> s
         test_path=str(test_path) if test_path else None,
     )
     return snapshot
+
+
+def read_failure_snapshot_with_source(
+    results_dir: Path, test_path: Path | None = None
+) -> tuple[str, Path | None]:
+    """Return a failure snapshot and its matching error-context.md path when available."""
+    snapshot = read_failure_snapshot(results_dir, test_path)
+    if not snapshot:
+        return "", None
+    contexts, _ = _find_matching_contexts(results_dir, test_path)
+    return snapshot, contexts[0] if contexts else None

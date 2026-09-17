@@ -1,92 +1,115 @@
 ---
 title: "Exit codes & JSON output"
-description: "How CI branches on the result: exit codes plus the RepairSummary / SuiteSummary / ReviewReport JSON schemas."
+description: "How CI branches on repair, refusal, suite, and review JSON results."
 ---
 
 # Exit codes & JSON output
 
-How CI branches on the result: exit codes plus the RepairSummary / SuiteSummary / ReviewReport JSON schemas.
+`--json` emits one machine-readable result to stdout; human output stays on stderr so CI can
+parse it safely.
 
 ## Exit code contract
 
-- `e2e-healer heal <path>` exits `0` when the failing test is healed, non-zero otherwise.
+- `e2e-healer heal <path>` exits `0` when the test is healed and `1` for a refusal.
 - `e2e-healer heal` (suite mode) exits `0` only when every discovered failing test is healed.
-- `e2e-healer review` always exits `0` — the CI wrapper branches on `has_findings`.
-- `--json` prints the machine-readable summary to **stdout**; human-readable output goes to **stderr**, so a wrapper can parse the JSON without filtering prose.
+- `e2e-healer review` exits `0` after a completed review; wrappers branch on `has_findings`.
 
 ## JSON contract
 
-Every machine-readable summary is self-describing: it carries a `schema_version` and a `kind`
-discriminator so consumers can dispatch without guessing on keys. Bump `schema_version` on any
-breaking change to the payload. See the [schema versioning and deprecation
-policy](./schema-versioning) for compatibility rules, consumer behavior, and migration windows.
+Every result contains a `schema_version` and `kind` discriminator. Current output is schema
+`"2.0"`: version 2 introduced the first-class `"refusal"` kind and its closed reason taxonomy.
+Consumers must reject unsupported schema majors and unknown `kind` or refusal-reason values.
+See the [schema versioning and deprecation policy](./schema-versioning) for the compatibility
+and migration rules.
 
-| Field              | `RepairSummary` | `SuiteSummary` | `ReviewReport` |
-| ------------------ | --------------- | -------------- | -------------- |
-| `schema_version`   | `"1.0"`         | `"1.0"`        | `"1.0"`        |
-| `kind`             | `"repair"`      | `"suite"`      | `"review"`     |
-| `test_script_path` | ✔               | —              | ✔              |
-| `is_success`       | ✔               | ✔              | —              |
-| `loop_count`       | ✔               | —              | —              |
-| `instructions`     | ✔               | —              | —              |
-| `total_failed`     | —               | ✔              | —              |
-| `healed`           | —               | ✔              | —              |
-| `results`          | —               | ✔ (`RepairSummary[]`) | —        |
-| `findings`         | —               | —              | ✔ (`ReviewFinding[]`) |
-| `has_findings`     | —               | —              | ✔              |
+| Field | `RepairSummary` | `RefusalReport` | `SuiteSummary` | `ReviewReport` |
+| --- | --- | --- | --- | --- |
+| `schema_version` | `"2.0"` | `"2.0"` | `"2.0"` | `"2.0"` |
+| `kind` | `"repair"` | `"refusal"` | `"suite"` | `"review"` |
+| `test_script_path` | ✔ | ✔ | — | ✔ |
+| `is_success` | ✔ | `false` | ✔ | — |
+| `reason` | — | ✔ | — | — |
+| `loop_count` | ✔ | ✔ | — | — |
+| `instructions` | ✔ | — | — | — |
+| `evidence` | ✔ | ✔ | — | — |
+| `results` | — | — | ✔ (`RepairSummary` / `RefusalReport`) | — |
+| `findings` | — | — | — | ✔ |
 
-### Example: single-file heal (`kind: "repair"`)
+The `evidence` object records the parsed failure, failing selector, DOM diff context, a
+content-hashed ARIA snapshot reference, ordered repair candidates, and ordered loop-stage
+outcomes. Snapshot content is not embedded in output; its reference points to the original
+workspace artifact when available. Sensitive structured values and URL query values are redacted.
+
+### Example: successful single-file heal
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "kind": "repair",
   "test_script_path": "tests/login.spec.ts",
   "is_success": true,
   "loop_count": 2,
-  "instructions": []
+  "instructions": [],
+  "evidence": {
+    "parsed_error": "Error: locator('#submit') timed out",
+    "failing_selector": "#submit",
+    "dom_diff_context": [],
+    "aria_snapshot": null,
+    "candidates": [],
+    "loop_history": []
+  }
 }
 ```
 
-### Example: suite heal (`kind: "suite"`)
+### Example: single-file refusal
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
+  "kind": "refusal",
+  "test_script_path": "tests/login.spec.ts",
+  "reason": "ambiguous_target",
+  "is_success": false,
+  "loop_count": 2,
+  "evidence": {
+    "parsed_error": "Error: locator('#submit') resolved to 2 elements",
+    "failing_selector": "#submit",
+    "dom_diff_context": [],
+    "aria_snapshot": null,
+    "candidates": [],
+    "loop_history": []
+  }
+}
+```
+
+### Example: suite heal
+
+```json
+{
+  "schema_version": "2.0",
   "kind": "suite",
   "total_failed": 2,
   "healed": 1,
   "is_success": false,
   "results": [
     {
-      "schema_version": "1.0",
+      "schema_version": "2.0",
       "kind": "repair",
       "test_script_path": "tests/login.spec.ts",
       "is_success": true,
       "loop_count": 1,
-      "instructions": []
+      "instructions": [],
+      "evidence": {}
     },
     {
-      "schema_version": "1.0",
-      "kind": "repair",
+      "schema_version": "2.0",
+      "kind": "refusal",
       "test_script_path": "tests/checkout.spec.ts",
+      "reason": "insufficient_evidence",
       "is_success": false,
-      "loop_count": 3,
-      "instructions": []
+      "loop_count": 0,
+      "evidence": {}
     }
   ]
 }
 ```
-
-### Example: review (`kind: "review"`)
-
-```json
-{
-  "schema_version": "1.0",
-  "kind": "review",
-  "test_script_path": "tests/login.spec.ts",
-  "findings": [],
-  "has_findings": false
-}
-```
-

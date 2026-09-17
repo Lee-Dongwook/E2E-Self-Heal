@@ -5,6 +5,7 @@ from langgraph.graph.state import CompiledStateGraph
 import structlog
 
 from app.config import settings
+from app.evidence import add_loop_event
 from app.nodes.diagnoser import diagnoser
 from app.nodes.memory_lookup import memory_lookup
 from app.nodes.patch_generator import patch_generator
@@ -73,7 +74,12 @@ def refusal_finalizer(state: AgentState) -> dict:
         reason = RefusalReason.LOOP_CAP_REACHED
 
     logger.info("repair_refused", reason=reason.value, loop_count=state["loop_count"])
-    return {"refusal_reason": reason}
+    return {
+        "refusal_reason": reason,
+        "evidence_history": add_loop_event(
+            state, "refusal_finalizer", "refused", reason=reason.value
+        ),
+    }
 
 
 def route_after_patch(state: AgentState) -> str:

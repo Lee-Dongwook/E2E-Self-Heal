@@ -11,7 +11,7 @@ from app.cli import app
 from app.config import settings
 from app.healing_history import load_history
 from app.sandbox import SandboxViolation
-from app.schemas import SCHEMA_VERSION, RepairSummary, SuiteSummary
+from app.schemas import RefusalReason, SCHEMA_VERSION, RepairSummary, SuiteSummary
 from app.state import AgentState
 from app.utils.files import atomic_write
 
@@ -60,6 +60,7 @@ def mock_graph_failure(monkeypatch: pytest.MonkeyPatch) -> None:
             state["loop_count"] = 3
             state["current_code"] = "await page.click('#new')"
             state["patch_instructions"] = {}
+            state["refusal_reason"] = RefusalReason.LOOP_CAP_REACHED
             if state["test_script_path"]:
                 atomic_write(Path(state["test_script_path"]), state["current_code"])
             return state
@@ -196,6 +197,23 @@ def test_heal_resolves_relative_paths_against_root(
     data = json.loads(json_line)
     assert data["kind"] == "repair"
     assert data["schema_version"] == SCHEMA_VERSION
+    assert data["evidence"]["parsed_error"] == "call log: selector"
+
+
+def test_cli_json_output_emits_refusal_bundle(mock_graph_failure, tmp_path) -> None:
+    test_file = tmp_path / "test.spec.ts"
+    test_file.write_text("await page.click('#old')")
+    log_file = tmp_path / "error.log"
+    log_file.write_text("Error: waiting for locator('#old') timed out")
+
+    result = CliRunner().invoke(app, [str(test_file), "--log", str(log_file), "--json"])
+
+    assert result.exit_code == 1
+    payload = json.loads(next(line for line in result.stdout.splitlines() if line.startswith("{")))
+    assert payload["kind"] == "refusal"
+    assert payload["reason"] == "loop_cap_reached"
+    assert payload["loop_count"] == 3
+    assert payload["evidence"]["failing_selector"] == "#old"
 
 
 def test_git_diff_failure_renders_error_without_markup_crash(monkeypatch, tmp_path) -> None:

@@ -41,7 +41,7 @@ outputs:
     description: "One of: passed | healed | unhealed | reviewed | errored"
     value: ${{ steps.heal.outputs.outcome }}
   summary-path:
-    description: "Path to the RepairSummary JSON (heal mode; empty otherwise)"
+    description: "Path to the RepairSummary or RefusalReport JSON (heal mode; empty otherwise)"
     value: ${{ steps.heal.outputs.summary-path }}
   review-path:
     description: "Path to the ReviewReport JSON (review mode; empty otherwise)"

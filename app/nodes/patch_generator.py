@@ -7,6 +7,7 @@ from typing import cast
 
 import structlog
 
+from app.evidence import add_candidate, add_loop_event
 from app.llm import generate_patch
 from app.prompts.patch_generator import (
     DomDiffEntry,
@@ -479,6 +480,9 @@ def patch_generator(state: AgentState) -> dict:
             "verification_report": {},
             "memory_report": {"active": False, "source": "llm"},
             "loop_count": state["loop_count"] + 1,
+            "evidence_history": add_loop_event(
+                state, "patch_generator", "boundary_denied", error=str(exc)
+            ),
         }
     user_prompt = (
         f"Failure diagnosis:\n{state['analysis_report']}\n\n"
@@ -501,6 +505,7 @@ def patch_generator(state: AgentState) -> dict:
             "patch_provider_report": {"ok": False},
             "verification_report": {},
             "memory_report": {"active": False, "source": "llm"},
+            "evidence_history": add_loop_event(state, "patch_generator", "provider_failed"),
         }
 
     try:
@@ -525,6 +530,16 @@ def patch_generator(state: AgentState) -> dict:
             "verification_report": {},
             "memory_report": {"active": False, "source": "llm"},
             "loop_count": next_count,
+            "evidence_candidates": add_candidate(
+                state,
+                source="llm",
+                instructions=output.instructions,
+                outcome="rejected",
+                rejection=str(exc),
+            ),
+            "evidence_history": add_loop_event(
+                state, "patch_generator", "application_rejected", error=str(exc)
+            ),
         }
     logger.info("patch_generator_finished", instruction_count=len(output.instructions))
     return {
@@ -535,4 +550,11 @@ def patch_generator(state: AgentState) -> dict:
         "patch_provider_report": {"ok": True},
         "verification_report": {},
         "memory_report": {"active": False, "source": "llm"},
+        "evidence_candidates": add_candidate(state, source="llm", instructions=output.instructions),
+        "evidence_history": add_loop_event(
+            state,
+            "patch_generator",
+            "candidate_generated",
+            instruction_count=len(output.instructions),
+        ),
     }

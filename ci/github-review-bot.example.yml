@@ -69,6 +69,16 @@ jobs:
               return;
             }
             const report = JSON.parse(fs.readFileSync(path, 'utf8'));
+            if (
+              typeof report.schema_version !== 'string' ||
+              report.schema_version.split('.', 1)[0] !== '2' ||
+              report.kind !== 'review'
+            ) {
+              core.setFailed(
+                `unsupported e2e-healer review schema: ${String(report.schema_version)}`
+              );
+              return;
+            }
             const findings = report.findings || [];
             if (findings.length === 0) {
               core.info('no findings to post');

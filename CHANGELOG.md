@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Repair/refusal evidence bundle** — `--json` now emits schema `2.0` results with a
+  deterministic, redacted evidence bundle: parsed failure and selector, DOM context, ARIA snapshot
+  reference, candidate verification scores, and loop history. Terminal failures emit a first-class
+  `RefusalReport` with its exact refusal reason; consumers must update from schema `1.0` before
+  accepting these results (#296).
 - **`--root` path anchor** — `e2e-healer heal` / `review` accept `--root <dir>` to anchor all
   relative-path resolution (test spec, diff file, test-results dir, and the `git diff` /
   Playwright subprocess cwd) to a project root. This lets programmatic integrators (e.g. a

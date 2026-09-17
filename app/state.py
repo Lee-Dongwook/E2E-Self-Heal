@@ -45,6 +45,7 @@ class AgentState(TypedDict):
     error_log: str  # latest Playwright error log (abstracted)
     dom_diff_context: list[dict]  # DOM changes from AST parsing
     dom_snapshot: str  # ARIA snapshot of the failing page (from error-context.md)
+    dom_snapshot_source: NotRequired[str]  # source error-context.md path for evidence references
     analysis_report: str  # Diagnoser's failure-cause report
     memory_enabled: NotRequired[bool]  # opt in/out of local healing-history lookup and storage
     detected_framework: NotRequired[str]  # optional framework hint for prompt strategy selection
@@ -57,5 +58,7 @@ class AgentState(TypedDict):
     memory_report: NotRequired[MemoryReport]
     review_report: NotRequired[dict]  # Reviewer's source-level suggestions (review mode only)
     refusal_reason: NotRequired[RefusalReason]  # exact reason for a terminal repair refusal
+    evidence_candidates: NotRequired[list[dict]]  # ordered memory/LLM candidates and scores
+    evidence_history: NotRequired[list[dict]]  # ordered repair-loop stage outcomes
     loop_count: int  # infinite-loop guard (max: settings.max_loops)
     is_success: bool  # whether the test passed

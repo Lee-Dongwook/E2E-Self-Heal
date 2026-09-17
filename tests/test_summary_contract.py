@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from app.schemas import (
     RefusalReason,
     RefusalReport,
+    EvidenceBundle,
     SCHEMA_VERSION,
     RepairSummary,
     ReviewReport,
@@ -33,6 +34,8 @@ def _refusal(**overrides: Any) -> RefusalReport:
     fields: dict[str, Any] = {
         "test_script_path": "tests/login.spec.ts",
         "reason": RefusalReason.AMBIGUOUS_TARGET,
+        "loop_count": 1,
+        "evidence": EvidenceBundle(),
     }
     fields.update(overrides)
     return RefusalReport(**fields)
@@ -85,6 +88,7 @@ def test_refusal_report_round_trips_through_json() -> None:
 
     assert restored == report
     assert json.loads(report.model_dump_json())["reason"] == "architecture_boundary_violation"
+    assert report.is_success is False
 
 
 def test_refusal_report_rejects_unknown_reason() -> None:
@@ -96,7 +100,7 @@ def test_refusal_report_rejects_unknown_reason() -> None:
 def test_unsupported_schema_version_is_rejected(make: Callable[..., _AnySummary]) -> None:
     # The contract pins the emitted version, so a model can never serialize an
     # unsupported schema_version (e.g. a stale hard-coded "2.0").
-    bad_version: Any = "2.0"
+    bad_version: Any = "1.0"
     with pytest.raises(ValidationError, match="schema_version"):
         make(schema_version=bad_version)
 
