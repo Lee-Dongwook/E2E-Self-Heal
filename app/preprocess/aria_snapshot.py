@@ -101,38 +101,36 @@ def read_failure_snapshot(results_dir: Path, test_path: Path | None = None) -> s
     Returns '' when no results dir, no matching snapshot, or file read fails (TOCTOU-safe),
     so callers degrade gracefully.
     """
-    if not results_dir.exists():
-        return ""
+    return read_failure_snapshot_with_source(results_dir, test_path)[0]
 
+
+def read_failure_snapshot_with_source(
+    results_dir: Path, test_path: Path | None = None
+) -> tuple[str, Path | None]:
+    """Return a failure snapshot and its matching error-context.md path when available."""
+    if not results_dir.exists():
+        return "", None
     try:
         assert_read_allowed(results_dir)
     except SandboxViolation as exc:
         logger.warning("failure_snapshot_sandbox_denied", path=str(results_dir), error=str(exc))
-        return ""
-
+        return "", None
     contexts, diagnostic = _find_matching_contexts(results_dir, test_path)
     if not contexts:
         if diagnostic:
             logger.info("failure_snapshot_skipped", reason=diagnostic)
-        return ""
-
-    # Read the newest matching context (TOCTOU-safe)
+        return "", None
+    source = contexts[0]
     try:
-        content = contexts[0].read_text()
+        content = source.read_text()
     except (FileNotFoundError, OSError) as exc:
-        # File deleted between glob and read (TOCTOU) or permission error
-        logger.warning(
-            "failure_snapshot_read_failed",
-            path=str(contexts[0]),
-            error=str(exc),
-        )
-        return ""
-
+        logger.warning("failure_snapshot_read_failed", path=str(source), error=str(exc))
+        return "", None
     snapshot = extract_page_snapshot(content)
     logger.info(
         "failure_snapshot_read",
         chars=len(snapshot),
-        source=str(contexts[0]),
+        source=str(source),
         test_path=str(test_path) if test_path else None,
     )
-    return snapshot
+    return (snapshot, source) if snapshot else ("", None)

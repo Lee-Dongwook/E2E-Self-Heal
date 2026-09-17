@@ -36,7 +36,15 @@ def test_memory_lookup_is_bypassed_when_disabled(monkeypatch: pytest.MonkeyPatch
 
     result = memory_lookup(state)
 
-    assert result == {"memory_report": {"attempted": False, "enabled": False}}
+    assert result["memory_report"] == {"attempted": False, "enabled": False}
+    assert result["evidence_history"] == [
+        {
+            "loop_count": 0,
+            "stage": "memory_lookup",
+            "outcome": "disabled",
+            "details": {},
+        }
+    ]
 
 
 def test_memory_lookup_applies_rebased_guarded_candidate(
@@ -111,3 +119,8 @@ def test_memory_lookup_rejects_duplicate_source_lines_without_mutating(
 
     assert result["memory_report"]["hit"] is False
     assert "matched 2" in result["memory_report"]["rejection"]
+    candidate = result["evidence_candidates"][0]
+    assert candidate["source"] == "memory"
+    assert candidate["memory_score"] is not None
+    assert candidate["outcome"] == "rejected"
+    assert "matched 2" in candidate["rejection"]

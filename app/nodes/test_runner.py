@@ -4,6 +4,7 @@ from pathlib import Path
 
 import structlog
 
+from app.evidence import add_loop_event, update_latest_candidate
 from app.preprocess.error_log_parser import parse_error_log
 from app.runner import run_playwright
 from app.state import AgentState
@@ -25,7 +26,13 @@ def test_runner(state: AgentState) -> dict:
     passed, log = run_playwright(path)
     if passed:
         logger.info("test_runner_passed", loop_count=state["loop_count"])
-        return {"is_success": True}
+        return {
+            "is_success": True,
+            "evidence_candidates": update_latest_candidate(
+                state, test_passed=True, outcome="accepted"
+            ),
+            "evidence_history": add_loop_event(state, "test_runner", "passed"),
+        }
 
     memory_candidate = state.get("memory_report", {}).get("active", False)
     if memory_candidate:
@@ -38,4 +45,8 @@ def test_runner(state: AgentState) -> dict:
         "current_code": state["original_code"] if memory_candidate else state["current_code"],
         "error_log": parse_error_log(log),
         "loop_count": next_count,
+        "evidence_candidates": update_latest_candidate(
+            state, test_passed=False, outcome="rejected", rejection="test_failed"
+        ),
+        "evidence_history": add_loop_event(state, "test_runner", "failed"),
     }

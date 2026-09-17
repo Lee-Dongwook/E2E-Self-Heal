@@ -11,7 +11,7 @@ from app.shadow import (
     ShadowSnapshot,
     ShadowWorkspace,
 )
-from app.shadow.redaction import redact_url
+from app.shadow.redaction import redact_url, redact_value
 from app.shadow.snapshot_store import SnapshotStore
 
 
@@ -20,6 +20,17 @@ def test_redact_url_removes_sensitive_query_values() -> None:
     assert "secret" not in safe
     assert "page=2" in safe
     assert "token=%5BREDACTED%5D" in safe
+
+
+def test_redact_value_removes_unstructured_credentials_and_url_components() -> None:
+    safe = redact_value(
+        "Authorization: Bearer test-token; password=test-password "
+        "https://user:test-password@example.test/path#test-token"
+    )
+
+    assert safe == (
+        "Authorization: Bearer [REDACTED]; password=[REDACTED] https://example.test/path#[REDACTED]"
+    )
 
 
 def test_snapshot_store_redacts_secrets_and_uses_private_permissions(tmp_path) -> None:

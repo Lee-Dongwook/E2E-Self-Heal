@@ -9,6 +9,7 @@ from pathlib import Path
 
 import structlog
 
+from app.evidence import add_loop_event, update_latest_candidate
 from app.shadow.config import ShadowConfig
 from app.shadow.runtime import run_shadow
 from app.shadow.schemas import ShadowRunResult
@@ -53,7 +54,10 @@ def shadow_verifier(state: AgentState) -> dict:
         store.get_snapshot(snapshot_id)
     except SnapshotNotFoundError:
         logger.info("shadow_verify_skipped_no_snapshot", snapshot_id=snapshot_id)
-        return {"shadow_report": {"ok": True, "skipped": True}}
+        return {
+            "shadow_report": {"ok": True, "skipped": True},
+            "evidence_history": add_loop_event(state, "shadow_verifier", "skipped"),
+        }
 
     # ``rollback_code`` is the single source of truth for the last accepted candidate.
     # In particular, do not read the disk file as a baseline: it may still contain a
@@ -71,13 +75,20 @@ def shadow_verifier(state: AgentState) -> dict:
             # Fallback if run_shadow returned placeholder string
             logger.info("shadow_verify_skipped_placeholder")
             atomic_write(test_path, rollback_code)
-            return {"shadow_report": {"ok": True, "skipped": True}}
+            return {
+                "shadow_report": {"ok": True, "skipped": True},
+                "evidence_history": add_loop_event(state, "shadow_verifier", "skipped"),
+            }
 
         if result.is_success:
             logger.info("shadow_verify_passed", score=result.score)
             return {
                 "current_code": candidate_code,
                 "shadow_report": {"ok": True, "score": result.score},
+                "evidence_candidates": update_latest_candidate(state, shadow_score=result.score),
+                "evidence_history": add_loop_event(
+                    state, "shadow_verifier", "passed", score=result.score
+                ),
             }
 
         # Replay failed: rollback both disk and state to the shared baseline.
@@ -94,6 +105,12 @@ def shadow_verifier(state: AgentState) -> dict:
             "analysis_report": state["analysis_report"] + _shadow_feedback(result),
             "loop_count": next_count,
             "shadow_report": {"ok": False, "score": result.score},
+            "evidence_candidates": update_latest_candidate(
+                state, shadow_score=result.score, outcome="rejected", rejection="shadow_failed"
+            ),
+            "evidence_history": add_loop_event(
+                state, "shadow_verifier", "failed", score=result.score
+            ),
         }
 
     except Exception as e:
@@ -114,4 +131,8 @@ def shadow_verifier(state: AgentState) -> dict:
             ),
             "loop_count": next_count,
             "shadow_report": {"ok": False, "error": str(e)},
+            "evidence_candidates": update_latest_candidate(
+                state, outcome="rejected", rejection="shadow_error"
+            ),
+            "evidence_history": add_loop_event(state, "shadow_verifier", "error", error=str(e)),
         }

@@ -7,7 +7,7 @@ import pytest
 
 import app.cli as cli
 from app.config import settings
-from app.schemas import RepairSummary
+from app.schemas import CandidateEvidence, EvidenceBundle, RepairSummary
 
 type FailureTarget = Path | str
 type PlaywrightResult = tuple[bool, str]
@@ -317,3 +317,50 @@ def test_suite_final_rerun_reveals_failures_in_scanner_order(
     summary = cli._heal_suite("", [], dry_run=False)
     revealed = [r.test_script_path for r in summary.results if not r.is_success]
     assert revealed == [str(b), str(c)]
+
+
+def test_suite_final_rerun_rejects_previously_accepted_candidate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    test_file = tmp_path / "a.spec.ts"
+    test_file.write_text("x")
+
+    def _heal(
+        path: Path,
+        log: str,
+        context: list[dict],
+        dry_run: bool,
+        memory_enabled: bool,
+    ) -> RepairSummary:
+        return RepairSummary(
+            test_script_path=str(path),
+            is_success=True,
+            loop_count=1,
+            evidence=EvidenceBundle(
+                candidates=[
+                    CandidateEvidence(
+                        loop_count=1,
+                        source="llm",
+                        test_passed=True,
+                        outcome="accepted",
+                    )
+                ]
+            ),
+        )
+
+    monkeypatch.setattr(cli, "_heal_file", _heal)
+    monkeypatch.setattr(
+        cli,
+        "run_playwright",
+        _suite_runner((test_file,), lambda target: (False, "focused"), False, (test_file,)),
+    )
+
+    summary = cli._heal_suite("", [], dry_run=False)
+
+    result = summary.results[0]
+    assert isinstance(result, RepairSummary)
+    assert result.is_success is False
+    assert result.evidence.candidates[0].test_passed is False
+    assert result.evidence.candidates[0].outcome == "rejected"
+    assert result.evidence.candidates[0].rejection == "final_suite_failed"
+    assert result.evidence.loop_history[-1].outcome == "final_suite_failed"

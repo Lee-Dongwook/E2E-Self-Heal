@@ -14,6 +14,7 @@ from pathlib import Path
 import structlog
 
 from app.config import settings
+from app.evidence import add_loop_event, update_latest_candidate
 from app.schemas import PatchInstruction
 from app.state import AgentState
 from app.utils.files import atomic_write, split_line_ending
@@ -48,20 +49,29 @@ def _feedback(bad: dict[str, int]) -> str:
 def selector_verifier(state: AgentState) -> dict:
     """Verify patched selectors against the live DOM; revert and loop back if any is invalid."""
     if not settings.verify_selectors or not settings.app_url:
-        return {"verification_report": _SKIPPED}
+        return {
+            "verification_report": _SKIPPED,
+            "evidence_history": add_loop_event(state, "selector_verifier", "skipped"),
+        }
 
     instructions = [
         PatchInstruction(**i) for i in state["patch_instructions"].get("instructions", [])
     ]
     selectors = [i.selector for i in instructions if i.selector]
     if not selectors:
-        return {"verification_report": _SKIPPED}
+        return {
+            "verification_report": _SKIPPED,
+            "evidence_history": add_loop_event(state, "selector_verifier", "skipped"),
+        }
 
     logger.info("selector_verify_started", selector_count=len(selectors), url=settings.app_url)
     counts = check_selectors(settings.app_url, selectors)
     if counts is None:
         logger.info("selector_verify_unavailable")  # tooling missing -> defer to Test Runner
-        return {"verification_report": _SKIPPED}
+        return {
+            "verification_report": _SKIPPED,
+            "evidence_history": add_loop_event(state, "selector_verifier", "unavailable"),
+        }
 
     bad = {sel: count for sel, count in counts.items() if count != 1}
     if not bad:
@@ -69,6 +79,8 @@ def selector_verifier(state: AgentState) -> dict:
         return {
             "rollback_code": state["current_code"],
             "verification_report": {"ok": True, "counts": counts},
+            "evidence_candidates": update_latest_candidate(state, selector_counts=counts),
+            "evidence_history": add_loop_event(state, "selector_verifier", "passed"),
         }
 
     rollback_code = state.get("rollback_code", state["original_code"])
@@ -84,4 +96,8 @@ def selector_verifier(state: AgentState) -> dict:
         "analysis_report": state["analysis_report"] + _feedback(bad),
         "loop_count": next_count,
         "verification_report": {"ok": False, "counts": counts},
+        "evidence_candidates": update_latest_candidate(
+            state, selector_counts=counts, outcome="rejected", rejection="selector_not_unique"
+        ),
+        "evidence_history": add_loop_event(state, "selector_verifier", "failed"),
     }

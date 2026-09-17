@@ -40,6 +40,42 @@ export interface ReviewReport {
   has_findings: boolean;
 }
 
+const SUPPORTED_SCHEMA_MAJOR = "2";
+
+function isReviewFinding(payload: unknown): payload is ReviewFinding {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+  const finding = payload as Partial<ReviewFinding>;
+  return (
+    typeof finding.file === "string" &&
+    typeof finding.line === "number" &&
+    typeof finding.broken_selector === "string" &&
+    typeof finding.root_cause === "string" &&
+    typeof finding.suggestion === "string" &&
+    (finding.recommended_selector === undefined ||
+      typeof finding.recommended_selector === "string") &&
+    (finding.severity === undefined ||
+      finding.severity === "info" ||
+      finding.severity === "warning")
+  );
+}
+
+function isSupportedReviewReport(payload: unknown): payload is ReviewReport {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+  const report = payload as Partial<ReviewReport>;
+  return (
+    report.schema_version?.split(".", 1)[0] === SUPPORTED_SCHEMA_MAJOR &&
+    report.kind === "review" &&
+    typeof report.test_script_path === "string" &&
+    Array.isArray(report.findings) &&
+    report.findings.every(isReviewFinding) &&
+    typeof report.has_findings === "boolean"
+  );
+}
+
 export interface E2EHealerReporterOptions {
   /** The e2e-healer executable to invoke (or a full command). Default: "e2e-healer". */
   command?: string;
@@ -119,7 +155,15 @@ function runHealer(
     return null;
   }
   try {
-    return JSON.parse(jsonLine) as ReviewReport;
+    const payload: unknown = JSON.parse(jsonLine);
+    if (!isSupportedReviewReport(payload)) {
+      process.stderr.write(
+        `[e2e-healer] unsupported review schema or payload for ${failure.testPath}; ` +
+          `expected major ${SUPPORTED_SCHEMA_MAJOR} and kind "review"\n`,
+      );
+      return null;
+    }
+    return payload;
   } catch (error) {
     process.stderr.write(`[e2e-healer] invalid JSON for ${failure.testPath}: ${String(error)}\n`);
     return null;
@@ -186,7 +230,7 @@ export default class E2EHealerReporter implements Reporter {
 
     const findings = reports.flatMap((report) => report.findings);
     const aggregate = {
-      schema_version: "1.0",
+      schema_version: "2.0",
       kind: "review",
       failed_tests: this.failures.length,
       reports,

@@ -248,10 +248,11 @@ directory other than the project root (e.g. from a Playwright Reporter).
 
 Exit code is `0` when the test is healed, non-zero otherwise. `--json` prints a
 machine-readable summary to stdout (human output goes to stderr) so CI can branch on it:
-a `RepairSummary` for single-file heals, a `SuiteSummary` for suite mode, and a
-`ReviewReport` in review mode. Every emitted summary is self-describing: it carries a
-`schema_version` (currently `"1.0"`) and a `kind` discriminator (`"repair"` / `"suite"` /
-`"review"`) so the CI wrapper can dispatch without guessing on keys. `e2e-healer <path>`
+a `RepairSummary` for a successful single-file heal, a `RefusalReport` when it declines a
+single-file repair, a `SuiteSummary` for suite mode, and a `ReviewReport` in review mode.
+Every emitted summary is self-describing: it carries a `schema_version` (currently `"2.0"`)
+and a `kind` discriminator (`"repair"` / `"refusal"` / `"suite"` / `"review"`) so the CI
+wrapper can dispatch without guessing on keys. `e2e-healer <path>`
 is shorthand for `e2e-healer heal <path>`; `review` is a separate subcommand that emits a
 `ReviewReport` (findings anchored to the changed source line) and always exits `0` — the
 CI wrapper branches on `has_findings`.

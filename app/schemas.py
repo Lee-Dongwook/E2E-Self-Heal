@@ -1,15 +1,14 @@
 """Pydantic models: structured LLM output and machine-readable CI results."""
 
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Literal, TypedDict, cast
 
 from pydantic import BaseModel, Field
 
-# Version of the machine-readable CI contract emitted as `--json` output (RepairSummary /
-# SuiteSummary / ReviewReport). Bump this on any breaking change to the JSON shape so CI
-# wrappers can detect it instead of guessing on keys. The Literal type pins
-# the version so a model can never silently serialize an unsupported one.
-SCHEMA_VERSION: Literal["1.0"] = "1.0"
+# Version of the machine-readable CI contract emitted as `--json`. Version 2 adds the
+# ``refusal`` discriminator and closed refusal reasons, which the published compatibility
+# policy classifies as a breaking change.
+SCHEMA_VERSION: Literal["2.0"] = "2.0"
 
 
 class DomDiff(BaseModel):
@@ -22,6 +21,22 @@ class DomDiff(BaseModel):
     )
     previous: dict = Field(default_factory=dict, description="DOM node before the change")
     current: dict = Field(default_factory=dict, description="DOM node after the change")
+
+
+class DomNode(TypedDict, total=False):
+    """A JSX DOM node captured on one side of a changed element."""
+
+    tag: str
+    attributes: dict[str, str]
+
+
+class EvidenceDomDiff(BaseModel):
+    """A typed DOM diff entry published in repair/refusal evidence."""
+
+    file: str
+    line: int = Field(ge=0)
+    previous: DomNode = Field(default_factory=lambda: cast(DomNode, {}))
+    current: DomNode = Field(default_factory=lambda: cast(DomNode, {}))
 
 
 class PatchInstruction(BaseModel):
@@ -62,10 +77,83 @@ class RefusalReason(str, Enum):
     PROVIDER_ERROR = "provider_error"
 
 
+class SnapshotReference(BaseModel):
+    """Stable reference to a redacted failure-time ARIA snapshot."""
+
+    sha256: str = Field(description="SHA-256 digest of the redacted extracted snapshot content")
+    sha256: str = Field(description="SHA-256 digest of the redacted snapshot content")
+    source_path: str | None = Field(
+        default=None,
+        description="workspace-relative error-context.md provenance path, when available",
+    )
+    chars: int = Field(ge=0, description="character count of the redacted snapshot")
+
+
+class CandidateEvidence(BaseModel):
+    """One memory or LLM repair candidate and its verification evidence."""
+
+    loop_count: int = Field(ge=0)
+    source: Literal["memory", "llm"]
+    instructions: list[PatchInstruction] = Field(default_factory=list)
+    memory_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    shadow_score: float | None = None
+    selector_counts: dict[str, int] = Field(default_factory=dict)
+    test_passed: bool | None = None
+    outcome: Literal["generated", "accepted", "rejected"] = "generated"
+    rejection: str | None = None
+
+
+class LoopEvidenceDetails(BaseModel):
+    """Known, sanitized details emitted by repair-loop stages."""
+
+    score: float | None = None
+    error: str | None = None
+    instruction_count: int | None = Field(default=None, ge=0)
+    reason: RefusalReason | None = None
+
+
+class LoopEvidence(BaseModel):
+    """One deterministic repair-loop stage outcome."""
+
+    loop_count: int = Field(ge=0)
+    stage: Literal[
+        "memory_lookup",
+        "patch_generator",
+        "shadow_verifier",
+        "selector_verifier",
+        "test_runner",
+        "refusal_finalizer",
+    ]
+    outcome: str
+    details: LoopEvidenceDetails = Field(default_factory=LoopEvidenceDetails)
+
+
+class SelectorHintEvidence(BaseModel):
+    """A user-provided selector hint preserved in repair evidence."""
+
+    type: Literal["selector_hint"]
+    hint_type: Literal["role", "testid", "text", "css"]
+    value: str
+    original: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    priority: Literal["high"]
+
+
+class EvidenceBundle(BaseModel):
+    """Reviewable, redacted evidence used to decide a repair or refusal."""
+
+    parsed_error: str = ""
+    failing_selector: str = ""
+    dom_diff_context: list[EvidenceDomDiff | SelectorHintEvidence] = Field(default_factory=list)
+    aria_snapshot: SnapshotReference | None = None
+    candidates: list[CandidateEvidence] = Field(default_factory=list)
+    loop_history: list[LoopEvidence] = Field(default_factory=list)
+
+
 class RefusalReport(BaseModel):
     """Machine-readable outcome when the repair workflow refuses to change a test."""
 
-    schema_version: Literal["1.0"] = Field(
+    schema_version: Literal["2.0"] = Field(
         default=SCHEMA_VERSION,
         description="version of this machine-readable contract; bump on breaking changes",
     )
@@ -81,12 +169,18 @@ class RefusalReport(BaseModel):
         ...,
         description="closed taxonomy value explaining why the workflow refused the repair",
     )
+    is_success: Literal[False] = Field(
+        default=False,
+        description="always false because this result records a declined repair",
+    )
+    loop_count: int = Field(ge=0, description="repair-loop count when the refusal was finalized")
+    evidence: EvidenceBundle
 
 
 class RepairSummary(BaseModel):
     """Machine-readable result emitted for the CI wrapper to consume."""
 
-    schema_version: Literal["1.0"] = Field(
+    schema_version: Literal["2.0"] = Field(
         default=SCHEMA_VERSION,
         description="version of this machine-readable contract; bump on breaking changes",
     )
@@ -98,12 +192,16 @@ class RepairSummary(BaseModel):
     is_success: bool
     loop_count: int
     instructions: list[PatchInstruction] = Field(default_factory=list)
+    evidence: EvidenceBundle = Field(default_factory=EvidenceBundle)
+
+
+HealResult = Annotated[RepairSummary | RefusalReport, Field(discriminator="kind")]
 
 
 class SuiteSummary(BaseModel):
     """Aggregate result when healing a whole suite (multiple failing tests)."""
 
-    schema_version: Literal["1.0"] = Field(
+    schema_version: Literal["2.0"] = Field(
         default=SCHEMA_VERSION,
         description="version of this machine-readable contract; bump on breaking changes",
     )
@@ -114,7 +212,7 @@ class SuiteSummary(BaseModel):
     total_failed: int
     healed: int
     is_success: bool  # every failing test was healed
-    results: list[RepairSummary] = Field(default_factory=list)
+    results: list[HealResult] = Field(default_factory=list)
 
 
 class ReviewFinding(BaseModel):
@@ -150,7 +248,7 @@ class ReviewOutput(BaseModel):
 class ReviewReport(BaseModel):
     """Machine-readable review result emitted for the CI wrapper to post as PR comments."""
 
-    schema_version: Literal["1.0"] = Field(
+    schema_version: Literal["2.0"] = Field(
         default=SCHEMA_VERSION,
         description="version of this machine-readable contract; bump on breaking changes",
     )

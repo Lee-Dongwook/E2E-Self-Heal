@@ -4,6 +4,7 @@ from pathlib import Path
 
 import structlog
 
+from app.evidence import add_candidate, add_loop_event
 from app.healing_history import find_match
 from app.nodes.patch_generator import PatchApplicationError, _apply
 from app.sandbox import SandboxViolation, assert_patch_boundary_allowed
@@ -28,11 +29,17 @@ def memory_lookup(state: AgentState) -> dict:
     """Attempt a high-confidence local repair before invoking any LLM."""
     if not state.get("memory_enabled", True):
         logger.info("memory_disabled")
-        return {"memory_report": {"attempted": False, "enabled": False}}
+        return {
+            "memory_report": {"attempted": False, "enabled": False},
+            "evidence_history": add_loop_event(state, "memory_lookup", "disabled"),
+        }
     record, score = find_match(state["error_log"], state["test_script_path"])
     if record is None:
         logger.info("memory_miss", score=score)
-        return {"memory_report": {"attempted": True, "hit": False, "score": score}}
+        return {
+            "memory_report": {"attempted": True, "hit": False, "score": score},
+            "evidence_history": add_loop_event(state, "memory_lookup", "miss", score=score),
+        }
     try:
         assert_patch_boundary_allowed(Path(state["test_script_path"]))
         instructions = [
@@ -47,7 +54,18 @@ def memory_lookup(state: AgentState) -> dict:
                 "hit": False,
                 "score": score,
                 "rejection": str(exc),
-            }
+            },
+            "evidence_history": add_loop_event(
+                state, "memory_lookup", "candidate_rejected", error=str(exc), score=score
+            ),
+            "evidence_candidates": add_candidate(
+                state,
+                source="memory",
+                instructions=record.instructions,
+                memory_score=score,
+                outcome="rejected",
+                rejection=str(exc),
+            ),
         }
     logger.info("memory_hit", score=score, source=record.source)
     return {
@@ -62,4 +80,8 @@ def memory_lookup(state: AgentState) -> dict:
             "score": score,
             "source": "memory",
         },
+        "evidence_candidates": add_candidate(
+            state, source="memory", instructions=instructions, memory_score=score
+        ),
+        "evidence_history": add_loop_event(state, "memory_lookup", "hit", score=score),
     }
