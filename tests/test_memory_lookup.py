@@ -119,3 +119,8 @@ def test_memory_lookup_rejects_duplicate_source_lines_without_mutating(
 
     assert result["memory_report"]["hit"] is False
     assert "matched 2" in result["memory_report"]["rejection"]
+    candidate = result["evidence_candidates"][0]
+    assert candidate["source"] == "memory"
+    assert candidate["memory_score"] is not None
+    assert candidate["outcome"] == "rejected"
+    assert "matched 2" in candidate["rejection"]

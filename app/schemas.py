@@ -1,7 +1,7 @@
 """Pydantic models: structured LLM output and machine-readable CI results."""
 
 from enum import Enum
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypedDict, cast
 
 from pydantic import BaseModel, Field
 
@@ -21,6 +21,22 @@ class DomDiff(BaseModel):
     )
     previous: dict = Field(default_factory=dict, description="DOM node before the change")
     current: dict = Field(default_factory=dict, description="DOM node after the change")
+
+
+class DomNode(TypedDict, total=False):
+    """A JSX DOM node captured on one side of a changed element."""
+
+    tag: str
+    attributes: dict[str, str]
+
+
+class EvidenceDomDiff(BaseModel):
+    """A typed DOM diff entry published in repair/refusal evidence."""
+
+    file: str
+    line: int = Field(ge=0)
+    previous: DomNode = Field(default_factory=lambda: cast(DomNode, {}))
+    current: DomNode = Field(default_factory=lambda: cast(DomNode, {}))
 
 
 class PatchInstruction(BaseModel):
@@ -64,10 +80,11 @@ class RefusalReason(str, Enum):
 class SnapshotReference(BaseModel):
     """Stable reference to a redacted failure-time ARIA snapshot."""
 
+    sha256: str = Field(description="SHA-256 digest of the redacted extracted snapshot content")
     sha256: str = Field(description="SHA-256 digest of the redacted snapshot content")
     source_path: str | None = Field(
         default=None,
-        description="workspace-relative error-context.md source path, when available",
+        description="workspace-relative error-context.md provenance path, when available",
     )
     chars: int = Field(ge=0, description="character count of the redacted snapshot")
 
@@ -86,6 +103,15 @@ class CandidateEvidence(BaseModel):
     rejection: str | None = None
 
 
+class LoopEvidenceDetails(BaseModel):
+    """Known, sanitized details emitted by repair-loop stages."""
+
+    score: float | None = None
+    error: str | None = None
+    instruction_count: int | None = Field(default=None, ge=0)
+    reason: RefusalReason | None = None
+
+
 class LoopEvidence(BaseModel):
     """One deterministic repair-loop stage outcome."""
 
@@ -99,7 +125,18 @@ class LoopEvidence(BaseModel):
         "refusal_finalizer",
     ]
     outcome: str
-    details: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+    details: LoopEvidenceDetails = Field(default_factory=LoopEvidenceDetails)
+
+
+class SelectorHintEvidence(BaseModel):
+    """A user-provided selector hint preserved in repair evidence."""
+
+    type: Literal["selector_hint"]
+    hint_type: Literal["role", "testid", "text", "css"]
+    value: str
+    original: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    priority: Literal["high"]
 
 
 class EvidenceBundle(BaseModel):
@@ -107,7 +144,7 @@ class EvidenceBundle(BaseModel):
 
     parsed_error: str = ""
     failing_selector: str = ""
-    dom_diff_context: list[dict] = Field(default_factory=list)
+    dom_diff_context: list[EvidenceDomDiff | SelectorHintEvidence] = Field(default_factory=list)
     aria_snapshot: SnapshotReference | None = None
     candidates: list[CandidateEvidence] = Field(default_factory=list)
     loop_history: list[LoopEvidence] = Field(default_factory=list)

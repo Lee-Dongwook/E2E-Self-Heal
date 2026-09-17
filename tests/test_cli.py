@@ -200,7 +200,7 @@ def test_heal_resolves_relative_paths_against_root(
     assert data["evidence"]["parsed_error"] == "call log: selector"
 
 
-def test_cli_json_output_emits_refusal_bundle(mock_graph_failure, tmp_path) -> None:
+def test_cli_json_output_emits_refusal_bundle(mock_graph_failure: None, tmp_path: Path) -> None:
     test_file = tmp_path / "test.spec.ts"
     test_file.write_text("await page.click('#old')")
     log_file = tmp_path / "error.log"

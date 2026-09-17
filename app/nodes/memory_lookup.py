@@ -58,6 +58,14 @@ def memory_lookup(state: AgentState) -> dict:
             "evidence_history": add_loop_event(
                 state, "memory_lookup", "candidate_rejected", error=str(exc), score=score
             ),
+            "evidence_candidates": add_candidate(
+                state,
+                source="memory",
+                instructions=record.instructions,
+                memory_score=score,
+                outcome="rejected",
+                rejection=str(exc),
+            ),
         }
     logger.info("memory_hit", score=score, source=record.source)
     return {

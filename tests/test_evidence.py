@@ -1,7 +1,10 @@
+import hashlib
 from pathlib import Path
 
+import pytest
+
 from app.evidence import add_candidate, add_loop_event, build_evidence_bundle
-from app.schemas import PatchInstruction
+from app.schemas import EvidenceDomDiff, PatchInstruction
 from app.state import AgentState
 
 
@@ -24,7 +27,7 @@ def _state(**overrides: object) -> AgentState:
 
 
 def test_evidence_bundle_redacts_sensitive_values_and_references_snapshot(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     snapshot_path = tmp_path / "test-results" / "login" / "error-context.md"
     snapshot_path.parent.mkdir(parents=True)
@@ -36,8 +39,12 @@ def test_evidence_bundle_redacts_sensitive_values_and_references_snapshot(
         dom_diff_context=[
             {
                 "file": "src/login.tsx",
-                "password": "secret",
-                "url": "https://example.test/?token=secret",
+                "line": 1,
+                "previous": {"tag": "input", "attributes": {"password": "secret"}},
+                "current": {
+                    "tag": "input",
+                    "attributes": {"url": "https://example.test/?token=secret"},
+                },
             }
         ],
         evidence_candidates=[
@@ -57,13 +64,19 @@ def test_evidence_bundle_redacts_sensitive_values_and_references_snapshot(
     )
 
     assert bundle.failing_selector == "#login"
-    assert bundle.dom_diff_context[0]["password"] == "[REDACTED]"
+    entry = bundle.dom_diff_context[0]
+    assert isinstance(entry, EvidenceDomDiff)
+    assert "attributes" in entry.previous
+    assert entry.previous["attributes"]["password"] == "[REDACTED]"
     assert "secret" not in bundle.parsed_error
     assert bundle.candidates[0].rejection is not None
     assert "secret" not in bundle.candidates[0].rejection
     assert bundle.aria_snapshot is not None
     assert bundle.aria_snapshot.source_path == "test-results/login/error-context.md"
-    assert len(bundle.aria_snapshot.sha256) == 64
+    assert (
+        bundle.aria_snapshot.sha256
+        == hashlib.sha256(b"page: https://example.test/?token=[REDACTED]").hexdigest()
+    )
 
 
 def test_candidate_and_loop_history_preserve_attempt_order() -> None:

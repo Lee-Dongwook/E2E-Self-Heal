@@ -42,6 +42,25 @@ export interface ReviewReport {
 
 const SUPPORTED_SCHEMA_MAJOR = "2";
 
+function isReviewFinding(payload: unknown): payload is ReviewFinding {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+  const finding = payload as Partial<ReviewFinding>;
+  return (
+    typeof finding.file === "string" &&
+    typeof finding.line === "number" &&
+    typeof finding.broken_selector === "string" &&
+    typeof finding.root_cause === "string" &&
+    typeof finding.suggestion === "string" &&
+    (finding.recommended_selector === undefined ||
+      typeof finding.recommended_selector === "string") &&
+    (finding.severity === undefined ||
+      finding.severity === "info" ||
+      finding.severity === "warning")
+  );
+}
+
 function isSupportedReviewReport(payload: unknown): payload is ReviewReport {
   if (!payload || typeof payload !== "object") {
     return false;
@@ -52,6 +71,7 @@ function isSupportedReviewReport(payload: unknown): payload is ReviewReport {
     report.kind === "review" &&
     typeof report.test_script_path === "string" &&
     Array.isArray(report.findings) &&
+    report.findings.every(isReviewFinding) &&
     typeof report.has_findings === "boolean"
   );
 }

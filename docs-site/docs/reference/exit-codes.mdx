@@ -38,7 +38,9 @@ and migration rules.
 The `evidence` object records the parsed failure, failing selector, DOM diff context, a
 content-hashed ARIA snapshot reference, ordered repair candidates, and ordered loop-stage
 outcomes. Snapshot content is not embedded in output; its reference points to the original
-workspace artifact when available. Sensitive structured values and URL query values are redacted.
+workspace artifact as provenance when available. The digest is over the redacted extracted
+snapshot, not the source `error-context.md` bytes. Sensitive structured values and URL query
+values are redacted.
 
 ### Example: successful single-file heal
 
@@ -83,6 +85,8 @@ workspace artifact when available. Sensitive structured values and URL query val
 ```
 
 ### Example: suite heal
+The nested `evidence` values below are abbreviated; see the single-file examples above for the
+complete evidence shape.
 
 ```json
 {

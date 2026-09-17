@@ -17,7 +17,7 @@ from rich.table import Table
 from typer.core import TyperGroup
 
 from app.config import settings
-from app.evidence import build_evidence_bundle, build_unavailable_evidence
+from app.evidence import build_evidence_bundle, build_unavailable_evidence, mark_final_suite_failure
 from app.graph import build_graph, build_review_graph
 from app.healing_history import append_record, make_record
 from app.logging import configure_logging
@@ -340,8 +340,9 @@ def _heal_suite(
             if final_failing:
                 for rel in final_failing:
                     if rel in result_by_rel:
-                        if isinstance(result_by_rel[rel], RepairSummary):
-                            result_by_rel[rel].is_success = False
+                        existing_result = result_by_rel[rel]
+                        if isinstance(existing_result, RepairSummary):
+                            mark_final_suite_failure(existing_result, parse_error_log(final_log))
                     else:
                         result = RefusalReport(
                             test_script_path=rel,
@@ -357,7 +358,7 @@ def _heal_suite(
                 # An unparseable final failure invalidates all repairs (#212).
                 for result in results:
                     if isinstance(result, RepairSummary):
-                        result.is_success = False
+                        mark_final_suite_failure(result, parse_error_log(final_log))
 
     healed = sum(1 for result in results if isinstance(result, RepairSummary) and result.is_success)
     return SuiteSummary(
