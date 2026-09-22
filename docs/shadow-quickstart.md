@@ -65,6 +65,13 @@ Snapshots are durable: `ON_SUCCESS` and `ALWAYS` cleanup remove only the workspa
 `cache/` and `tmp/` directories. The owned root and `snapshots/` remain available for
 later replays. `NEVER` preserves all three artifact directories.
 
+### Offline replay policy
+
+Set `offline=True` to make replay a hard no-network boundary. Offline runs require
+`miss_policy="strict"`: an unmatched request is aborted and is never continued to the
+live origin or fetched for recording. `lenient` and `record-and-augment` are rejected
+when combined with offline mode; use them only when deliberately allowing live traffic.
+
 ## 3. Replay the test with `e2e-healer --shadow`
 
 Today, `e2e-healer --shadow` on its own only exercises the runtime lifecycle as a

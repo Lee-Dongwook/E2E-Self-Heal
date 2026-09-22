@@ -57,6 +57,12 @@ def test_invalid_miss_policy_is_rejected():
         ShadowConfig.model_validate({"miss_policy": "ignore"})
 
 
+@pytest.mark.parametrize("miss_policy", [MissPolicy.LENIENT, MissPolicy.RECORD_AND_AUGMENT])
+def test_offline_mode_rejects_network_capable_miss_policies(miss_policy: MissPolicy) -> None:
+    with pytest.raises(ValidationError, match="offline mode requires"):
+        ShadowConfig(offline=True, miss_policy=miss_policy)
+
+
 def test_match_options_accept_nested_configuration():
     config = ShadowConfig.model_validate(
         {"match_options": {"allow_cross_origin": True, "min_score": 120.0}}

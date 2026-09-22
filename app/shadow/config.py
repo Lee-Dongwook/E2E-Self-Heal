@@ -113,3 +113,14 @@ class ShadowConfig(BaseModel):
                         f"{left_name} and {right_name} must not overlap or contain each other"
                     )
         return self
+
+    @model_validator(mode="after")
+    def validate_offline_miss_policy(self) -> Self:
+        """Keep offline replay a hard no-network boundary.
+
+        Lenient and record-and-augment misses both contact the live origin, so accepting
+        either setting alongside ``offline`` would make the advertised isolation false.
+        """
+        if self.offline and self.miss_policy is not MissPolicy.STRICT:
+            raise ValueError("offline mode requires miss_policy='strict' to prevent network access")
+        return self
