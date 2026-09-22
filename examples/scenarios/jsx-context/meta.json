@@ -1,0 +1,1 @@
+{"class":"selector_drift","expected_outcome":"repair","failing_selector":"legacy-submit","rationale":"The scenario models a locator change with enough JSX context to repair it."}

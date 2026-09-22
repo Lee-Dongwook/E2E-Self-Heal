@@ -1,0 +1,1 @@
+{"class":"product_regression","expected_outcome":"refuse","failing_selector":"#submit-btn","rationale":"The selector remains valid but the submit behavior was removed."}

@@ -1,0 +1,1 @@
+{"class":"selector_drift","expected_outcome":"repair","failing_selector":".submit-btn","rationale":"Only a CSS class changed; the test intent and behavior are unchanged."}

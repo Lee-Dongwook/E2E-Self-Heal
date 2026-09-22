@@ -638,6 +638,24 @@ def review(
 
 
 @app.command()
+def safety_benchmark(
+    scenario_root: Path = typer.Option(
+        Path("examples/scenarios"),
+        "--scenario-root",
+        help="Directory containing labeled scenario subdirectories.",
+    ),
+) -> None:
+    """Run the opt-in repair/refusal safety benchmark and print a stable JSON report."""
+    from app.safety_benchmark import discover_safety_scenarios, run_safety_benchmark
+
+    if not scenario_root.is_dir():
+        console.print(f"[red]scenario root does not exist:[/red] {escape(str(scenario_root))}")
+        raise typer.Exit(code=2)
+    report = run_safety_benchmark(discover_safety_scenarios(scenario_root))
+    typer.echo(report.model_dump_json(indent=2))
+
+
+@app.command()
 def init(
     scaffold: bool = typer.Option(
         False, "--scaffold", "-s", help="Also scaffold a starter GitHub Actions workflow."
