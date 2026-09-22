@@ -776,16 +776,46 @@ def init(
         else:
             try:
                 WORKFLOW_TARGET_PATH.parent.mkdir(parents=True, exist_ok=True)
-                yaml_template = """name: E2E Self-Healing CI
+                yaml_template = """name: E2E repair review gate
+
 on:
-  push:
-    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+
 jobs:
-  heal:
+  review-e2e-failure:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # add steps to invoke e2e-healer
+      # Install your project's Node dependencies and Playwright browser before this step.
+      - name: Install project dependencies
+        run: npm ci
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Review a failing E2E test
+        id: healer
+        uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0
+        with:
+          # Replace this with the test path reported by your failing suite.
+          test-path: tests/example.spec.ts
+          # Review mode is read-only: it never changes test code.
+          mode: review
+          nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
+          diff-base: ${{ github.event.pull_request.base.sha }}
+      - name: Verify the full E2E suite
+        run: npx playwright test
+      - name: Retain repair or refusal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-healer-evidence
+          path: |
+            repair-summary.json
+            review.json
+            playwright.log
+          if-no-files-found: ignore
 """
                 WORKFLOW_TARGET_PATH.write_text(yaml_template)
                 console.print(
