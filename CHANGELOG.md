@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-09-22
 
 ### Added
 - **Repair/refusal evidence bundle** — `--json` now emits schema `2.0` results with a
@@ -17,10 +17,6 @@ All notable changes to this project are documented here. The format is based on
   Playwright subprocess cwd) to a project root. This lets programmatic integrators (e.g. a
   Playwright Reporter) invoke the CLI from an arbitrary working directory — the explicit
   equivalent of the shell wrapper's `cd $working-directory` (#301).
-
-## [0.5.0] - 2026-08-29
-
-### Added
 - **Self-describing JSON contract** — every `--json` summary (`RepairSummary`, `SuiteSummary`,
   `ReviewReport`) now carries a `schema_version` (currently `"1.0"`) and a `kind`
   discriminator (`"repair"` / `"suite"` / `"review"`) so CI wrappers can detect breaking
