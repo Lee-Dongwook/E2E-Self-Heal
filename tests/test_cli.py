@@ -821,7 +821,13 @@ def test_cli_init_scaffolds_workflow_successfully(monkeypatch, tmp_path) -> None
     assert "Successfully scaffolded starter workflow" in result.stderr
     target_file = tmp_path / ".github" / "workflows" / "e2e-healer.yml"
     assert target_file.exists()
-    assert "E2E Self-Healing CI" in target_file.read_text()
+    workflow = target_file.read_text()
+    assert "uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0" in workflow
+    assert "mode: review" in workflow
+    assert "nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}" in workflow
+    assert "permissions:\n  contents: read" in workflow
+    assert "run: npx playwright test" in workflow
+    assert "uses: actions/upload-artifact@v4" in workflow
 
 
 def test_cli_init_prevents_overwrite_unless_forced(monkeypatch, tmp_path) -> None:
@@ -846,7 +852,7 @@ def test_cli_init_prevents_overwrite_unless_forced(monkeypatch, tmp_path) -> Non
     result_forced = runner.invoke(app, ["init", "--scaffold", "--force"])
     assert result_forced.exit_code == 0
     assert "Successfully scaffolded" in result_forced.stderr
-    assert "E2E Self-Healing CI" in target_file.read_text()
+    assert "uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0" in target_file.read_text()
 
 
 # NEW TESTS: CLI boundary tests for notification paths (Issue #124)
