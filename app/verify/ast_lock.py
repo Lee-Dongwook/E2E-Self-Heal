@@ -59,6 +59,15 @@ class AstLockVerdict(BaseModel):
 
 DEFAULT_AST_LOCK_ALLOWLIST: Final = AstLockAllowlist()
 _TSX_LANGUAGE: Final = Language(ts_typescript.language_tsx())
+_LOCATOR_ARGUMENT_EXECUTION_BOUNDARIES: Final = frozenset(
+    {
+        "arrow_function",
+        "call_expression",
+        "function_expression",
+        "generator_function",
+        "new_expression",
+    }
+)
 
 
 def check_ast_lock(
@@ -164,6 +173,8 @@ def _inside_locator_arguments(
     current: Node | None = node
     while current is not None and current.parent is not None:
         parent = current.parent
+        if parent.type in _LOCATOR_ARGUMENT_EXECUTION_BOUNDARIES:
+            return False
         if parent.type == "arguments" and parent.parent is not None:
             call = parent.parent
             if call.type == "call_expression":

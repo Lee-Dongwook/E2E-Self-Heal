@@ -60,6 +60,18 @@ def test_allows_explicitly_safe_ast_changes(original: str, patched: str) -> None
             "await page.locator(`article-${admin.id}`).click();",
         ),
         (
+            'await page.locator(report("old-selector")).click();',
+            'await page.locator(report("new-selector")).click();',
+        ),
+        (
+            'await page.locator(() => "old-selector").click();',
+            'await page.locator(() => "new-selector").click();',
+        ),
+        (
+            'await page.locator(function () { return "old-selector"; }).click();',
+            'await page.locator(function () { return "new-selector"; }).click();',
+        ),
+        (
             'await page.locator("#save").click({ force: false });',
             'await page.locator("#save").click({ force: true });',
         ),
