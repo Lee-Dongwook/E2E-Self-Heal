@@ -56,7 +56,9 @@ def payload_is_success(payload: RunPayload) -> bool:
 
 def store_run(engine: Engine, request: IngestRunRequest) -> IngestRunResponse:
     """Store a run once; retries with the same workflow attempt return the original row."""
-    payload = request.payload.model_dump(mode="json")
+    # Preserve the core CLI's wire payload exactly: serializing defaults here would make an
+    # upload with omitted optional fields differ from the JSON the CI originally produced.
+    payload = request.payload.model_dump(mode="json", exclude_unset=True)
     with engine.begin() as connection:
         project_id = connection.execute(
             insert(Project)
