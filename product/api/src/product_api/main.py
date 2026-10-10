@@ -4,17 +4,25 @@ The product never runs Playwright or repair logic; it only consumes structured o
 the user's CI sends after running the core (see discussion #332).
 """
 
+from collections.abc import Awaitable, Callable
 from importlib.metadata import version
 from typing import Annotated, Literal
 
 from app.logging import configure_logging
 from app.schemas import SCHEMA_VERSION
-from fastapi import Depends, FastAPI, Response, status
+from fastapi import Depends, FastAPI, Request, Response, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import Engine
 
 from product_api.config import get_settings
 from product_api.db import database_reachable, get_engine
+from product_api.ingest import (
+    IngestRunRequest,
+    IngestRunResponse,
+    require_upload_auth,
+    store_run,
+)
 
 
 class Health(BaseModel):
@@ -31,6 +39,25 @@ def create_app() -> FastAPI:
     api_version = version("product-api")
     api = FastAPI(title="E2E Self-Heal API", version=api_version)
 
+    @api.middleware("http")
+    async def reject_oversized_uploads(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        if request.method == "POST" and request.url.path == "/v1/runs":
+            content_length = request.headers.get("content-length")
+            if content_length is not None:
+                try:
+                    is_too_large = int(content_length) > get_settings().max_upload_bytes
+                except ValueError:
+                    return JSONResponse(
+                        status_code=400, content={"detail": "invalid content-length"}
+                    )
+                if is_too_large:
+                    return JSONResponse(
+                        status_code=413, content={"detail": "request body is too large"}
+                    )
+        return await call_next(request)
+
     @api.get("/version")
     def version_info() -> VersionInfo:
         return VersionInfo(api_version=api_version, schema_version=SCHEMA_VERSION)
@@ -41,6 +68,14 @@ def create_app() -> FastAPI:
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
             return Health(status="degraded", database=False)
         return Health(status="ok", database=True)
+
+    @api.post("/v1/runs", response_model=IngestRunResponse, status_code=status.HTTP_201_CREATED)
+    def ingest_run(
+        request: IngestRunRequest,
+        engine: Annotated[Engine, Depends(get_engine)],
+        _: Annotated[None, Depends(require_upload_auth)],
+    ) -> IngestRunResponse:
+        return store_run(engine, request)
 
     return api
 
