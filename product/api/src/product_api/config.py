@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     database_url: str
     log_level: str = "INFO"
+    max_upload_bytes: int = 1_048_576
 
     @field_validator("log_level")
     @classmethod
@@ -23,6 +24,13 @@ class Settings(BaseSettings):
             names = ", ".join(sorted(logging.getLevelNamesMapping()))
             raise ValueError(f"unknown log level {value!r}; expected one of {names}")
         return level
+
+    @field_validator("max_upload_bytes")
+    @classmethod
+    def _positive_upload_limit(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("max_upload_bytes must be positive")
+        return value
 
 
 @lru_cache
