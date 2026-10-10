@@ -1,12 +1,29 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 
-// /api/* goes to the FastAPI dev server, so the browser never needs CORS during development.
-const api = { "/api": { target: "http://localhost:8000", rewrite: (path: string) => path.replace(/^\/api/, "") } };
-
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, ".", "");
+  const apiTarget = env.PRODUCT_API_URL || "http://localhost:8000";
+  return {
     plugins: [react(), tailwindcss()],
-    server: { proxy: api },
-    preview: { proxy: api },
+    server: {
+      proxy: {
+        "/api": {
+          target: apiTarget,
+          changeOrigin: true,
+          rewrite: (p: string) => p.slice(4),
+        },
+      },
+    },
+    preview: {
+      proxy: {
+        "/api": {
+          target: apiTarget,
+          changeOrigin: true,
+          rewrite: (p: string) => p.slice(4),
+        },
+      },
+    },
+  };
 });
