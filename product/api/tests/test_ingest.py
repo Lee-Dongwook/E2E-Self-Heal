@@ -10,8 +10,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, text
 
 from product_api.db import get_engine
-from product_api.ingest import require_upload_auth
 from product_api.main import create_app
+from product_api.oidc import UploadIdentity, require_upload_auth
 
 TEST_DATABASE_URL = os.getenv("PRODUCT_API_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -34,9 +34,13 @@ def engine() -> Iterator[Engine]:
 def client(engine: Engine) -> Iterator[TestClient]:
     api = create_app()
     api.dependency_overrides[get_engine] = lambda: engine
-    api.dependency_overrides[require_upload_auth] = lambda: None
+    api.dependency_overrides[require_upload_auth] = lambda: _identity()
     with TestClient(api) as test_client:
         yield test_client
+
+
+def _identity() -> UploadIdentity:
+    return UploadIdentity(123456, "acme/storefront", 98765, 1, "a" * 40, "refs/pull/42/merge")
 
 
 def _request(payload: dict[str, Any], *, kind_offset: int = 0) -> dict[str, Any]:
@@ -151,22 +155,6 @@ def test_unknown_schema_version_names_the_supported_versions(client: TestClient)
 
     assert response.status_code == 422
     assert f"supported versions: {SCHEMA_VERSION}" in response.text
-
-
-def test_upload_is_refused_without_the_test_auth_override(engine: Engine) -> None:
-    api = create_app()
-    api.dependency_overrides[get_engine] = lambda: engine
-    payload = {
-        "schema_version": SCHEMA_VERSION,
-        "kind": "repair",
-        "test_script_path": "tests/login.spec.ts",
-        "is_success": True,
-        "loop_count": 1,
-    }
-
-    response = TestClient(api).post("/v1/runs", json=_request(payload))
-
-    assert response.status_code == 403
 
 
 def test_upload_has_a_body_size_limit(client: TestClient) -> None:

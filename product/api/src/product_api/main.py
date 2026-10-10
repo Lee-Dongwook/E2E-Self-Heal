@@ -20,9 +20,9 @@ from product_api.db import database_reachable, get_engine
 from product_api.ingest import (
     IngestRunRequest,
     IngestRunResponse,
-    require_upload_auth,
     store_run,
 )
+from product_api.oidc import UploadIdentity, require_upload_auth
 
 
 class Health(BaseModel):
@@ -73,8 +73,15 @@ def create_app() -> FastAPI:
     def ingest_run(
         request: IngestRunRequest,
         engine: Annotated[Engine, Depends(get_engine)],
-        _: Annotated[None, Depends(require_upload_auth)],
+        identity: Annotated[UploadIdentity, Depends(require_upload_auth)],
     ) -> IngestRunResponse:
+        # GitHub's signed claims, rather than caller-controlled JSON, define storage identity.
+        request.repository.github_repo_id = identity.repository_id
+        request.repository.full_name = identity.full_name
+        request.workflow.run_id = identity.run_id
+        request.workflow.run_attempt = identity.run_attempt
+        request.commit_sha = identity.sha
+        request.ref = identity.ref
         return store_run(engine, request)
 
     return api
