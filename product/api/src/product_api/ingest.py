@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from app.schemas import SCHEMA_VERSION, HealResult, ReviewReport, SuiteSummary
-from fastapi import HTTPException, status
 from pydantic import BaseModel, Field, TypeAdapter, field_validator
 from sqlalchemy import Engine, select
 from sqlalchemy.dialects.postgresql import insert
@@ -102,10 +101,3 @@ def store_run(engine: Engine, request: IngestRunRequest) -> IngestRunResponse:
             )
         ).scalar_one()
         return IngestRunResponse(id=existing_id, created=False)
-
-
-def require_upload_auth() -> None:
-    """Deny all uploads until the OIDC authentication endpoint is implemented."""
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN, detail="upload authentication is not configured"
-    )

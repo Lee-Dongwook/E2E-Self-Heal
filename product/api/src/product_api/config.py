@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     database_url: str
     log_level: str = "INFO"
     max_upload_bytes: int = 1_048_576
+    oidc_audience: str = "e2e-self-heal-product"
+    oidc_jwks_ttl_seconds: int = 300
+    allowed_repository_owners: list[str] = []
 
     @field_validator("log_level")
     @classmethod
