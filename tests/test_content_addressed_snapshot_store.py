@@ -4,13 +4,8 @@ import pytest
 
 from app.shadow.config import ShadowConfig
 from app.shadow.content_addressed_snapshot_store import ContentAddressedSnapshotStore
-from app.shadow.interfaces import ISnapshotStore
 from app.shadow.schemas import CapturedRequest, CapturedResponse, NetworkSnapshot, ShadowSnapshot
-from app.shadow.snapshot_store import (
-    SnapshotCorruptionError,
-    SnapshotNotFoundError,
-    SnapshotStoreError,
-)
+from app.shadow.snapshot_store import SnapshotCorruptionError
 from app.shadow.workspace import ShadowWorkspace
 
 
@@ -30,49 +25,6 @@ def _make_snapshot(snapshot_id: str, body: str = "hello-world") -> ShadowSnapsho
         metadata={"user": "tester", "env": "ci"},
         network_snapshots=[net_snap],
     )
-
-
-def test_implements_isnapshot_store_interface(tmp_path):
-    store = _make_store(tmp_path)
-    assert isinstance(store, ISnapshotStore)
-
-
-def test_save_and_get_shadow_snapshot_object(tmp_path):
-    store = _make_store(tmp_path)
-
-    store.save_snapshot("test_snap_1", _make_snapshot("test_snap_1"))
-    loaded_snap = store.get_snapshot("test_snap_1")
-
-    assert loaded_snap.snapshot_id == "test_snap_1"
-    assert loaded_snap.metadata["user"] == "tester"
-    assert len(loaded_snap.network_snapshots) == 1
-    assert loaded_snap.network_snapshots[0].request.url == "https://api.example.com/test"
-    assert loaded_snap.network_snapshots[0].response.body == "hello-world"
-
-
-def test_save_dict_and_get_snapshot(tmp_path):
-    store = _make_store(tmp_path)
-    dict_data = {
-        "snapshot_id": "test_snap_dict",
-        "metadata": {"source": "manual"},
-        "network_snapshots": [
-            {
-                "request": {
-                    "method": "POST",
-                    "url": "https://api.example.com/submit",
-                    "headers": {},
-                },
-                "response": {"status": 201, "headers": {}, "body": "created"},
-            }
-        ],
-    }
-
-    store.save_snapshot("test_snap_dict", dict_data)
-    loaded_snap = store.get_snapshot("test_snap_dict")
-
-    assert loaded_snap.snapshot_id == "test_snap_dict"
-    assert loaded_snap.network_snapshots[0].request.method == "POST"
-    assert loaded_snap.network_snapshots[0].response.status == 201
 
 
 def test_identical_payloads_map_to_one_object(tmp_path):
@@ -119,43 +71,14 @@ def test_saving_same_id_twice_updates_reference(tmp_path):
     assert loaded.network_snapshots[0].response.body == "second"
 
 
-def test_save_invalid_dict_raises_snapshot_store_error(tmp_path):
-    store = _make_store(tmp_path)
-    invalid_dict = {
-        "snapshot_id": "invalid",
-        "network_snapshots": [{"request": {"bad_field": True}}],  # Missing required fields
-    }
-
-    with pytest.raises(SnapshotStoreError) as exc_info:
-        store.save_snapshot("invalid", invalid_dict)
-    assert "Invalid snapshot dict structure" in str(exc_info.value)
-
-
-def test_save_unsupported_type_raises_snapshot_store_error(tmp_path):
-    store = _make_store(tmp_path)
-
-    with pytest.raises(SnapshotStoreError) as exc_info:
-        store.save_snapshot("unsupported", [1, 2, 3])  # type: ignore[arg-type]
-    assert "Unsupported data type" in str(exc_info.value)
-
-
-def test_get_snapshot_not_found_raises_error(tmp_path):
-    store = _make_store(tmp_path)
-
-    with pytest.raises(SnapshotNotFoundError) as exc_info:
-        store.get_snapshot("does_not_exist")
-    assert "does not exist" in str(exc_info.value)
-
-
 def test_get_snapshot_dangling_reference_raises_corruption(tmp_path):
     store = _make_store(tmp_path)
 
     # A ref pointing at a valid-looking hash whose object was never written.
     store._ref_path("dangling").write_text("de" * 32, encoding="utf-8")
 
-    with pytest.raises(SnapshotCorruptionError) as exc_info:
+    with pytest.raises(SnapshotCorruptionError):
         store.get_snapshot("dangling")
-    assert "missing object" in str(exc_info.value)
 
 
 def test_get_snapshot_corrupted_object_raises_corruption(tmp_path):
@@ -165,6 +88,5 @@ def test_get_snapshot_corrupted_object_raises_corruption(tmp_path):
     content_hash = store._ref_path("snap").read_text(encoding="utf-8").strip()
     (store.objects_dir / f"{content_hash}.json").write_text("{bad-json:", encoding="utf-8")
 
-    with pytest.raises(SnapshotCorruptionError) as exc_info:
+    with pytest.raises(SnapshotCorruptionError):
         store.get_snapshot("snap")
-    assert "Failed to read or parse snapshot object" in str(exc_info.value)

@@ -7,8 +7,6 @@ import pytest
 
 from app.shadow.har_entry import headers_to_dict
 from app.shadow.har_parser import HarTraceParser, InvalidHarFileError
-from app.shadow.interfaces import ITraceParser
-from app.shadow.trace_parser import TraceParseError
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "sample.har"
 
@@ -36,10 +34,6 @@ def _entry(
 def _write_har(path: Path, entries: list[dict]) -> Path:
     path.write_text(json.dumps({"log": {"entries": entries}}), encoding="utf-8")
     return path
-
-
-def test_implements_trace_parser_contract() -> None:
-    assert isinstance(HarTraceParser(), ITraceParser)
 
 
 def test_parses_standalone_har_fixture() -> None:
@@ -287,10 +281,6 @@ def test_invalid_utf8_raises_typed_error(tmp_path: Path) -> None:
 
     with pytest.raises(InvalidHarFileError):
         HarTraceParser().parse(path)
-
-
-def test_error_derives_from_trace_parse_error() -> None:
-    assert issubclass(InvalidHarFileError, TraceParseError)
 
 
 # --- repeated header names (#226) ---------------------------------------------------------

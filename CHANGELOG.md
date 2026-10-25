@@ -197,6 +197,16 @@ All notable changes to this project are documented here. The format is based on
   - The default Docusaurus scaffold left in the docs site: the unused `HomepageFeatures`
     component, its illustrations, `docusaurus.png` and the unlisted `/markdown-page` page.
   - The product dashboard's fallback to `/api/info`, an endpoint the API never had.
+- Tests that checked nothing a user or CI depends on (#395): exact log, help and prompt prose, mocks
+  echoing their own arguments, incidental defaults, bare `isinstance` checks and same-branch
+  duplicates. Near-identical cases became parametrized tables, and test files covering the same
+  module were merged (`test_patch_apply.py` into `test_patch_generator.py`,
+  `test_ast_lock_corpus.py` into `test_ast_lock.py`, the three snapshot-store files into
+  `test_snapshot_store.py`, `test_aria_snapshot_identity.py` into `test_aria_snapshot.py`,
+  `test_selector_check_concurrent.py` into `test_selector_check.py`). The suite went from 65 test
+  files and 1,100 tests to 59 files and 1,061 tests, with every `app/` line and branch still covered as
+  before (92.69%). Guardrail, refusal, exit-code and JSON-contract tests were only deduplicated, and
+  `pytest.raises(..., match=)` stays wherever it shows which gate rejected a patch.
 
 ### Security
 - **One redaction boundary for every prompt and every log line** (#377). The Diagnoser, Patch

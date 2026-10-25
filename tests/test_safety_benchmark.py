@@ -872,19 +872,6 @@ def test_a_false_green_reports_its_shortfall_and_still_fails() -> None:
     assert gate.scenarios_needed == GATE_MIN_SAMPLE - 1
 
 
-def test_a_single_false_green_fails_its_gate_at_any_sample_size() -> None:
-    report = _metrics_with(
-        healed=(
-            ScenarioClass.PRODUCT_REGRESSION,
-            ExpectedOutcome.REFUSE,
-            ActualOutcome.REPAIR,
-            1,
-        ),
-    )
-
-    assert _gate(report, "false_green_rate").status is GateStatus.FAIL
-
-
 def test_refusing_everything_fails_the_incorrect_refusal_ceiling() -> None:
     n = GATE_MIN_SAMPLE
     report = _metrics_with(

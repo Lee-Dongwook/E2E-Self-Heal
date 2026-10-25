@@ -56,17 +56,14 @@ def test_run_playwright_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert passed is True
     assert log == "Success stdout\nSuccess stderr\n"
-    assert called[0][0] == ["npx", "playwright", "test", "tests/login.spec.ts"]
     # Child must run in its own process group / session so timeouts can reap the tree.
     kwargs = called[0][1]
     assert kwargs.get("start_new_session") or "creationflags" in kwargs
 
 
 def test_run_playwright_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    called: list[list[str]] = []
 
     def mock_popen(cmd: list[str], **kwargs: object) -> FakePopen:
-        called.append(cmd)
         return FakePopen(returncode=1, output=("Failure stdout\n", "Failure stderr\n"))
 
     monkeypatch.setattr(subprocess, "Popen", mock_popen)
@@ -76,7 +73,6 @@ def test_run_playwright_failure(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert passed is False
     assert log == "Failure stdout\nFailure stderr\n"
-    assert called == [["npx", "playwright", "test"]]
 
 
 def test_run_playwright_timeout(monkeypatch: pytest.MonkeyPatch) -> None:

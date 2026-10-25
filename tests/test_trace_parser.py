@@ -8,11 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from app.shadow.trace_parser import (
-    InvalidTraceArchiveError,
-    PlaywrightTraceParser,
-    TraceParseError,
-)
+from app.shadow.trace_parser import InvalidTraceArchiveError, PlaywrightTraceParser
 
 
 # --- fixtures / helpers ------------------------------------------------------
@@ -278,36 +274,27 @@ def test_valid_trace_with_no_network_events_returns_empty(tmp_path):
 # --- graceful failure --------------------------------------------------------
 
 
-def test_missing_archive_raises(tmp_path):
-    with pytest.raises(InvalidTraceArchiveError):
-        PlaywrightTraceParser().parse(tmp_path / "nope.zip")
-
-
-def test_directory_path_raises(tmp_path):
-    with pytest.raises(InvalidTraceArchiveError):
-        PlaywrightTraceParser().parse(tmp_path)
-
-
-def test_non_zip_file_raises(tmp_path):
-    bogus = tmp_path / "trace.zip"
-    bogus.write_bytes(b"this is definitely not a zip archive")
-
-    with pytest.raises(InvalidTraceArchiveError):
-        PlaywrightTraceParser().parse(bogus)
-
-
-def test_archive_without_trace_streams_raises(tmp_path):
-    trace = _write_trace_zip(
-        tmp_path / "trace.zip",
-        extra_files={"README.txt": b"no trace here"},
-    )
+@pytest.mark.parametrize(
+    "archive_kind",
+    ["missing", "directory", "non-zip", "without-trace-streams"],
+    ids=["missing", "directory", "non-zip", "without-trace-streams"],
+)
+def test_invalid_trace_archives_raise(tmp_path: Path, archive_kind: str) -> None:
+    if archive_kind == "missing":
+        path = tmp_path / "nope.zip"
+    elif archive_kind == "directory":
+        path = tmp_path
+    elif archive_kind == "non-zip":
+        path = tmp_path / "trace.zip"
+        path.write_bytes(b"this is definitely not a zip archive")
+    else:
+        path = _write_trace_zip(
+            tmp_path / "trace.zip",
+            extra_files={"README.txt": b"no trace here"},
+        )
 
     with pytest.raises(InvalidTraceArchiveError):
-        PlaywrightTraceParser().parse(trace)
-
-
-def test_errors_derive_from_trace_parse_error():
-    assert issubclass(InvalidTraceArchiveError, TraceParseError)
+        PlaywrightTraceParser().parse(path)
 
 
 # --- repeated header names (#226) ---------------------------------------------------------

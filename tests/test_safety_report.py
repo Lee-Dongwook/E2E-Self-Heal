@@ -714,15 +714,6 @@ def test_markdown_lists_the_unstable_scenarios_by_name() -> None:
     assert "product-regression" not in section.split("## ")[0]
 
 
-def test_markdown_explains_that_repeats_do_not_widen_the_gate_sample() -> None:
-    text = render_markdown(_flaky_report())
-
-    assert "Repeated runs do not count toward the 20" in text
-    assert "a false green in any run fails the gate" in text
-    assert "`n` counts distinct scenarios" in text
-    assert "Repaired, Refused, Errors and Correct count runs (3 per scenario)" in text
-
-
 def test_a_single_run_report_shows_none_of_the_repeat_sections() -> None:
     text = render_markdown(_report())
 

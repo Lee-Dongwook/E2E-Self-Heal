@@ -76,7 +76,6 @@ def test_selector_hint_invalid_json_exits_2(mock_heal_dependencies, tmp_path):
         ["heal", str(tmp_path / "test.spec.ts"), "--selector-hint", "{invalid json}"],
     )
     assert result.exit_code == 2
-    assert "Invalid --selector-hint JSON" in result.stderr
 
 
 def test_selector_hint_model_validation():

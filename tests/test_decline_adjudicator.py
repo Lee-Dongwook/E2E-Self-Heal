@@ -103,8 +103,6 @@ def test_the_prompt_carries_the_diagnosis_and_the_failure_evidence(prompts) -> N
     decline_adjudicator(_state())
 
     system_prompt, user_prompt = prompts[0]
-    assert "selector_drift" in system_prompt
-    assert "behaviour_change" in system_prompt
     assert "The submit handler was removed" in user_prompt
     assert "Timed out waiting for 'Thanks!'" in user_prompt
     assert "src/App.tsx" in user_prompt

@@ -1,3 +1,5 @@
+import pytest
+
 from app.preprocess.failure_scanner import scan_failing_tests
 
 SUITE_LOG = """
@@ -19,30 +21,23 @@ Running 3 tests using 1 worker
 """
 
 
-def test_scans_distinct_failing_files_in_order():
-    # login.spec.ts fails twice (1 and 3) -> deduped; first-seen order preserved.
+def test_scans_distinct_failing_files_in_order() -> None:
     assert scan_failing_tests(SUITE_LOG) == ["tests/login.spec.ts", "example.spec.ts"]
 
 
-def test_ignores_the_checkmark_summary_lines():
-    # The `✘  2 ...` summary lines must not be scanned — only numbered `N)` entries.
-    assert "tests/ok.spec.ts" not in scan_failing_tests(SUITE_LOG)
-
-
-def test_empty_when_no_failures():
+def test_empty_when_no_failures() -> None:
     assert scan_failing_tests("Running 1 test\n  1 passed") == []
 
 
-def test_path_with_space_is_not_truncated() -> None:
-    log = "  1) [chromium] › tests/my suite/login.spec.ts:12:3 › user can log in\n"
-    assert scan_failing_tests(log) == ["tests/my suite/login.spec.ts"]
-
-
-def test_path_with_at_sign_is_not_truncated() -> None:
-    log = "  1) tests/@smoke/login.spec.ts:12:3 › smoke test\n"
-    assert scan_failing_tests(log) == ["tests/@smoke/login.spec.ts"]
-
-
-def test_path_with_percent_is_not_truncated() -> None:
-    log = "  1) tests/100%/login.spec.ts:12:3 › pct test\n"
-    assert scan_failing_tests(log) == ["tests/100%/login.spec.ts"]
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("tests/my suite/login.spec.ts", "tests/my suite/login.spec.ts"),
+        ("tests/@smoke/login.spec.ts", "tests/@smoke/login.spec.ts"),
+        ("tests/100%/login.spec.ts", "tests/100%/login.spec.ts"),
+    ],
+    ids=["spaces", "at-sign", "percent"],
+)
+def test_failure_path_preserves_special_characters(path: str, expected: str) -> None:
+    log = f"  1) [chromium] › {path}:12:3 › smoke test\n"
+    assert scan_failing_tests(log) == [expected]

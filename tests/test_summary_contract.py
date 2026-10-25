@@ -57,11 +57,6 @@ def _review(**overrides: Any) -> ReviewReport:
     return ReviewReport(test_script_path="tests/login.spec.ts", **overrides)
 
 
-@pytest.mark.parametrize("summary", [_repair(), _refusal(), _suite(), _review()])
-def test_all_output_models_share_one_schema_version(summary: _AnySummary) -> None:
-    assert summary.schema_version == SCHEMA_VERSION
-
-
 @pytest.mark.parametrize(
     ("summary", "expected_kind"),
     [
@@ -175,12 +170,6 @@ def test_suite_results_are_nested_repair_summaries() -> None:
     assert data["kind"] == "suite"
     assert [r["kind"] for r in data["results"]] == ["repair", "repair"]
     assert all(r["schema_version"] == SCHEMA_VERSION for r in data["results"])
-
-
-def test_review_report_kind_is_review() -> None:
-    data = json.loads(_review(has_findings=True).model_dump_json())
-    assert data["kind"] == "review"
-    assert data["schema_version"] == SCHEMA_VERSION
 
 
 def test_review_report_marks_incomplete_provider_failures() -> None:

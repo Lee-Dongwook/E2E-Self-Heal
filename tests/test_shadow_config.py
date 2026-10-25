@@ -4,17 +4,12 @@ from pydantic import ValidationError
 from app.shadow import CleanupPolicy, MissPolicy, ShadowConfig
 
 
-def test_shadow_config_is_importable_and_has_defaults():
+def test_shadow_config_fails_closed_by_default():
+    # Replay must abort on an unmatched request and never serve a capture to another origin
+    # unless a user opts in.
     config = ShadowConfig()
-    assert config.workspace_dir == ".shadow_workspace"
-    assert config.cache_dir == "cache"
-    assert config.snapshots_dir == "snapshots"
-    assert config.tmp_dir == "tmp"
-    assert config.offline is False
-    assert config.cleanup_policy is CleanupPolicy.ON_SUCCESS
     assert config.miss_policy is MissPolicy.STRICT
     assert config.match_options.allow_cross_origin is False
-    assert config.match_options.min_score == 180.0
 
 
 def test_shadow_config_accepts_overrides():
@@ -39,22 +34,12 @@ def test_shadow_config_is_immutable():
         config.offline = True
 
 
-def test_invalid_cleanup_policy_is_rejected():
-    with pytest.raises(ValidationError):
-        ShadowConfig.model_validate({"cleanup_policy": "sometimes"})
-
-
 def test_miss_policy_accepts_string_value():
     config = ShadowConfig.model_validate({"miss_policy": "record-and-augment"})
     assert config.miss_policy is MissPolicy.RECORD_AND_AUGMENT
 
     lenient = ShadowConfig.model_validate({"miss_policy": "lenient"})
     assert lenient.miss_policy is MissPolicy.LENIENT
-
-
-def test_invalid_miss_policy_is_rejected():
-    with pytest.raises(ValidationError):
-        ShadowConfig.model_validate({"miss_policy": "ignore"})
 
 
 @pytest.mark.parametrize("miss_policy", [MissPolicy.LENIENT, MissPolicy.RECORD_AND_AUGMENT])
