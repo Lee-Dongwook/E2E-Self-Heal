@@ -2,11 +2,19 @@ import pytest
 from datetime import UTC, datetime
 from pathlib import Path
 
+import app.cli as cli_module
 from app.config import settings
-from app.healing_history import HealingHistoryRecord, append_record, normalize_error_signature
+from app.healing_history import (
+    HealingHistoryRecord,
+    append_record,
+    find_match,
+    make_record,
+    normalize_error_signature,
+)
 from app.nodes.memory_lookup import memory_lookup
+from app.preprocess.error_log_parser import parse_error_log
 from app.registry import classify_selector_kind
-from app.schemas import PatchInstruction
+from app.schemas import PatchInstruction, RefusalReason, RefusalReport
 from app.state import AgentState
 
 
@@ -175,3 +183,54 @@ def test_memory_lookup_rejects_duplicate_source_lines_without_mutating(
     assert "matched 2" in candidate["rejection"]
     # Not an AST lock rejection, so no lock verdict is attributed.
     assert "ast_lock" not in candidate
+
+
+def test_a_remembered_repair_cannot_pre_empt_the_ambiguous_target_refusal(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Learning may save a model call, never lower the refusal bar (Issue #308)."""
+    monkeypatch.setattr(settings, "workspace_root", str(tmp_path))
+    monkeypatch.setattr(settings, "sandbox_mode", "strict")
+    original = "await page.click('#old')\n"
+    spec = tmp_path / "t.spec.ts"
+    spec.write_text(original)
+    raw_log = "Error: waiting for locator('#old') timed out"
+    record = make_record(
+        error_log=parse_error_log(raw_log),
+        instructions=[
+            PatchInstruction(
+                line=1,
+                original=original.strip(),
+                replacement="await page.click('#save')",
+                reason="an earlier verified repair",
+                selector="#save",
+            )
+        ],
+        test_script_path=str(spec),
+        source="llm",
+    )
+    assert record is not None
+    assert append_record(record) is True
+    # Without the refusal check this history would apply: the record matches this failure.
+    assert find_match(parse_error_log(raw_log), str(spec))[0] is not None
+    monkeypatch.setattr(
+        "app.nodes.memory_lookup.find_match",
+        lambda *_: pytest.fail("an ambiguous target must be refused before history is consulted"),
+    )
+    old = {"tag": "button", "attributes": {"id": "old", "type": "submit"}}
+    look_alikes = [
+        {"tag": "button", "attributes": {"id": id_, "type": "submit"}}
+        for id_ in ("save", "publish")
+    ]
+    dom_diff_context = [
+        {"file": "src/App.tsx", "line": 0, "previous": old, "current": {}},
+        {"file": "src/App.tsx", "line": 4, "previous": {}, "current": look_alikes[0]},
+        {"file": "src/App.tsx", "line": 7, "previous": {}, "current": look_alikes[1]},
+    ]
+
+    result = cli_module._heal_file(spec, raw_log, dom_diff_context, dry_run=False)
+
+    assert isinstance(result, RefusalReport)
+    assert result.reason is RefusalReason.AMBIGUOUS_TARGET
+    assert result.evidence.candidates == []
+    assert spec.read_text() == original

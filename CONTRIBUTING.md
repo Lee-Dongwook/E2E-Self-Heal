@@ -220,6 +220,11 @@ This repo follows the rules in [`.claude/CLAUDE.md`](.claude/CLAUDE.md) and
 - **Guardrail (non-negotiable):** the Patch Generator only fixes **selectors and wait
   conditions** — never assertions or test logic. This is enforced at *both* the prompt and the
   `PatchOutput` schema level. Keep it that way.
+- **Learning never lowers the refusal bar:** healing history, and any learned rule or policy
+  setting added later, may reorder candidates or save a model call, but every candidate still
+  goes through the same refusal checks and verification as a fresh model repair. A PR that adds
+  learning or a policy setting must say that it cannot lower the refusal bar. See the guardrails
+  in [`.claude/CLAUDE.md`](.claude/CLAUDE.md).
 - **Preprocess before the LLM:** never send raw Playwright logs or a full `git diff` to the
   model — abstract them into compact context first.
 - **CLI core vs. CI wrapper:** all repair logic lives in the CLI core; the CI wrapper only

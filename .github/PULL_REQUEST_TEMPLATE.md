@@ -7,6 +7,8 @@ Describe the change and the motivation.
 - [ ] `make check` (ruff lint + format check + pyright) passes
 - [ ] `make test` passes
 - [ ] Added/updated tests for behavior changes
+- [ ] If this adds learning (healing history, cached rules) or a policy setting: it cannot lower
+      the refusal bar, skip verification, or auto-apply a change a fresh repair would refuse
 
 ## Notes
 

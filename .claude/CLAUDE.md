@@ -117,6 +117,16 @@ Three nodes and one conditional edge control the flow.
   `loop_count`, and falls through to the LLM path. That is bounded because the memory lookup
   runs once at the start of the graph. Events: `ast_lock_rejected` (reason, node_kind, line)
   and `ast_lock_passed`.
+- **Learning never lowers the refusal bar** — local healing history, and any future learned
+  rule or policy setting, may reorder candidates or save a model call. It may never skip,
+  relax or replace a check. A history candidate is held to everything a model candidate is:
+  the ambiguous-target refusal runs before `memory_lookup`, so a remembered repair cannot
+  pre-empt it, and an applied history candidate still goes through the `_apply` scope gates
+  and AST lock, shadow replay, the live selector check and the test run. Only a verified pass
+  is accepted, and only a passing LLM repair is written back to history. No configuration
+  value may disable a refusal check or auto-apply an ambiguous change; the only way past the
+  ambiguous-target refusal is a human `--selector-hint`. A PR that adds learning or a policy
+  setting must say whether it can lower the refusal bar, and the answer must be no.
 
 ### Imports
 
