@@ -12,19 +12,12 @@ The first release whose safety gates are enforced on a corpus large enough to me
 44 runnable scenarios, 20 of them product regressions paired with a drift twin. The release run
 (`safety-benchmark --apply-patches --jobs 4 --enforce-gates`, Claude Sonnet 4.6) scored all 44 as
 labeled: `false_green_rate` 0% (n=20), `refusal_accuracy` 100% (n=22), `incorrect_refusal_rate` 0%
-(n=22), `error_count` 0. A three-repeat run with `deepseek-v4-flash` (132 runs) met the same three
-rate gates with no false green, but failed `error_count` on one run: see Known issues.
+(n=22), `error_count` 0.
 
 ### Known issues
-- **`deepseek-v4-flash` sometimes returns an empty or truncated answer.** Over the 132-run
-  release check it returned 62 empty completions and 14 unparseable structured outputs. Retries
-  absorbed all but one, which ended a run as `provider_error` (`catalog-search-regression`, the same
-  scenario as in an earlier run). The empty answers cluster on the product-regression scenarios,
-  where the model reasons longest, and take about as long as generating the 4,096-token default
-  cap, so the reasoning most likely uses up the output budget. On the two worst scenarios,
-  `E2E_HEALER_LLM_MAX_TOKENS=16384` cut empty answers from 5.0 to 1.25 per run and unparseable ones
-  from 2.2 to 0, over a small sample (6 and 4 runs). Set it when using DeepSeek; the default is
-  unchanged.
+- With `deepseek-v4-flash`, a run can occasionally end as `provider_error` because the model
+  returns an empty answer on every retry, most often on long product-regression diagnoses. A
+  higher `E2E_HEALER_LLM_MAX_TOKENS` (for example `16384`) appeared to help in a small test.
 
 ### Added
 - **`safety-benchmark --jobs N` runs scenarios in parallel, with live progress.** Scenarios
