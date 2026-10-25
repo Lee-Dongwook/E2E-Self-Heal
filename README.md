@@ -278,6 +278,8 @@ CI wrapper branches on `has_findings`.
 
 Healing history is enabled by default. Pass `--no-memory` to fully bypass local history lookup
 and verified-repair storage for a run; pass `--memory` explicitly to enable the default behavior.
+A remembered repair only saves a model call: it is checked and verified like any other candidate,
+and a test the engine would refuse (for example an ambiguous target) is refused with or without it.
 
 ### Benchmark semantic-context token usage
 

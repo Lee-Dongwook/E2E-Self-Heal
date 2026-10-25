@@ -172,6 +172,13 @@ All notable changes to this project are documented here. The format is based on
   the `error_count` gate and is outside the refusal-accuracy population (#326).
 
 ### Changed
+- **Learning never lowers the refusal bar is now a stated, tested invariant** (#308). Healing
+  history, and any learned rule or policy setting added later, may reorder candidates or save a
+  model call but never skip, relax or replace a refusal check or verification step. It is written
+  down in `.claude/CLAUDE.md`, `CONTRIBUTING.md` and the README, the pull request template asks
+  every learning or policy change to confirm it, and a test shows that a matching history record
+  cannot pre-empt the ambiguous-target refusal: the run is refused before history is consulted,
+  and the file is left as it was.
 - **Structural AST lock on every patch** — the Patch Generator and the healing-history memory
   lookup now verify each candidate against the original file with the tree-sitter AST lock,
   after the existing per-line scope gates. Only locator strings, timeouts, and wait-method names
