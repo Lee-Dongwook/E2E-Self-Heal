@@ -295,6 +295,8 @@ def _heal_file(
             "repair_run_finished",
             is_success=final_state["is_success"],
             loop_count=final_state["loop_count"],
+            loop_budget=settings.max_loops,
+            termination=summary.termination,
         )
         return summary
     finally:

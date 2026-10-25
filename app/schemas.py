@@ -3,14 +3,27 @@
 from enum import Enum
 from typing import Annotated, Literal, TypedDict, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 # Version of the machine-readable CI contract emitted as `--json`. Version 2 adds the
 # ``refusal`` discriminator and closed refusal reasons, which the published compatibility
 # policy classifies as a breaking change. Version 2.1 adds the optional
 # ``CandidateEvidence.ast_lock`` detail object, a compatible minor addition. Version 2.2 adds
-# the optional ``EvidenceBundle.provenance`` object, another compatible minor addition.
-SCHEMA_VERSION: Literal["2.2"] = "2.2"
+# the optional ``EvidenceBundle.provenance`` object, another compatible minor addition. Version
+# 2.3 adds the executed graph ``path``, the ``loop_budget``, ``CandidateEvidence.next_step`` and
+# the ``termination`` of a repair or refusal: optional additions, so a minor bump as well.
+SCHEMA_VERSION: Literal["2.3"] = "2.3"
+
+# How a repair run ended. ``refused`` covers every refusal reason except the loop cap, which
+# splits by what the last candidate ran into: a verifier (``verification_failed``) or nothing a
+# verifier could judge (``budget_exhausted``).
+Termination = Literal["verified", "refused", "budget_exhausted", "verification_failed"]
+
+# Candidate rejections that come from running a verifier on the patched test, as opposed to the
+# line gates, the AST lock or an application error that stop a candidate before verification.
+VERIFIER_REJECTIONS = frozenset(
+    {"shadow_failed", "shadow_error", "selector_not_unique", "test_failed", "final_suite_failed"}
+)
 
 
 class DomDiff(BaseModel):
@@ -154,6 +167,14 @@ class CandidateEvidence(BaseModel):
             "rejections from other checks, whose cause is only in ``rejection``"
         ),
     )
+    next_step: str | None = Field(
+        default=None,
+        description=(
+            "graph node the run moved to once this candidate was accepted or rejected, or "
+            "``end`` when the run stopped there; null while it was still undecided. An open "
+            "string: nodes can be added without a contract change"
+        ),
+    )
 
 
 class LoopEvidenceDetails(BaseModel):
@@ -179,6 +200,13 @@ class LoopEvidence(BaseModel):
     ]
     outcome: str
     details: LoopEvidenceDetails = Field(default_factory=LoopEvidenceDetails)
+
+
+class GraphStep(BaseModel):
+    """One node the repair graph executed, in execution order."""
+
+    node: str = Field(description="graph node name; an open string, nodes can be added")
+    loop_count: int = Field(ge=0, description="loop count after the node ran")
 
 
 class SelectorHintEvidence(BaseModel):
@@ -234,12 +262,24 @@ class EvidenceBundle(BaseModel):
             "ran, because then nothing was sent to a provider"
         ),
     )
+    path: list[GraphStep] = Field(
+        default_factory=list,
+        description=(
+            "every node the repair graph executed, in order; each adjacent pair is a routing "
+            "decision. Empty when the graph never ran"
+        ),
+    )
+    loop_budget: int | None = Field(
+        default=None,
+        ge=1,
+        description="loop cap the run was allowed (E2E_HEALER_MAX_LOOPS); null when it never ran",
+    )
 
 
 class RefusalReport(BaseModel):
     """Machine-readable outcome when the repair workflow refuses to change a test."""
 
-    schema_version: Literal["2.2"] = Field(
+    schema_version: Literal["2.3"] = Field(
         default=SCHEMA_VERSION,
         description="version of this machine-readable contract; bump on breaking changes",
     )
@@ -262,11 +302,22 @@ class RefusalReport(BaseModel):
     loop_count: int = Field(ge=0, description="repair-loop count when the refusal was finalized")
     evidence: EvidenceBundle
 
+    @computed_field
+    @property
+    def termination(self) -> Termination:
+        """How the run ended: a refusal on evidence, or the loop cap with what stopped it."""
+        if self.reason is not RefusalReason.LOOP_CAP_REACHED:
+            return "refused"
+        candidates = self.evidence.candidates
+        if candidates and candidates[-1].rejection in VERIFIER_REJECTIONS:
+            return "verification_failed"
+        return "budget_exhausted"
+
 
 class RepairSummary(BaseModel):
     """Machine-readable result emitted for the CI wrapper to consume."""
 
-    schema_version: Literal["2.2"] = Field(
+    schema_version: Literal["2.3"] = Field(
         default=SCHEMA_VERSION,
         description="version of this machine-readable contract; bump on breaking changes",
     )
@@ -280,6 +331,12 @@ class RepairSummary(BaseModel):
     instructions: list[PatchInstruction] = Field(default_factory=list)
     evidence: EvidenceBundle = Field(default_factory=EvidenceBundle)
 
+    @computed_field
+    @property
+    def termination(self) -> Termination:
+        """``verified``, or ``verification_failed`` once the final suite rerun rejected it."""
+        return "verified" if self.is_success else "verification_failed"
+
 
 HealResult = Annotated[RepairSummary | RefusalReport, Field(discriminator="kind")]
 
@@ -287,7 +344,7 @@ HealResult = Annotated[RepairSummary | RefusalReport, Field(discriminator="kind"
 class SuiteSummary(BaseModel):
     """Aggregate result when healing a whole suite (multiple failing tests)."""
 
-    schema_version: Literal["2.2"] = Field(
+    schema_version: Literal["2.3"] = Field(
         default=SCHEMA_VERSION,
         description="version of this machine-readable contract; bump on breaking changes",
     )
@@ -334,7 +391,7 @@ class ReviewOutput(BaseModel):
 class ReviewReport(BaseModel):
     """Machine-readable review result emitted for the CI wrapper to post as PR comments."""
 
-    schema_version: Literal["2.2"] = Field(
+    schema_version: Literal["2.3"] = Field(
         default=SCHEMA_VERSION,
         description="version of this machine-readable contract; bump on breaking changes",
     )

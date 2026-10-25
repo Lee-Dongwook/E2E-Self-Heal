@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 from typing import Literal, cast
 
+from app.config import settings
 from app.healing_history import extract_failing_selector
 from app.provenance import provider_provenance
 from app.sandbox import workspace_root
@@ -11,6 +12,7 @@ from app.schemas import (
     CandidateEvidence,
     EvidenceBundle,
     EvidenceDomDiff,
+    GraphStep,
     LoopEvidence,
     LoopEvidenceDetails,
     PatchInstruction,
@@ -162,6 +164,10 @@ def build_evidence_bundle(state: AgentState, *, initial_error_log: str) -> Evide
         LoopEvidence.model_validate(redact_value(event))
         for event in state.get("evidence_history", [])
     ]
+    for candidate in candidates:
+        # A decision with no later node is where the run stopped.
+        if candidate.outcome != "generated" and candidate.next_step is None:
+            candidate.next_step = "end"
     return EvidenceBundle(
         parsed_error=parsed_error,
         failing_selector=extract_failing_selector(parsed_error),
@@ -172,6 +178,8 @@ def build_evidence_bundle(state: AgentState, *, initial_error_log: str) -> Evide
         candidates=candidates,
         loop_history=loop_history,
         provenance=provider_provenance(state),
+        path=[GraphStep.model_validate(step) for step in state.get("graph_path", [])],
+        loop_budget=settings.max_loops,
     )
 
 

@@ -1,12 +1,12 @@
 {
-  "schema_version": "2.2",
+  "schema_version": "2.3",
   "kind": "suite",
   "total_failed": 2,
   "healed": 1,
   "is_success": false,
   "results": [
     {
-      "schema_version": "2.2",
+      "schema_version": "2.3",
       "kind": "repair",
       "test_script_path": "/path/to/E2E-Self-Heal/examples/scenarios/docs-capture/cta.spec.ts",
       "is_success": true,
@@ -15,9 +15,9 @@
         {
           "line": 5,
           "original": "  await page.click(\".cta-button\");",
-          "replacement": "  await page.click(\".cta-primary\");",
-          "reason": "The CSS class on the CTA button was renamed from 'cta-button' to 'cta-primary' in CTAButton.tsx, so the selector must be updated to match the new class name.",
-          "selector": ".cta-primary"
+          "replacement": "  await page.click(\"role=button[name='Get started']\");",
+          "reason": "The className changed from 'cta-button' to 'cta-primary', breaking the CSS selector. The ARIA snapshot confirms the button is accessible as button \"Get started\", so using a role-based locator is more resilient.",
+          "selector": "role=button[name='Get started']"
         }
       ],
       "evidence": {
@@ -46,7 +46,7 @@
           },
           {
             "file": "examples/demo-app/src/App.tsx",
-            "line": 13,
+            "line": 44,
             "previous": {
               "tag": "form",
               "attributes": {
@@ -59,7 +59,11 @@
             }
           }
         ],
-        "aria_snapshot": null,
+        "aria_snapshot": {
+          "sha256": "639d4fd977c9486e9e1d5e134c639e37e0174568ee4b934138599068ae501a84",
+          "source_path": "test-results/docs-capture-cta-clicks-the-CTA/error-context.md",
+          "chars": 705
+        },
         "candidates": [
           {
             "loop_count": 0,
@@ -68,9 +72,9 @@
               {
                 "line": 5,
                 "original": "  await page.click(\".cta-button\");",
-                "replacement": "  await page.click(\".cta-primary\");",
-                "reason": "The CSS class on the CTA button was renamed from 'cta-button' to 'cta-primary' in CTAButton.tsx, so the selector must be updated to match the new class name.",
-                "selector": ".cta-primary"
+                "replacement": "  await page.click(\"role=button[name='Get started']\");",
+                "reason": "The className changed from 'cta-button' to 'cta-primary', breaking the CSS selector. The ARIA snapshot confirms the button is accessible as button \"Get started\", so using a role-based locator is more resilient.",
+                "selector": "role=button[name='Get started']"
               }
             ],
             "memory_score": null,
@@ -79,7 +83,8 @@
             "test_passed": true,
             "outcome": "accepted",
             "rejection": null,
-            "ast_lock": null
+            "ast_lock": null,
+            "next_step": "end"
           }
         ],
         "loop_history": [
@@ -146,11 +151,39 @@
           "mode": "remote",
           "redaction_applied": false,
           "redaction_count": 0
-        }
-      }
+        },
+        "path": [
+          {
+            "node": "memory_lookup",
+            "loop_count": 0
+          },
+          {
+            "node": "diagnoser",
+            "loop_count": 0
+          },
+          {
+            "node": "patch_generator",
+            "loop_count": 0
+          },
+          {
+            "node": "shadow_verifier",
+            "loop_count": 0
+          },
+          {
+            "node": "selector_verifier",
+            "loop_count": 0
+          },
+          {
+            "node": "test_runner",
+            "loop_count": 0
+          }
+        ],
+        "loop_budget": 3
+      },
+      "termination": "verified"
     },
     {
-      "schema_version": "2.2",
+      "schema_version": "2.3",
       "kind": "refusal",
       "test_script_path": "/path/to/E2E-Self-Heal/examples/scenarios/docs-capture/submit.spec.ts",
       "reason": "loop_cap_reached",
@@ -182,7 +215,7 @@
           },
           {
             "file": "examples/demo-app/src/App.tsx",
-            "line": 13,
+            "line": 44,
             "previous": {
               "tag": "form",
               "attributes": {
@@ -204,25 +237,19 @@
               {
                 "line": 5,
                 "original": "  await page.click(\"#submit-btn\");",
-                "replacement": "  await page.click(\"role=button[name='Submit']\");",
-                "reason": "The form's onSubmit handler is missing, so clicking the button alone won't trigger submission. Switching to a role-based locator that targets the submit button by its accessible name ensures we're hitting the correct interactive element; combined with the expect timeout below, this gives React time to process any remaining submission logic wired to the button directly.",
-                "selector": "role=button[name='Submit']"
-              },
-              {
-                "line": 6,
-                "original": "  await expect(page.getByText(\"Thanks!\")).toBeVisible();",
-                "replacement": "  await expect(page.getByText(\"Thanks!\")).toBeVisible({ timeout: 10000 });",
-                "reason": "Raise the visibility timeout so the assertion waits longer for the confirmation text to appear after the async React state update following form submission.",
-                "selector": ""
+                "replacement": "  await page.click(\"#submit-btn\", { timeout: 15000 });",
+                "reason": "The onSubmit handler removal means the React component may need extra time to process; raising the timeout on the click gives the app more time to handle submission and render the success message, without changing test logic.",
+                "selector": "#submit-btn"
               }
             ],
             "memory_score": null,
             "shadow_score": null,
             "selector_counts": {},
-            "test_passed": null,
+            "test_passed": false,
             "outcome": "rejected",
-            "rejection": "line 6 targets an assertion",
-            "ast_lock": null
+            "rejection": "test_failed",
+            "ast_lock": null,
+            "next_step": "diagnoser"
           },
           {
             "loop_count": 1,
@@ -230,9 +257,9 @@
             "instructions": [
               {
                 "line": 5,
-                "original": "  await page.click(\"#submit-btn\");",
-                "replacement": "  await page.click(\"#submit-btn\", { timeout: 10000 });",
-                "reason": "The form's onSubmit handler is missing so the button click alone does not trigger submission. Raising the timeout on the click gives React more time to process any async rendering, and signals intent to wait longer for the resulting state change before the assertion.",
+                "original": "  await page.click(\"#submit-btn\", { timeout: 15000 });",
+                "replacement": "  await page.click(\"#submit-btn\", { timeout: 30000 });",
+                "reason": "The form's onSubmit handler was removed, so the 'Thanks!' text never appears — the button click itself may be racing with React hydration or async state updates. Raising the timeout on the click gives the UI more time to process; this is the only wait-condition lever available without adding or removing lines. No selector rename is warranted since the diff confirms neither the button nor 'Thanks!' was renamed.",
                 "selector": ""
               }
             ],
@@ -242,19 +269,29 @@
             "test_passed": false,
             "outcome": "rejected",
             "rejection": "test_failed",
-            "ast_lock": null
+            "ast_lock": null,
+            "next_step": "diagnoser"
           },
           {
             "loop_count": 2,
             "source": "llm",
-            "instructions": [],
+            "instructions": [
+              {
+                "line": 5,
+                "original": "  await page.click(\"#submit-btn\", { timeout: 30000 });",
+                "replacement": "  await page.click(\"#submit-btn\", { timeout: 60000 });",
+                "reason": "The submit handler was removed from the form in App.tsx, meaning the 'Thanks!' message never appears. The diagnosis confirms the locator is correct but the element never renders. Since we cannot change assertions or business logic, and the only permitted fix is to adjust wait/timeout conditions on existing calls, we raise the timeout on the click to give any async re-attachment of the handler more time. This is the only in-scope lever available.",
+                "selector": ""
+              }
+            ],
             "memory_score": null,
             "shadow_score": null,
             "selector_counts": {},
             "test_passed": false,
             "outcome": "rejected",
             "rejection": "test_failed",
-            "ast_lock": null
+            "ast_lock": null,
+            "next_step": "refusal_finalizer"
           }
         ],
         "loop_history": [
@@ -272,10 +309,43 @@
           {
             "loop_count": 0,
             "stage": "patch_generator",
-            "outcome": "application_rejected",
+            "outcome": "candidate_generated",
             "details": {
               "score": null,
-              "error": "line 6 targets an assertion",
+              "error": null,
+              "instruction_count": 1,
+              "reason": null
+            }
+          },
+          {
+            "loop_count": 0,
+            "stage": "shadow_verifier",
+            "outcome": "skipped",
+            "details": {
+              "score": null,
+              "error": null,
+              "instruction_count": null,
+              "reason": null
+            }
+          },
+          {
+            "loop_count": 0,
+            "stage": "selector_verifier",
+            "outcome": "skipped",
+            "details": {
+              "score": null,
+              "error": null,
+              "instruction_count": null,
+              "reason": null
+            }
+          },
+          {
+            "loop_count": 0,
+            "stage": "test_runner",
+            "outcome": "failed",
+            "details": {
+              "score": null,
+              "error": null,
               "instruction_count": null,
               "reason": null
             }
@@ -331,7 +401,7 @@
             "details": {
               "score": null,
               "error": null,
-              "instruction_count": 0,
+              "instruction_count": 1,
               "reason": null
             }
           },
@@ -387,8 +457,80 @@
           "mode": "remote",
           "redaction_applied": false,
           "redaction_count": 0
-        }
-      }
+        },
+        "path": [
+          {
+            "node": "memory_lookup",
+            "loop_count": 0
+          },
+          {
+            "node": "diagnoser",
+            "loop_count": 0
+          },
+          {
+            "node": "patch_generator",
+            "loop_count": 0
+          },
+          {
+            "node": "shadow_verifier",
+            "loop_count": 0
+          },
+          {
+            "node": "selector_verifier",
+            "loop_count": 0
+          },
+          {
+            "node": "test_runner",
+            "loop_count": 1
+          },
+          {
+            "node": "diagnoser",
+            "loop_count": 1
+          },
+          {
+            "node": "patch_generator",
+            "loop_count": 1
+          },
+          {
+            "node": "shadow_verifier",
+            "loop_count": 1
+          },
+          {
+            "node": "selector_verifier",
+            "loop_count": 1
+          },
+          {
+            "node": "test_runner",
+            "loop_count": 2
+          },
+          {
+            "node": "diagnoser",
+            "loop_count": 2
+          },
+          {
+            "node": "patch_generator",
+            "loop_count": 2
+          },
+          {
+            "node": "shadow_verifier",
+            "loop_count": 2
+          },
+          {
+            "node": "selector_verifier",
+            "loop_count": 2
+          },
+          {
+            "node": "test_runner",
+            "loop_count": 3
+          },
+          {
+            "node": "refusal_finalizer",
+            "loop_count": 3
+          }
+        ],
+        "loop_budget": 3
+      },
+      "termination": "verification_failed"
     }
   ]
 }

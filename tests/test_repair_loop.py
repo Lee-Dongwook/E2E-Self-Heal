@@ -2,6 +2,7 @@
 
 import json
 import pathlib
+from collections.abc import Callable
 
 import pytest
 
@@ -412,3 +413,164 @@ def test_a_provider_failure_is_never_adjudicated(
     final = build_graph().invoke(state)
 
     assert final["refusal_reason"] is RefusalReason.PROVIDER_ERROR
+
+
+# --- the executed path and how the run ended (Issue #375) -------------------------------
+
+_TIMEOUT_LOG = "Error: waiting for locator('#old') timed out"
+
+
+def _heal_json(
+    spec: pathlib.Path, dom_diff_context: list[dict], raw_log: str = _TIMEOUT_LOG
+) -> dict:
+    result = cli_module._heal_file(
+        spec, raw_log, dom_diff_context, dry_run=True, memory_enabled=False
+    )
+    return json.loads(result.model_dump_json())
+
+
+def _renames_current_line(spec: pathlib.Path) -> Callable[[str, str], PatchOutput]:
+    """A patch generator that renames whatever selector the test holds now.
+
+    A failed candidate stays in the file for the next cycle, so a re-plan targets that line.
+    """
+    renames = iter(range(1, 10))
+
+    def generate(system: str, user: str) -> PatchOutput:
+        current = spec.read_text().strip()
+        return PatchOutput(
+            instructions=[
+                PatchInstruction(
+                    line=1,
+                    original=current,
+                    replacement=f"await page.click('#new{next(renames)}')",
+                    reason="selector renamed",
+                )
+            ]
+        )
+
+    return generate
+
+
+def test_a_rejected_candidate_and_its_replan_are_one_ordered_trace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    spec = tmp_path / "t.spec.ts"
+    spec.write_text(ORIGINAL)
+    verdicts = iter([False, True])
+
+    monkeypatch.setattr(diagnoser_node, "generate_diagnosis", lambda s, u: "selector changed")
+    monkeypatch.setattr(patch_node, "generate_patch", _renames_current_line(spec))
+    monkeypatch.setattr(runner_node, "run_playwright", lambda path: (next(verdicts), "Error: x"))
+
+    payload = _heal_json(spec, list(_DOM_CHANGE))
+
+    assert payload["termination"] == "verified"
+    evidence = payload["evidence"]
+    attempt = [
+        "diagnoser",
+        "patch_generator",
+        "shadow_verifier",
+        "selector_verifier",
+        "test_runner",
+    ]
+    assert [step["node"] for step in evidence["path"]] == ["memory_lookup", *attempt, *attempt]
+    first, second = evidence["candidates"]
+    # The failed run sent the graph back to diagnosis; the second candidate ended the run.
+    assert (first["outcome"], first["rejection"], first["next_step"]) == (
+        "rejected",
+        "test_failed",
+        "diagnoser",
+    )
+    assert (second["outcome"], second["next_step"]) == ("accepted", "end")
+
+
+def test_a_candidate_that_keeps_failing_its_test_ends_as_a_verification_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    spec = tmp_path / "t.spec.ts"
+    spec.write_text(ORIGINAL)
+
+    monkeypatch.setattr(diagnoser_node, "generate_diagnosis", lambda s, u: "selector changed")
+    monkeypatch.setattr(patch_node, "generate_patch", _renames_current_line(spec))
+    monkeypatch.setattr(runner_node, "run_playwright", lambda path: (False, "Error: still failing"))
+
+    payload = _heal_json(spec, list(_DOM_CHANGE))
+
+    assert payload["reason"] == "loop_cap_reached"
+    assert payload["termination"] == "verification_failed"
+    evidence = payload["evidence"]
+    assert payload["loop_count"] == evidence["loop_budget"] == settings.max_loops
+    assert [c["next_step"] for c in evidence["candidates"]] == [
+        *["diagnoser"] * (settings.max_loops - 1),
+        "refusal_finalizer",
+    ]
+    assert evidence["path"][-1] == {"node": "refusal_finalizer", "loop_count": settings.max_loops}
+
+
+def test_candidates_that_never_reach_a_verifier_end_as_an_exhausted_budget(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    spec = tmp_path / "t.spec.ts"
+    spec.write_text(ORIGINAL)
+    stale = PatchOutput(
+        instructions=[
+            PatchInstruction(
+                line=1,
+                original="await page.click('#elsewhere')",
+                replacement="await page.click('#new')",
+                reason="targets a line that is not there",
+            )
+        ]
+    )
+
+    monkeypatch.setattr(diagnoser_node, "generate_diagnosis", lambda s, u: "selector changed")
+    monkeypatch.setattr(patch_node, "generate_patch", lambda s, u: stale)
+    monkeypatch.setattr(
+        runner_node,
+        "run_playwright",
+        lambda path: (_ for _ in ()).throw(AssertionError("an unapplied patch must not be run")),
+    )
+
+    payload = _heal_json(spec, list(_DOM_CHANGE))
+
+    assert payload["reason"] == "loop_cap_reached"
+    assert payload["termination"] == "budget_exhausted"
+    assert [c["next_step"] for c in payload["evidence"]["candidates"]] == [
+        *["patch_generator"] * (settings.max_loops - 1),
+        "refusal_finalizer",
+    ]
+
+
+def test_an_ambiguous_target_is_refused_before_any_attempt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    spec = tmp_path / "t.spec.ts"
+    spec.write_text(ORIGINAL)
+    monkeypatch.setattr(
+        diagnoser_node,
+        "generate_diagnosis",
+        lambda s, u: (_ for _ in ()).throw(AssertionError("no model call for an ambiguous target")),
+    )
+    old = {"tag": "button", "attributes": {"id": "old", "type": "submit"}}
+    look_alikes = [
+        {"tag": "button", "attributes": {"id": id_, "type": "submit"}}
+        for id_ in ("save", "publish")
+    ]
+    dom_diff_context = [
+        {"file": "src/App.tsx", "line": 0, "previous": old, "current": {}},
+        *[
+            {"file": "src/App.tsx", "line": line, "previous": {}, "current": element}
+            for line, element in zip((4, 7), look_alikes, strict=True)
+        ],
+    ]
+
+    payload = _heal_json(spec, dom_diff_context)
+
+    assert (payload["reason"], payload["termination"]) == ("ambiguous_target", "refused")
+    assert payload["evidence"]["path"] == [{"node": "refusal_finalizer", "loop_count": 0}]
+    assert payload["evidence"]["candidates"] == []

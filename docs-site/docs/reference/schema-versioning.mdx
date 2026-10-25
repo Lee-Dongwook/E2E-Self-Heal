@@ -12,9 +12,11 @@ It applies to `RepairSummary`, `RefusalReport`, `SuiteSummary`, and `ReviewRepor
 
 Schema `1.0` is the original published baseline. Schema `2.0` added the `refusal`
 discriminator, closed refusal reasons, and evidence bundles. Schema `2.1` added the optional
-`CandidateEvidence.ast_lock` detail object. Schema `2.2` is the current output contract: it adds
-the optional `EvidenceBundle.provenance` object, which records the provider, model, endpoint and
-redaction counts for the evidence a run sent. Both are compatible minor changes under the rules
+`CandidateEvidence.ast_lock` detail object, and `2.2` the optional `EvidenceBundle.provenance`
+object, which records the provider, model, endpoint and redaction counts for the evidence a run
+sent. Schema `2.3` is the current output contract: it adds the executed graph `path`, the
+`loop_budget`, `CandidateEvidence.next_step` and the `termination` of a repair or refusal. All three
+are compatible minor changes under the rules
 below. The contract is emitted by the CLI, documented for GitHub Action workflows, and consumed by
 the bundled Playwright Reporter and review-bot examples. A schema change is evaluated against this
 published contract, not merely against direct runtime checks in this repository.
@@ -150,3 +152,24 @@ boundary replaced anything first:
   `mode === "remote"` would otherwise start sending evidence differently without noticing.
 - `redaction_applied` and `redaction_count` describe what the boundary did, not what it guarantees;
   a count of `0` must not be read as "this evidence was harmless".
+
+### Worked example: schema 2.3
+
+Schema `2.3` made the repair loop's control flow reviewable: `evidence.path` lists every graph node
+the run executed, each candidate's `next_step` names where the router sent the run after judging
+it, `evidence.loop_budget` states the cap, and `termination` (`verified`, `refused`,
+`budget_exhausted`, `verification_failed`) says how the run ended:
+
+- `path`, `loop_budget` and `next_step` are new optional fields with a documented absence (an empty
+  list and `null` when the loop never ran), so a consumer written against `2.2` keeps working by
+  ignoring them: a **minor** change.
+- Node names in `path` and `next_step` are **open strings**, not a closed enum, because the graph's
+  nodes are meant to be extended. A new node must not be a contract change; consumers must tolerate
+  names they do not recognize.
+- `termination` is a **closed** enum on a new field. Adding the field is minor; adding a value to it
+  later is **major**, because a wrapper that branches on `budget_exhausted` to retry with a larger
+  cap must not silently misread a new outcome.
+- `termination` is derived from `reason`, `is_success` and the last candidate's `rejection`, so it
+  never contradicts them. It does not replace `reason`: `refused` covers six reasons, which `reason`
+  still tells apart. `LoopEvidence.stage` was left unchanged, since adding the Diagnoser to that
+  closed set would have been a major change; `path` records every node instead.

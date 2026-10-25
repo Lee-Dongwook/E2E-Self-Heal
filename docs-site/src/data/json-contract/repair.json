@@ -1,15 +1,15 @@
 {
-  "schema_version": "2.2",
+  "schema_version": "2.3",
   "kind": "repair",
   "test_script_path": "scenarios/id-rename/spec.ts",
   "is_success": true,
-  "loop_count": 0,
+  "loop_count": 1,
   "instructions": [
     {
       "line": 5,
       "original": "  await page.click(\"#submit-btn\");",
       "replacement": "  await page.click(\"#submit\");",
-      "reason": "The button's id attribute was changed from 'submit-btn' to 'submit' in SubmitButton.tsx; updating the CSS ID selector to match the new id.",
+      "reason": "The submit button's id attribute was renamed from 'submit-btn' to 'submit' in the DOM; updating the selector to match the new id.",
       "selector": "#submit"
     }
   ],
@@ -39,9 +39,9 @@
       }
     ],
     "aria_snapshot": {
-      "sha256": "9a97acc4eeb60225fa7ca89eff931265d6a6dd293f9ab18f2491f4f651076fa6",
+      "sha256": "639d4fd977c9486e9e1d5e134c639e37e0174568ee4b934138599068ae501a84",
       "source_path": "test-results/id-rename-spec.ts-submits-the-form/error-context.md",
-      "chars": 310
+      "chars": 705
     },
     "candidates": [
       {
@@ -50,9 +50,30 @@
         "instructions": [
           {
             "line": 5,
+            "original": "  await page.click('#submit-btn');",
+            "replacement": "  await page.click('#submit');",
+            "reason": "The submit button's id attribute was renamed from 'submit-btn' to 'submit' in the DOM; updating the selector to match the new id.",
+            "selector": "#submit"
+          }
+        ],
+        "memory_score": null,
+        "shadow_score": null,
+        "selector_counts": {},
+        "test_passed": null,
+        "outcome": "rejected",
+        "rejection": "line 5 no longer matches the expected original text",
+        "ast_lock": null,
+        "next_step": "patch_generator"
+      },
+      {
+        "loop_count": 1,
+        "source": "llm",
+        "instructions": [
+          {
+            "line": 5,
             "original": "  await page.click(\"#submit-btn\");",
             "replacement": "  await page.click(\"#submit\");",
-            "reason": "The button's id attribute was changed from 'submit-btn' to 'submit' in SubmitButton.tsx; updating the CSS ID selector to match the new id.",
+            "reason": "The submit button's id attribute was renamed from 'submit-btn' to 'submit' in the DOM; updating the selector to match the new id.",
             "selector": "#submit"
           }
         ],
@@ -62,7 +83,8 @@
         "test_passed": true,
         "outcome": "accepted",
         "rejection": null,
-        "ast_lock": null
+        "ast_lock": null,
+        "next_step": "end"
       }
     ],
     "loop_history": [
@@ -80,6 +102,17 @@
       {
         "loop_count": 0,
         "stage": "patch_generator",
+        "outcome": "application_rejected",
+        "details": {
+          "score": null,
+          "error": "line 5 no longer matches the expected original text",
+          "instruction_count": null,
+          "reason": null
+        }
+      },
+      {
+        "loop_count": 1,
+        "stage": "patch_generator",
         "outcome": "candidate_generated",
         "details": {
           "score": null,
@@ -89,7 +122,7 @@
         }
       },
       {
-        "loop_count": 0,
+        "loop_count": 1,
         "stage": "shadow_verifier",
         "outcome": "skipped",
         "details": {
@@ -100,7 +133,7 @@
         }
       },
       {
-        "loop_count": 0,
+        "loop_count": 1,
         "stage": "selector_verifier",
         "outcome": "skipped",
         "details": {
@@ -111,7 +144,7 @@
         }
       },
       {
-        "loop_count": 0,
+        "loop_count": 1,
         "stage": "test_runner",
         "outcome": "passed",
         "details": {
@@ -129,6 +162,38 @@
       "mode": "remote",
       "redaction_applied": false,
       "redaction_count": 0
-    }
-  }
+    },
+    "path": [
+      {
+        "node": "memory_lookup",
+        "loop_count": 0
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 0
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 1
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 1
+      },
+      {
+        "node": "shadow_verifier",
+        "loop_count": 1
+      },
+      {
+        "node": "selector_verifier",
+        "loop_count": 1
+      },
+      {
+        "node": "test_runner",
+        "loop_count": 1
+      }
+    ],
+    "loop_budget": 3
+  },
+  "termination": "verified"
 }
