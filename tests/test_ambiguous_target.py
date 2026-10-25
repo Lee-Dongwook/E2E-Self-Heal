@@ -1,5 +1,7 @@
 """The diff check that refuses a test whose element became several look-alikes (Issue #388)."""
 
+import pytest
+
 from app.preprocess.ambiguous_target import ambiguous_replacements
 
 CLICK_TIMEOUT = """    TimeoutError: page.click: Timeout 3000ms exceeded.
@@ -23,19 +25,22 @@ def _button(id_: str, type_: str = "submit", tag: str = "button") -> dict:
     return {"tag": tag, "attributes": {"id": id_, "className": "btn", "type": type_}}
 
 
-def test_one_button_split_into_two_is_ambiguous() -> None:
-    context = [_removed(SUBMIT), _added(_button("save-draft"), 4), _added(_button("publish"), 7)]
-
-    assert ambiguous_replacements(CLICK_TIMEOUT, context) == ["#save-draft", "#publish"]
-
-
-def test_a_paired_change_still_counts_its_new_side_as_a_look_alike() -> None:
-    # The analyzer may pair the old button with the first new one as a "changed" element.
-    context = [
-        {"file": FILE, "line": 4, "previous": SUBMIT, "current": _button("save-draft")},
-        _added(_button("publish"), 7),
-    ]
-
+@pytest.mark.parametrize(
+    "context",
+    [
+        [
+            _removed(SUBMIT),
+            _added(_button("save-draft"), 4),
+            _added(_button("publish"), 7),
+        ],
+        [
+            {"file": FILE, "line": 4, "previous": SUBMIT, "current": _button("save-draft")},
+            _added(_button("publish"), 7),
+        ],
+    ],
+    ids=["removed-and-added", "paired-change"],
+)
+def test_two_replacements_are_ambiguous(context: list[dict]) -> None:
     assert ambiguous_replacements(CLICK_TIMEOUT, context) == ["#save-draft", "#publish"]
 
 

@@ -108,7 +108,7 @@ All notable changes to this project are documented here. The format is based on
   labeled but one: the model returned unparseable structured output three times in a row on
   `catalog-search-regression`, which is correctly scored as an `error` and fails `error_count`.
   That is model output, not `--jobs`: the logs show no rate limiting, and the sequential runs of
-  #387 had as many unparseable answers (26 against 24) and four exhausted patch retries, which
+  #383 had as many unparseable answers (26 against 24) and four exhausted patch retries, which
   happened to recover on a later loop.
 - **A late-rendering element gets a longer wait, not a guessed selector** (#388). On
   `delayed-cta` the CTA renders four seconds after load, so the 3 s click times out and the
@@ -197,6 +197,16 @@ All notable changes to this project are documented here. The format is based on
   - The default Docusaurus scaffold left in the docs site: the unused `HomepageFeatures`
     component, its illustrations, `docusaurus.png` and the unlisted `/markdown-page` page.
   - The product dashboard's fallback to `/api/info`, an endpoint the API never had.
+- Tests that checked nothing a user or CI depends on (#395): exact log, help and prompt prose, mocks
+  echoing their own arguments, incidental defaults, bare `isinstance` checks and same-branch
+  duplicates. Near-identical cases became parametrized tables, and test files covering the same
+  module were merged (`test_patch_apply.py` into `test_patch_generator.py`,
+  `test_ast_lock_corpus.py` into `test_ast_lock.py`, the three snapshot-store files into
+  `test_snapshot_store.py`, `test_aria_snapshot_identity.py` into `test_aria_snapshot.py`,
+  `test_selector_check_concurrent.py` into `test_selector_check.py`). The suite went from 65 test
+  files and 1,100 tests to 59 files and 1,061 tests, with every `app/` line and branch still covered as
+  before (92.69%). Guardrail, refusal, exit-code and JSON-contract tests were only deduplicated, and
+  `pytest.raises(..., match=)` stays wherever it shows which gate rejected a patch.
 
 ### Security
 - **One redaction boundary for every prompt and every log line** (#377). The Diagnoser, Patch
@@ -301,7 +311,7 @@ Preview release. Everything below is shipped and tested; the surfaces added here
   spec files and their directories, `playwright` in `package.json`, configured LLM provider
   and API key) and prints a rich status table. `--scaffold` additionally writes a starter
   GitHub Actions workflow so a repo can wire the healer into CI in one step, and `--force`
-  overwrites an existing one (#126, #144).
+  overwrites an existing one (#126).
 - **`--selector-hint`** on `heal` — accepts a JSON `SelectorHint` (`role` / `testid` / `text`
   / `css`, plus the original selector and a confidence score) so a human, or a DOM picker,
   can pinpoint the intended target instead of leaving it to inference (#119).

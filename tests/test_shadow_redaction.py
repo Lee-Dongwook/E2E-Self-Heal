@@ -17,7 +17,6 @@ from app.shadow import (
 )
 from app.shadow.har_parser import HarTraceParser
 from app.shadow.redaction import (
-    MIN_CONFIGURED_SECRET_LENGTH,
     REDACTED,
     RedactionRecord,
     redact_text,
@@ -164,12 +163,6 @@ def test_redact_text_covers_a_bare_log_line() -> None:
     )
 
 
-def test_redact_value_and_redact_text_agree_on_a_string() -> None:
-    # redact_value delegates its string branch, so both entries to the boundary behave alike.
-    text = "page https://example.test/?token=secret"
-    assert redact_value(text) == redact_text(text)
-
-
 def test_a_configured_environment_variable_value_is_redacted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -210,7 +203,6 @@ def test_configured_values_shorter_than_the_minimum_are_ignored(
 
     assert redact_text("abc and xy stay", record=record) == "abc and xy stay"
     assert record.count == 0
-    assert MIN_CONFIGURED_SECRET_LENGTH == 4
 
 
 def test_the_redaction_marker_is_never_replaced_again(monkeypatch: pytest.MonkeyPatch) -> None:

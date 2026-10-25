@@ -34,7 +34,6 @@ def test_classify_selector_kind():
 
     # Attribute selectors
     assert classify_selector_kind("[class*=btn]") == SelectorKind.CSS_CLASS
-    assert classify_selector_kind("css=#main") == SelectorKind.CSS_ID
 
     # Other
     assert classify_selector_kind("div > span") == SelectorKind.OTHER

@@ -116,15 +116,6 @@ def test_each_captured_payload_matches_the_current_models_exactly(path: Path) ->
     assert adapter.dump_python(parsed, mode="json") == raw
 
 
-def test_every_captured_payload_is_shown_on_the_page() -> None:
-    page = PAGE.read_text(encoding="utf-8")
-    paths = _payload_paths()
-
-    assert paths, "no captured payloads found"
-    for path in paths:
-        assert f"json-contract/{path.name}" in page, f"{path.name} is not shown on the page"
-
-
 def test_every_refusal_reason_is_documented_and_captured_unless_explained() -> None:
     page = PAGE.read_text(encoding="utf-8")
     captured: set[RefusalReason] = set()

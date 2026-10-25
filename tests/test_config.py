@@ -14,10 +14,6 @@ def make_settings(**overrides: Any) -> Settings:
     return Settings(_env_file=None, **overrides)  # type: ignore[call-arg]
 
 
-def test_defaults_to_nvidia_provider():
-    assert make_settings().llm_provider == "nvidia"
-
-
 def test_legacy_nvidia_key_backfills_generic_field():
     # An existing E2E_HEALER_NVIDIA_API_KEY-only setup must keep working: the legacy key
     # is folded into the generic llm_api_key, along with the nvidia base_url/model defaults.
@@ -82,10 +78,6 @@ def test_max_loops_rejects_values_above_three(bad):
 @pytest.mark.parametrize("good", [1, 2, 3])
 def test_max_loops_accepts_one_through_three(good):
     assert make_settings(max_loops=good).max_loops == good
-
-
-def test_max_loops_defaults_to_three():
-    assert make_settings().max_loops == 3
 
 
 @pytest.mark.parametrize("field", ["llm_max_tokens", "nvidia_max_tokens"])

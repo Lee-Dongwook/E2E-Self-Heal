@@ -4,7 +4,6 @@ from langgraph.graph import END
 import app.graph as graph_module
 from app.config import settings
 from app.graph import (
-    build_graph,
     declined_candidate,
     refusal_finalizer,
     route,
@@ -36,16 +35,17 @@ def _state(**overrides) -> AgentState:
     return base
 
 
-def test_route_ends_on_success():
-    assert route(_state(is_success=True)) == END
-
-
-def test_route_ends_on_loop_cap():
-    assert route(_state(loop_count=settings.max_loops)) == "refusal_finalizer"
-
-
-def test_route_continues_when_failing_under_cap():
-    assert route(_state(is_success=False, loop_count=0)) == "diagnoser"
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    [
+        ({"is_success": True}, END),
+        ({"loop_count": settings.max_loops}, "refusal_finalizer"),
+        ({"is_success": False, "loop_count": 0}, "diagnoser"),
+    ],
+    ids=["success", "loop-cap", "retry"],
+)
+def test_route_selects_terminal_or_retry_path(overrides: dict, expected: str) -> None:
+    assert route(_state(**overrides)) == expected
 
 
 def test_memory_hit_starts_verification_and_rejection_retries_diagnosis() -> None:
@@ -75,10 +75,6 @@ def test_capped_memory_verification_failures_finalize_immediately() -> None:
 
     assert route_after_shadow(shadow_state) == "refusal_finalizer"
     assert route_after_verify(selector_state) == "refusal_finalizer"
-
-
-def test_graph_compiles():
-    assert build_graph() is not None
 
 
 @pytest.mark.parametrize(
@@ -146,18 +142,19 @@ def test_a_provider_failure_is_not_a_declined_candidate() -> None:
     assert route_after_patch(failed) == "shadow_verifier"
 
 
-def test_route_after_decline_finalizes_only_a_behaviour_change() -> None:
-    behaviour_change = _state(diagnosis_verdict=DiagnosisVerdict.BEHAVIOUR_CHANGE)
-
-    assert route_after_decline(behaviour_change) == "refusal_finalizer"
-    # No verdict (a provider failure) and the two non-terminal verdicts keep the old path.
-    assert route_after_decline(_state()) == "shadow_verifier"
-    assert route_after_decline(_state(diagnosis_verdict=DiagnosisVerdict.UNCLEAR)) == (
-        "shadow_verifier"
-    )
-    assert route_after_decline(_state(diagnosis_verdict=DiagnosisVerdict.SELECTOR_DRIFT)) == (
-        "shadow_verifier"
-    )
+@pytest.mark.parametrize(
+    ("verdict", "expected"),
+    [
+        (DiagnosisVerdict.BEHAVIOUR_CHANGE, "refusal_finalizer"),
+        (None, "shadow_verifier"),
+        (DiagnosisVerdict.UNCLEAR, "shadow_verifier"),
+        (DiagnosisVerdict.SELECTOR_DRIFT, "shadow_verifier"),
+    ],
+    ids=["behaviour-change", "provider-failure", "unclear", "selector-drift"],
+)
+def test_route_after_decline(verdict: DiagnosisVerdict | None, expected: str) -> None:
+    overrides = {} if verdict is None else {"diagnosis_verdict": verdict}
+    assert route_after_decline(_state(**overrides)) == expected
 
 
 def test_a_missing_diff_outranks_a_behaviour_change_verdict() -> None:

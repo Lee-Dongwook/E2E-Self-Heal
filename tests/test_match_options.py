@@ -18,43 +18,6 @@ def _snapshot(request: CapturedRequest, body: str) -> NetworkSnapshot:
     return NetworkSnapshot(request=request, response=CapturedResponse(status=200, body=body))
 
 
-# ---------------------------------------------------------------------------
-# Default behavior unchanged
-# ---------------------------------------------------------------------------
-
-
-def test_default_options_do_not_change_score():
-    req1 = CapturedRequest(
-        method="POST",
-        url="http://test.com/items?page=1",
-        headers={"Content-Type": "application/json"},
-        body='{"a": 1, "tags": ["x", "y"]}',
-    )
-    req2 = CapturedRequest(
-        method="POST",
-        url="http://test.com/items?page=1",
-        headers={"Content-Type": "application/json"},
-        body='{"a": 1, "tags": ["x", "y"]}',
-    )
-
-    baseline = MatchScorer().calculate_score(req1, req2)
-    with_defaults = MatchScorer(options=MatchOptions()).calculate_score(req1, req2)
-
-    assert baseline == with_defaults
-
-
-# ---------------------------------------------------------------------------
-# Query-param normalization
-# ---------------------------------------------------------------------------
-
-
-def test_ignored_query_params_removes_key_from_scoring():
-    normalizer = RequestNormalizer(MatchOptions(ignored_query_params=frozenset({"debug"})))
-    _, query = normalizer.normalize_url("http://test.com/s?page=1&debug=xyz")
-    assert "debug" not in query
-    assert query["page"] == ["1"]
-
-
 def test_ignored_query_params_near_miss_now_matches_fully():
     req1 = CapturedRequest(method="GET", url="http://test.com/s?page=1&debug=xyz")
     req2 = CapturedRequest(method="GET", url="http://test.com/s?page=1&debug=abc")
@@ -198,15 +161,6 @@ def test_require_body_match_default_allows_partial():
 # ---------------------------------------------------------------------------
 # Fuzzy / order-insensitive array matching
 # ---------------------------------------------------------------------------
-
-
-def test_order_insensitive_arrays_normalizer():
-    default = RequestNormalizer()
-    fuzzy = RequestNormalizer(MatchOptions(order_insensitive_arrays=True))
-
-    body = '{"tags": ["c", "a", "b"]}'
-    assert default.normalize_body(body)["tags"] == ["c", "a", "b"]  # order preserved
-    assert fuzzy.normalize_body(body)["tags"] == ["a", "b", "c"]  # canonicalized
 
 
 def test_order_insensitive_arrays_reorder_matches():

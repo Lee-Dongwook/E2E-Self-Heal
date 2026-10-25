@@ -13,23 +13,16 @@ def test_strategy_guidance_varies_by_framework() -> None:
     svelte = selector_strategy_for("svelte")
 
     assert react.framework == "react"
-    assert "React" in react.guidance
-    assert "CSS-module" in react.guidance
 
     assert vue.framework == "vue"
-    assert "Vue 3" in vue.guidance
-    assert "data-v-*" in vue.guidance
 
     assert svelte.framework == "svelte"
-    assert "Svelte" in svelte.guidance
-    assert "compiled Svelte class names" in svelte.guidance
 
 
 def test_unknown_framework_uses_generic_strategy() -> None:
     strategy = selector_strategy_for("solid")
 
     assert strategy.framework == "generic"
-    assert "generic or unknown" in strategy.guidance
 
 
 def test_build_system_prompt_preserves_guardrails() -> None:

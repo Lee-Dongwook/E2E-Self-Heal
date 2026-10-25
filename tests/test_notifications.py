@@ -43,9 +43,11 @@ def test_noop_when_webhook_unset() -> None:
             mock_urlopen.assert_not_called()
 
 
+@pytest.mark.parametrize("is_success", [True, False], ids=["healed", "failed"])
 @patch("app.notifications.urllib.request.urlopen")
-def test_posts_payload_when_configured(mock_urlopen: MagicMock) -> None:
-    """Should post a correctly formatted payload when webhook is set."""
+def test_posts_structured_payload_when_configured(
+    mock_urlopen: MagicMock, is_success: bool
+) -> None:
     mock_response = MagicMock()
     mock_response.status = 200
     mock_response.__enter__.return_value = mock_response
@@ -58,56 +60,43 @@ def test_posts_payload_when_configured(mock_urlopen: MagicMock) -> None:
         reason="button id changed",
         selector='role=button[name="Submit"]',
     )
-    summary = make_summary(instructions=[instr])
+    summary = make_summary(is_success=is_success, instructions=[instr] if is_success else [])
 
     with patch("app.notifications.settings") as mock_settings:
         mock_settings.slack_webhook_url = "https://hooks.slack.com/services/FAKE"
         notify_heal_outcome(summary)
 
         mock_urlopen.assert_called_once()
-        call_args = mock_urlopen.call_args
-        req = call_args[0][0]
+        req = mock_urlopen.call_args[0][0]
         assert req.full_url == "https://hooks.slack.com/services/FAKE"
 
         payload = json.loads(req.data.decode("utf-8"))
-        assert "Healed" in payload["text"]
-        assert "tests/login.spec.ts" in payload["text"]
-        assert "*Loops:* 2" in payload["text"]
-        assert "button id changed" in payload["text"]
-
-
-@patch("app.notifications.urllib.request.urlopen")
-def test_failed_outcome(mock_urlopen: MagicMock) -> None:
-    """Should post 'Failed' when is_success is False."""
-    mock_response = MagicMock()
-    mock_response.status = 200
-    mock_response.__enter__.return_value = mock_response
-    mock_urlopen.return_value = mock_response
-
-    summary = make_summary(is_success=False)
-
-    with patch("app.notifications.settings") as mock_settings:
-        mock_settings.slack_webhook_url = "https://hooks.slack.com/services/FAKE"
-        notify_heal_outcome(summary)
-
-        req = mock_urlopen.call_args[0][0]
-        payload = json.loads(req.data.decode("utf-8"))
-        assert "Failed" in payload["text"]
+        assert payload["blocks"][0]["type"] == "header"
+        assert summary.test_script_path in payload["text"]
+        assert summary.test_script_path in payload["blocks"][1]["fields"][0]["text"]
+        if is_success:
+            assert "button id changed" in payload["text"]
 
 
 @patch("app.notifications.urllib.request.urlopen")
 def test_retry_on_transient_error(mock_urlopen: MagicMock) -> None:
     """Should retry on URLError and eventually log failure without crashing."""
     mock_urlopen.side_effect = URLError("connection refused")
+    retry_config = cast(Any, _post_to_slack).retry
+    original_wait = retry_config.wait
+    retry_config.wait = wait_none()
 
-    with patch("app.notifications.settings") as mock_settings:
-        mock_settings.slack_webhook_url = "https://hooks.slack.com/services/FAKE"
+    try:
+        with patch("app.notifications.settings") as mock_settings:
+            mock_settings.slack_webhook_url = "https://hooks.slack.com/services/FAKE"
 
-        # Should not raise an exception to the caller because notify_heal_outcome catches it
-        notify_heal_outcome(make_summary())
+            # Should not raise an exception to the caller because notify_heal_outcome catches it
+            notify_heal_outcome(make_summary())
 
-        # tenacity should have retried exactly 3 times
-        assert mock_urlopen.call_count == 3
+            # tenacity should have retried exactly 3 times
+            assert mock_urlopen.call_count == 3
+    finally:
+        retry_config.wait = original_wait
 
 
 @pytest.mark.parametrize("status", [429, 500, 503, 599])
