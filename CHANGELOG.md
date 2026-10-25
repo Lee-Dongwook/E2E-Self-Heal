@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-25
+
+The first release whose safety gates are enforced on a corpus large enough to mean something:
+44 runnable scenarios, 20 of them product regressions paired with a drift twin. The release run
+(`safety-benchmark --apply-patches --jobs 4 --enforce-gates`, Claude Sonnet 4.6) scored all 44 as
+labeled: `false_green_rate` 0% (n=20), `refusal_accuracy` 100% (n=22), `incorrect_refusal_rate` 0%
+(n=22), `error_count` 0. A three-repeat run with `deepseek-v4-flash` (132 runs) met the same three
+rate gates with no false green, but failed `error_count` on one run: see Known issues.
+
+### Known issues
+- **`deepseek-v4-flash` sometimes returns an empty or truncated answer.** Over the 132-run
+  release check it returned 62 empty completions and 14 unparseable structured outputs. Retries
+  absorbed all but one, which ended a run as `provider_error` (`catalog-search-regression`, the same
+  scenario as in an earlier run). The empty answers cluster on the product-regression scenarios,
+  where the model reasons longest, and take about as long as generating the 4,096-token default
+  cap, so the reasoning most likely uses up the output budget. On the two worst scenarios,
+  `E2E_HEALER_LLM_MAX_TOKENS=16384` cut empty answers from 5.0 to 1.25 per run and unparseable ones
+  from 2.2 to 0, over a small sample (6 and 4 runs). Set it when using DeepSeek; the default is
+  unchanged.
+
 ### Added
 - **`safety-benchmark --jobs N` runs scenarios in parallel, with live progress.** Scenarios
   share one demo app, so they ran one after another and a full corpus took about 29 minutes,
@@ -214,6 +234,8 @@ All notable changes to this project are documented here. The format is based on
   files and 1,100 tests to 59 files and 1,061 tests, with every `app/` line and branch still covered as
   before (92.69%). Guardrail, refusal, exit-code and JSON-contract tests were only deduplicated, and
   `pytest.raises(..., match=)` stays wherever it shows which gate rejected a patch.
+- `README_AR.md`, a partial Arabic translation whose language links pointed at files that do not
+  exist. `README.ar.md` follows the naming of the other translations and stays.
 
 ### Security
 - **One redaction boundary for every prompt and every log line** (#377). The Diagnoser, Patch
@@ -473,7 +495,8 @@ Preview release. Everything below is shipped and tested; the surfaces added here
 - LLM provider migrated from OpenAI to NVIDIA NIM (`openai/gpt-oss-120b`) via the
   OpenAI-compatible endpoint; Structured Outputs guardrail retained.
 
-[Unreleased]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5-pre...v0.5.0
 [0.5.0-pre]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.4.0...v0.5-pre
 [0.4.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.3.0...v0.4.0
