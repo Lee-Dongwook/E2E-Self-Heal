@@ -108,7 +108,7 @@ All notable changes to this project are documented here. The format is based on
   labeled but one: the model returned unparseable structured output three times in a row on
   `catalog-search-regression`, which is correctly scored as an `error` and fails `error_count`.
   That is model output, not `--jobs`: the logs show no rate limiting, and the sequential runs of
-  #387 had as many unparseable answers (26 against 24) and four exhausted patch retries, which
+  #383 had as many unparseable answers (26 against 24) and four exhausted patch retries, which
   happened to recover on a later loop.
 - **A late-rendering element gets a longer wait, not a guessed selector** (#388). On
   `delayed-cta` the CTA renders four seconds after load, so the 3 s click times out and the
@@ -311,7 +311,7 @@ Preview release. Everything below is shipped and tested; the surfaces added here
   spec files and their directories, `playwright` in `package.json`, configured LLM provider
   and API key) and prints a rich status table. `--scaffold` additionally writes a starter
   GitHub Actions workflow so a repo can wire the healer into CI in one step, and `--force`
-  overwrites an existing one (#126, #144).
+  overwrites an existing one (#126).
 - **`--selector-hint`** on `heal` — accepts a JSON `SelectorHint` (`role` / `testid` / `text`
   / `css`, plus the original selector and a confidence score) so a human, or a DOM picker,
   can pinpoint the intended target instead of leaving it to inference (#119).
