@@ -3,24 +3,12 @@ from unittest.mock import patch
 from app.nodes.diagnoser import DIAGNOSIS_UNAVAILABLE, diagnoser
 from app.preprocess.aria_snapshot import abstract_snapshot
 from app.state import AgentState
+from tests.factories import make_state
 
 
-def _state(**overrides) -> AgentState:
-    base: AgentState = {
-        "test_script_path": "t.spec.ts",
-        "original_code": "",
-        "current_code": 'await page.click("#old")',
-        "error_log": "Error: timeout",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "",
-        "patch_instructions": {},
-        "verification_report": {},
-        "loop_count": 0,
-        "is_success": False,
-    }
-    base.update(overrides)  # type: ignore[typeddict-item]
-    return base
+def _state(**overrides: object) -> AgentState:
+    defaults = {"current_code": 'await page.click("#old")', "error_log": "Error: timeout"}
+    return make_state(**(defaults | overrides))
 
 
 def test_abstract_snapshot_truncates_long_input():

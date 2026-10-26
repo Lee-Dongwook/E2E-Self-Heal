@@ -16,21 +16,22 @@ from app.nodes.patch_generator import patch_generator
 from app.nodes.reviewer import reviewer
 from app.schemas import DiagnosisVerdict, DiagnosisVerdictOutput, PatchOutput, ReviewOutput
 from app.state import AgentState
+from tests.factories import make_state
 
 SECRET = "sk-live-9f8e7d6c5b4a"
 
 # Every field a prompt can be assembled from carries the secret, so a node that forgets to route
 # one of them through the boundary fails the matching test below.
-LEAKY_STATE: AgentState = {
-    "test_script_path": "tests/login.spec.ts",
-    "original_code": "await page.click('#login');\n",
-    "current_code": "await page.click('#login');\n",
-    "error_log": (
+LEAKY_STATE = make_state(
+    test_script_path="tests/login.spec.ts",
+    original_code="await page.click('#login');\n",
+    current_code="await page.click('#login');\n",
+    error_log=(
         "Error: locator('#login') timed out.\n"
         f"  request header was authorization: bearer {SECRET}\n"
         "  at tests/login.spec.ts:4:16"
     ),
-    "dom_diff_context": [
+    dom_diff_context=[
         {
             "file": "src/Login.tsx",
             "line": 12,
@@ -38,13 +39,9 @@ LEAKY_STATE: AgentState = {
             "current": {"tag": "input", "attributes": {"data-token": SECRET}},
         }
     ],
-    "dom_snapshot": f"- textbox: Email\n- button: Submit {SECRET}",
-    "analysis_report": f"The submit handler quotes the credential {SECRET} inline.",
-    "patch_instructions": {},
-    "verification_report": {},
-    "loop_count": 0,
-    "is_success": False,
-}
+    dom_snapshot=f"- textbox: Email\n- button: Submit {SECRET}",
+    analysis_report=f"The submit handler quotes the credential {SECRET} inline.",
+)
 
 
 @pytest.fixture(autouse=True)

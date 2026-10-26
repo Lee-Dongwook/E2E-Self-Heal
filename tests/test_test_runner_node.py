@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 import app.nodes.test_runner as test_runner_node
-from app.state import AgentState
+from tests.factories import make_state
 
 
 def test_memory_test_failure_restores_original_source(
@@ -14,20 +14,12 @@ def test_memory_test_failure_restores_original_source(
     candidate = "await page.click('#new')\n"
     test_file.write_text(original, encoding="utf-8")
     monkeypatch.setattr(test_runner_node, "run_playwright", lambda _: (False, "still failing"))
-    state: AgentState = {
-        "test_script_path": str(test_file),
-        "original_code": original,
-        "current_code": candidate,
-        "error_log": "",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "",
-        "patch_instructions": {},
-        "verification_report": {},
-        "memory_report": {"active": True},
-        "loop_count": 0,
-        "is_success": False,
-    }
+    state = make_state(
+        test_script_path=str(test_file),
+        original_code=original,
+        current_code=candidate,
+        memory_report={"active": True},
+    )
 
     result = test_runner_node.test_runner(state)
 

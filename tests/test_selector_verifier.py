@@ -6,6 +6,7 @@ from app.graph import route_after_verify
 from app.nodes.selector_verifier import selector_verifier
 from app.schemas import PatchInstruction, PatchOutput
 from app.state import AgentState
+from tests.factories import make_state
 
 ORIGINAL = "await page.click('#old')\n"
 PATCHED = "await page.click('#new')\n"
@@ -21,22 +22,14 @@ def _instruction(selector: str) -> PatchInstruction:
     )
 
 
-def _state(selector: str = "#new", **overrides) -> AgentState:
-    base: AgentState = {
-        "test_script_path": "t.spec.ts",
+def _state(selector: str = "#new", **overrides: object) -> AgentState:
+    defaults = {
         "original_code": ORIGINAL,
         "current_code": PATCHED,
-        "error_log": "",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
         "analysis_report": "diagnosis",
         "patch_instructions": PatchOutput(instructions=[_instruction(selector)]).model_dump(),
-        "verification_report": {},
-        "loop_count": 0,
-        "is_success": False,
     }
-    base.update(overrides)  # type: ignore[typeddict-item]
-    return base
+    return make_state(**(defaults | overrides))
 
 
 def test_skips_when_disabled(monkeypatch):
