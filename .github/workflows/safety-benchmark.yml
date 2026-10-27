@@ -100,6 +100,9 @@ jobs:
         working-directory: examples
         env:
           E2E_HEALER_NVIDIA_API_KEY: ${{ secrets.E2E_HEALER_NVIDIA_API_KEY }}
+          # The worker logs are uploaded as an artifact, which GitHub's secret masking does not
+          # cover. Name the key so the engine's own log redaction replaces it wherever it appears.
+          E2E_HEALER_SENSITIVE_ENV_VARS: E2E_HEALER_NVIDIA_API_KEY
           # The example Playwright config adds a reporter that runs `e2e-healer review` on every
           # failing test. Benchmark scenarios fail on purpose, so that would add unrelated model
           # calls and distort latency. Use the plain list reporter.

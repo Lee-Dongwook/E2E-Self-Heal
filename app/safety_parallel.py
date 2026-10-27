@@ -28,6 +28,8 @@ from typing import Any
 
 import structlog
 
+from app.config import settings
+from app.logging import configure_logging
 from app.safety_benchmark import (
     ActualOutcome,
     SafetyBenchmarkReport,
@@ -140,6 +142,10 @@ def _init_worker(slots: Queue[WorkerSlot], executor: ScenarioExecutor) -> None:
     os.dup2(log, 1)
     os.dup2(log, 2)
     os.close(log)
+    # A spawned worker starts with structlog's defaults, which render tracebacks with every
+    # frame's local variables and skip redaction, so a provider error could write a credential
+    # held in a local into this file. Use the app's configuration: plain tracebacks, redacted.
+    configure_logging(settings.log_level)
     os.chdir(slot.project_dir)
     os.environ["E2E_DEMO_PORT"] = str(slot.port)
     _WORKER_SCENARIOS.update(

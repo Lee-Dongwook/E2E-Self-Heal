@@ -23,6 +23,15 @@ All notable changes to this project are documented here. The format is based on
   strict-schema verdict. An explicit `E2E_HEALER_LLM_MODEL` or `E2E_HEALER_NVIDIA_MODEL` is
   unaffected.
 
+### Security
+- **Parallel safety-benchmark workers redact their logs** (#402). With `--jobs`, each worker
+  process wrote its log with structlog's defaults: tracebacks rendered every frame's local
+  variables, and the log redaction never ran. A provider error raised where a local held the API
+  key wrote the key into `worker-<n>.log`. Workers now use the same logging configuration as the
+  CLI (plain tracebacks, redacted). The CI workflow, which now uploads those logs, also names
+  `E2E_HEALER_NVIDIA_API_KEY` in `E2E_HEALER_SENSITIVE_ENV_VARS`, so the key is replaced wherever
+  it appears. Logs from earlier local `--jobs` runs may contain a key and should be deleted.
+
 ## [0.6.0] - 2026-10-25
 
 The first release whose safety gates are enforced on a corpus large enough to mean something:
