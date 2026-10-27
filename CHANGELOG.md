@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-25
+
+The first release whose safety gates are enforced on a corpus large enough to mean something:
+44 runnable scenarios, 20 of them product regressions paired with a drift twin. The release run
+(`safety-benchmark --apply-patches --jobs 4 --enforce-gates`, Claude Sonnet 4.6) scored all 44 as
+labeled: `false_green_rate` 0% (n=20), `refusal_accuracy` 100% (n=22), `incorrect_refusal_rate` 0%
+(n=22), `error_count` 0.
+
+### Known issues
+- With `deepseek-v4-flash`, a run can occasionally end as `provider_error` because the model
+  returns an empty answer on every retry, most often on long product-regression diagnoses. A
+  higher `E2E_HEALER_LLM_MAX_TOKENS` (for example `16384`) appeared to help in a small test.
+
 ### Added
 - **The repair loop's control flow is in the result, schema `2.3`** (#375). `evidence.path` lists
   every graph node the run executed with its loop count, so a rejected candidate followed by a new
@@ -227,6 +240,8 @@ All notable changes to this project are documented here. The format is based on
   files and 1,100 tests to 59 files and 1,061 tests, with every `app/` line and branch still covered as
   before (92.69%). Guardrail, refusal, exit-code and JSON-contract tests were only deduplicated, and
   `pytest.raises(..., match=)` stays wherever it shows which gate rejected a patch.
+- `README_AR.md`, a partial Arabic translation whose language links pointed at files that do not
+  exist. `README.ar.md` follows the naming of the other translations and stays.
 
 ### Security
 - **One redaction boundary for every prompt and every log line** (#377). The Diagnoser, Patch
@@ -486,7 +501,8 @@ Preview release. Everything below is shipped and tested; the surfaces added here
 - LLM provider migrated from OpenAI to NVIDIA NIM (`openai/gpt-oss-120b`) via the
   OpenAI-compatible endpoint; Structured Outputs guardrail retained.
 
-[Unreleased]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5-pre...v0.5.0
 [0.5.0-pre]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.4.0...v0.5-pre
 [0.4.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.3.0...v0.4.0
