@@ -1,5 +1,7 @@
 """Assemble the repair StateGraph and its conditional Router edge."""
 
+from typing import Protocol, cast
+
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 import structlog
@@ -15,11 +17,18 @@ from app.nodes.selector_verifier import selector_verifier
 from app.nodes.shadow_verifier import shadow_verifier
 from app.nodes.test_runner import test_runner
 from app.schemas import DiagnosisVerdict, RefusalReason
-from app.state import AgentState
+from app.state import AgentState, EvidenceCandidateRecord, GraphStepRecord
 
 logger = structlog.get_logger(__name__)
 _REFUSAL_FINALIZER = "refusal_finalizer"
 _DECLINE_ADJUDICATOR = "decline_adjudicator"
+_DECIDED = ("accepted", "rejected")
+
+
+class Node(Protocol):
+    """A repair-graph node: reads the state and returns a partial update."""
+
+    def __call__(self, state: AgentState) -> dict: ...
 
 
 def route(state: AgentState) -> str:
@@ -159,17 +168,67 @@ def route_after_verify(state: AgentState) -> str:
     return "patch_generator"
 
 
+def _with_next_step(
+    state: AgentState, update: dict, node: str
+) -> list[EvidenceCandidateRecord] | None:
+    """Name ``node`` as the next step of every candidate decided before it ran.
+
+    A candidate is decided by the step that accepts or rejects it, so the node running now is
+    where the router sent the run from there. Returns None when nothing changed.
+    """
+    before = state.get("evidence_candidates", [])
+    pending = [
+        index
+        for index, candidate in enumerate(before)
+        if candidate["outcome"] in _DECIDED and "next_step" not in candidate
+    ]
+    if not pending:
+        return None
+    after = [
+        cast(EvidenceCandidateRecord, dict(candidate))
+        for candidate in update.get("evidence_candidates", before)
+    ]
+    for index in pending:
+        after[index]["next_step"] = node
+    return after
+
+
+def _recorded(name: str, node: Node) -> Node:
+    """Wrap a node so the run keeps an exact, ordered record of what executed.
+
+    Routing stays in the conditional edges; this only observes it, at the moment it happens,
+    so the evidence never re-derives a decision the router made.
+    """
+
+    def run(state: AgentState) -> dict:
+        update = dict(node(state))
+        loop_count = update.get("loop_count", state["loop_count"])
+        step: GraphStepRecord = {"node": name, "loop_count": loop_count}
+        update["graph_path"] = [*state.get("graph_path", []), step]
+        candidates = _with_next_step(state, update, name)
+        if candidates is not None:
+            update["evidence_candidates"] = candidates
+        logger.info("graph_step", node=name, loop_count=loop_count)
+        return update
+
+    return run
+
+
 def build_graph() -> CompiledStateGraph:
     """Build and compile the Diagnoser → Patch Generator → Shadow Verifier → Selector Verifier → Test Runner loop."""
     graph = StateGraph(AgentState)
-    graph.add_node("memory_lookup", memory_lookup)
-    graph.add_node("diagnoser", diagnoser)
-    graph.add_node("patch_generator", patch_generator)
-    graph.add_node(_DECLINE_ADJUDICATOR, decline_adjudicator)
-    graph.add_node("shadow_verifier", shadow_verifier)
-    graph.add_node("selector_verifier", selector_verifier)
-    graph.add_node("test_runner", test_runner)
-    graph.add_node(_REFUSAL_FINALIZER, refusal_finalizer)
+    nodes: dict[str, Node] = {
+        "memory_lookup": memory_lookup,
+        "diagnoser": diagnoser,
+        "patch_generator": patch_generator,
+        _DECLINE_ADJUDICATOR: decline_adjudicator,
+        "shadow_verifier": shadow_verifier,
+        "selector_verifier": selector_verifier,
+        "test_runner": test_runner,
+        _REFUSAL_FINALIZER: refusal_finalizer,
+    }
+    for name, node in nodes.items():
+        graph.add_node(name, _recorded(name, node))
 
     graph.add_conditional_edges(
         START,

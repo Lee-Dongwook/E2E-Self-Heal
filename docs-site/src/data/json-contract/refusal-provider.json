@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.2",
+  "schema_version": "2.3",
   "kind": "refusal",
   "test_script_path": "scenarios/id-rename/spec.ts",
   "reason": "provider_error",
@@ -31,9 +31,9 @@
       }
     ],
     "aria_snapshot": {
-      "sha256": "9a97acc4eeb60225fa7ca89eff931265d6a6dd293f9ab18f2491f4f651076fa6",
+      "sha256": "639d4fd977c9486e9e1d5e134c639e37e0174568ee4b934138599068ae501a84",
       "source_path": "test-results/id-rename-spec.ts-submits-the-form/error-context.md",
-      "chars": 310
+      "chars": 705
     },
     "candidates": [],
     "loop_history": [
@@ -199,6 +199,78 @@
       "mode": "remote",
       "redaction_applied": false,
       "redaction_count": 0
-    }
-  }
+    },
+    "path": [
+      {
+        "node": "memory_lookup",
+        "loop_count": 0
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 0
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 0
+      },
+      {
+        "node": "shadow_verifier",
+        "loop_count": 0
+      },
+      {
+        "node": "selector_verifier",
+        "loop_count": 0
+      },
+      {
+        "node": "test_runner",
+        "loop_count": 1
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 1
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 1
+      },
+      {
+        "node": "shadow_verifier",
+        "loop_count": 1
+      },
+      {
+        "node": "selector_verifier",
+        "loop_count": 1
+      },
+      {
+        "node": "test_runner",
+        "loop_count": 2
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 2
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 2
+      },
+      {
+        "node": "shadow_verifier",
+        "loop_count": 2
+      },
+      {
+        "node": "selector_verifier",
+        "loop_count": 2
+      },
+      {
+        "node": "test_runner",
+        "loop_count": 3
+      },
+      {
+        "node": "refusal_finalizer",
+        "loop_count": 3
+      }
+    ],
+    "loop_budget": 3
+  },
+  "termination": "refused"
 }

@@ -344,3 +344,4 @@ def test_suite_final_rerun_rejects_previously_accepted_candidate(
     assert result.evidence.candidates[0].outcome == "rejected"
     assert result.evidence.candidates[0].rejection == "final_suite_failed"
     assert result.evidence.loop_history[-1].outcome == "final_suite_failed"
+    assert result.termination == "verification_failed"

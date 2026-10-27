@@ -20,6 +20,7 @@ from app.schemas import (
     CandidateEvidence,
     EvidenceBundle,
     EvidenceDomDiff,
+    GraphStep,
     HealResult,
     LoopEvidence,
     LoopEvidenceDetails,
@@ -50,6 +51,7 @@ DOCUMENTED_MODELS: list[type[BaseModel]] = [
     SelectorHintEvidence,
     SnapshotReference,
     CandidateEvidence,
+    GraphStep,
     AstLockRejection,
     LoopEvidence,
     LoopEvidenceDetails,
@@ -100,7 +102,8 @@ def test_every_field_of_every_model_is_documented(model: type[BaseModel]) -> Non
 
     assert model.__name__ in sections, f"the page has no `{model.__name__}` section"
     # Both directions: an undocumented field, or a documented field that no longer exists.
-    assert sections[model.__name__] == set(model.model_fields)
+    # Computed fields are serialized like any other, so they are part of the contract too.
+    assert sections[model.__name__] == set(model.model_fields) | set(model.model_computed_fields)
 
 
 @pytest.mark.parametrize("path", _payload_paths(), ids=lambda path: path.stem)

@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.2",
+  "schema_version": "2.3",
   "kind": "refusal",
   "test_script_path": "scenarios/product-regression/spec.ts",
   "reason": "loop_cap_reached",
@@ -11,7 +11,7 @@
     "dom_diff_context": [
       {
         "file": "examples/demo-app/src/App.tsx",
-        "line": 13,
+        "line": 43,
         "previous": {
           "tag": "form",
           "attributes": {
@@ -34,34 +34,7 @@
             "line": 5,
             "original": "  await page.click(\"#submit-btn\");",
             "replacement": "  await page.click(\"#submit-btn\", { timeout: 10000 });",
-            "reason": "The onSubmit handler was removed from the form element, so the standard form submission path is broken. Increasing the timeout on the click gives any async re-attachment of the handler or hydration more time to complete before the action fires, while keeping the same selector that targets the submit button.",
-            "selector": "#submit-btn"
-          },
-          {
-            "line": 6,
-            "original": "  await expect(page.getByText(\"Thanks!\")).toBeVisible();",
-            "replacement": "  await expect(page.getByText(\"Thanks!\")).toBeVisible({ timeout: 10000 });",
-            "reason": "Raise the visibility timeout so the test waits longer for the confirmation message to appear after React re-renders, accommodating any hydration or async state update delay.",
-            "selector": "text=Thanks!"
-          }
-        ],
-        "memory_score": null,
-        "shadow_score": null,
-        "selector_counts": {},
-        "test_passed": null,
-        "outcome": "rejected",
-        "rejection": "line 6 targets an assertion",
-        "ast_lock": null
-      },
-      {
-        "loop_count": 1,
-        "source": "llm",
-        "instructions": [
-          {
-            "line": 5,
-            "original": "  await page.click(\"#submit-btn\");",
-            "replacement": "  await page.click(\"#submit-btn\", { timeout: 10000 });",
-            "reason": "The onSubmit handler was removed from the form element, so the confirmation message may take longer to appear or require the button click to be waited on more patiently. Raising the timeout gives the React re-render more time to complete after the click, increasing the chance the 'Thanks!' text becomes visible.",
+            "reason": "The submit handler was removed from the form, meaning the UI never updates to show 'Thanks!'. Since the locator itself is confirmed correct and the diff did not rename any selector, the only fix within scope is to raise the timeout on the click action to give any async re-wiring or hydration more time to complete before the subsequent assertion.",
             "selector": ""
           }
         ],
@@ -71,18 +44,19 @@
         "test_passed": false,
         "outcome": "rejected",
         "rejection": "test_failed",
-        "ast_lock": null
+        "ast_lock": null,
+        "next_step": "diagnoser"
       },
       {
-        "loop_count": 2,
+        "loop_count": 1,
         "source": "llm",
         "instructions": [
           {
             "line": 5,
             "original": "  await page.click(\"#submit-btn\", { timeout: 10000 });",
-            "replacement": "  await page.click(\"[type='submit']\", { timeout: 10000 });",
-            "reason": "The #submit-btn selector targets the submit button by ID, but the onSubmit handler was removed from the form element. Switching to the submit button via its type attribute triggers the native form submission which the React component handles via its event binding, ensuring the success message is rendered.",
-            "selector": "[type='submit']"
+            "replacement": "  await page.click(\"#submit-btn\", { timeout: 20000 });",
+            "reason": "The form's onSubmit handler was removed from the DOM, meaning the submit logic never fires and 'Thanks!' never appears. Since the locator itself is valid and the issue is a DOM-side breakage (not a selector mismatch), we cannot fix the missing handler via a selector change. Raising the timeout on the existing click action is the only permitted wait/locator tweak available here; this gives the app more time in case of async hydration delays, but the root cause (missing onSubmit) must be fixed in the application code.",
+            "selector": "#submit-btn"
           }
         ],
         "memory_score": null,
@@ -91,7 +65,29 @@
         "test_passed": false,
         "outcome": "rejected",
         "rejection": "test_failed",
-        "ast_lock": null
+        "ast_lock": null,
+        "next_step": "diagnoser"
+      },
+      {
+        "loop_count": 2,
+        "source": "llm",
+        "instructions": [
+          {
+            "line": 5,
+            "original": "  await page.click(\"#submit-btn\", { timeout: 20000 });",
+            "replacement": "  await page.click(\"#submit-btn\", { timeout: 20000 });",
+            "reason": "The failure is caused by a missing onSubmit handler in the application code, not by the test selector or wait conditions. The locator getByText('Thanks!') is confirmed correct and the submit button selector is unchanged. No locator or wait fix is warranted — the test itself is not the source of the failure.",
+            "selector": ""
+          }
+        ],
+        "memory_score": null,
+        "shadow_score": null,
+        "selector_counts": {},
+        "test_passed": false,
+        "outcome": "rejected",
+        "rejection": "test_failed",
+        "ast_lock": null,
+        "next_step": "refusal_finalizer"
       }
     ],
     "loop_history": [
@@ -109,10 +105,43 @@
       {
         "loop_count": 0,
         "stage": "patch_generator",
-        "outcome": "application_rejected",
+        "outcome": "candidate_generated",
         "details": {
           "score": null,
-          "error": "line 6 targets an assertion",
+          "error": null,
+          "instruction_count": 1,
+          "reason": null
+        }
+      },
+      {
+        "loop_count": 0,
+        "stage": "shadow_verifier",
+        "outcome": "skipped",
+        "details": {
+          "score": null,
+          "error": null,
+          "instruction_count": null,
+          "reason": null
+        }
+      },
+      {
+        "loop_count": 0,
+        "stage": "selector_verifier",
+        "outcome": "skipped",
+        "details": {
+          "score": null,
+          "error": null,
+          "instruction_count": null,
+          "reason": null
+        }
+      },
+      {
+        "loop_count": 0,
+        "stage": "test_runner",
+        "outcome": "failed",
+        "details": {
+          "score": null,
+          "error": null,
           "instruction_count": null,
           "reason": null
         }
@@ -224,6 +253,78 @@
       "mode": "remote",
       "redaction_applied": false,
       "redaction_count": 0
-    }
-  }
+    },
+    "path": [
+      {
+        "node": "memory_lookup",
+        "loop_count": 0
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 0
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 0
+      },
+      {
+        "node": "shadow_verifier",
+        "loop_count": 0
+      },
+      {
+        "node": "selector_verifier",
+        "loop_count": 0
+      },
+      {
+        "node": "test_runner",
+        "loop_count": 1
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 1
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 1
+      },
+      {
+        "node": "shadow_verifier",
+        "loop_count": 1
+      },
+      {
+        "node": "selector_verifier",
+        "loop_count": 1
+      },
+      {
+        "node": "test_runner",
+        "loop_count": 2
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 2
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 2
+      },
+      {
+        "node": "shadow_verifier",
+        "loop_count": 2
+      },
+      {
+        "node": "selector_verifier",
+        "loop_count": 2
+      },
+      {
+        "node": "test_runner",
+        "loop_count": 3
+      },
+      {
+        "node": "refusal_finalizer",
+        "loop_count": 3
+      }
+    ],
+    "loop_budget": 3
+  },
+  "termination": "verification_failed"
 }

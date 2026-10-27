@@ -59,6 +59,8 @@ def _request(payload: dict[str, Any], *, kind_offset: int = 0) -> dict[str, Any]
                 "test_script_path": "tests/login.spec.ts",
                 "is_success": True,
                 "loop_count": 1,
+                # Always emitted by the core since 2.3; derived, so it round-trips unchanged.
+                "termination": "verified",
             },
             True,
         ),
@@ -71,6 +73,7 @@ def _request(payload: dict[str, Any], *, kind_offset: int = 0) -> dict[str, Any]
                 "is_success": False,
                 "loop_count": 1,
                 "evidence": {},
+                "termination": "refused",
             },
             False,
         ),

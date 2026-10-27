@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **The repair loop's control flow is in the result, schema `2.3`** (#375). `evidence.path` lists
+  every graph node the run executed with its loop count, so a rejected candidate followed by a new
+  attempt reads as one ordered trace (`…, test_runner, diagnoser, patch_generator, …`). Each
+  candidate's `next_step` names where the router sent the run once it was accepted or rejected (or
+  `end`), `evidence.loop_budget` states the cap, and a new `termination` on repairs and refusals
+  says how the run ended: `verified`, `refused` (any refusal reason but the loop cap),
+  `budget_exhausted` (the cap, with no verifier rejecting the last candidate) or
+  `verification_failed` (the cap after a verifier rejected it, or a repair the final suite rerun
+  rejected). The path is recorded by a wrapper around each node in `build_graph`, at the moment the
+  node runs, so the routers are unchanged and nothing re-derives their decisions; the same steps go
+  to the log as `graph_step`, and `repair_run_finished` now carries `loop_budget` and
+  `termination`. All four are optional additions, so `2.3` is a compatible minor bump; node names
+  are an open set, `termination` is closed.
 - **`safety-benchmark --jobs N` runs scenarios in parallel, with live progress.** Scenarios
   share one demo app, so they ran one after another and a full corpus took about 29 minutes,
   mostly Playwright rebuilding the app and model latency. With `--jobs N` each of `N` worker

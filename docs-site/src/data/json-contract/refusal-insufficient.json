@@ -1,12 +1,12 @@
 {
-  "schema_version": "2.2",
+  "schema_version": "2.3",
   "kind": "refusal",
   "test_script_path": "scenarios/wrong-base-url/spec.ts",
   "reason": "insufficient_evidence",
   "is_success": false,
   "loop_count": 3,
   "evidence": {
-    "parsed_error": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4174/",
+    "parsed_error": "Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:47/",
     "failing_selector": "",
     "dom_diff_context": [],
     "aria_snapshot": null,
@@ -21,7 +21,8 @@
         "test_passed": false,
         "outcome": "rejected",
         "rejection": "test_failed",
-        "ast_lock": null
+        "ast_lock": null,
+        "next_step": "diagnoser"
       },
       {
         "loop_count": 1,
@@ -33,7 +34,8 @@
         "test_passed": false,
         "outcome": "rejected",
         "rejection": "test_failed",
-        "ast_lock": null
+        "ast_lock": null,
+        "next_step": "diagnoser"
       },
       {
         "loop_count": 2,
@@ -45,7 +47,8 @@
         "test_passed": false,
         "outcome": "rejected",
         "rejection": "test_failed",
-        "ast_lock": null
+        "ast_lock": null,
+        "next_step": "refusal_finalizer"
       }
     ],
     "loop_history": [
@@ -211,6 +214,90 @@
       "mode": "remote",
       "redaction_applied": false,
       "redaction_count": 0
-    }
-  }
+    },
+    "path": [
+      {
+        "node": "memory_lookup",
+        "loop_count": 0
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 0
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 0
+      },
+      {
+        "node": "decline_adjudicator",
+        "loop_count": 0
+      },
+      {
+        "node": "shadow_verifier",
+        "loop_count": 0
+      },
+      {
+        "node": "selector_verifier",
+        "loop_count": 0
+      },
+      {
+        "node": "test_runner",
+        "loop_count": 1
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 1
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 1
+      },
+      {
+        "node": "decline_adjudicator",
+        "loop_count": 1
+      },
+      {
+        "node": "shadow_verifier",
+        "loop_count": 1
+      },
+      {
+        "node": "selector_verifier",
+        "loop_count": 1
+      },
+      {
+        "node": "test_runner",
+        "loop_count": 2
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 2
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 2
+      },
+      {
+        "node": "decline_adjudicator",
+        "loop_count": 2
+      },
+      {
+        "node": "shadow_verifier",
+        "loop_count": 2
+      },
+      {
+        "node": "selector_verifier",
+        "loop_count": 2
+      },
+      {
+        "node": "test_runner",
+        "loop_count": 3
+      },
+      {
+        "node": "refusal_finalizer",
+        "loop_count": 3
+      }
+    ],
+    "loop_budget": 3
+  },
+  "termination": "refused"
 }

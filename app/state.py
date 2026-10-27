@@ -66,6 +66,15 @@ class EvidenceCandidateRecord(TypedDict):
     selector_counts: NotRequired[dict[str, int]]
     test_passed: NotRequired[bool]
     ast_lock: NotRequired[EvidenceAstLockRecord]
+    # Graph node the run moved to once this candidate was accepted or rejected (graph.py).
+    next_step: NotRequired[str]
+
+
+class GraphStepRecord(TypedDict):
+    """One node the repair graph executed, appended by the wrapper in ``build_graph``."""
+
+    node: str
+    loop_count: int
 
 
 class EvidenceLoopDetails(TypedDict, total=False):
@@ -127,6 +136,7 @@ class AgentState(TypedDict):
     refusal_reason: NotRequired[RefusalReason]  # exact reason for a terminal repair refusal
     evidence_candidates: NotRequired[list[EvidenceCandidateRecord]]
     evidence_history: NotRequired[list[EvidenceLoopRecord]]
+    graph_path: NotRequired[list[GraphStepRecord]]  # every executed node, in order
     # Number of values the evidence boundary replaced while preparing model prompts, and whether
     # anything was replaced at all. Reported in the result as provider provenance.
     redaction_count: NotRequired[int]

@@ -27,8 +27,10 @@ full table of outcomes, documents and exit codes.
 ## JSON contract
 
 Every result contains a `schema_version` and `kind` discriminator. Current output is schema
-`"2.1"`: version 2 introduced the first-class `"refusal"` kind and its closed reason taxonomy,
-and 2.1 added the optional `ast_lock` detail on rejected candidates (a compatible minor change).
+`"2.3"`: version 2 introduced the first-class `"refusal"` kind and its closed reason taxonomy,
+2.1 added the optional `ast_lock` detail on rejected candidates, 2.2 the evidence `provenance`,
+and 2.3 the executed graph `path`, the `loop_budget`, each candidate's `next_step` and the
+result's `termination` (all compatible minor changes).
 Consumers must reject unsupported schema majors and unknown `kind` or refusal-reason values, and
 must ignore unknown optional fields within a supported major.
 See the [schema versioning and deprecation policy](./schema-versioning) for the compatibility
@@ -36,20 +38,22 @@ and migration rules.
 
 | Field | `RepairSummary` | `RefusalReport` | `SuiteSummary` | `ReviewReport` |
 | --- | --- | --- | --- | --- |
-| `schema_version` | `"2.1"` | `"2.1"` | `"2.1"` | `"2.1"` |
+| `schema_version` | `"2.3"` | `"2.3"` | `"2.3"` | `"2.3"` |
 | `kind` | `"repair"` | `"refusal"` | `"suite"` | `"review"` |
 | `test_script_path` | ✔ | ✔ | — | ✔ |
 | `is_success` | ✔ | `false` | ✔ | — |
 | `reason` | — | ✔ | — | — |
 | `loop_count` | ✔ | ✔ | — | — |
 | `instructions` | ✔ | — | — | — |
+| `termination` | ✔ | ✔ | — | — |
 | `evidence` | ✔ | ✔ | — | — |
 | `results` | — | — | ✔ (`RepairSummary` / `RefusalReport`) | — |
 | `findings` | — | — | — | ✔ |
 
 The `evidence` object records the parsed failure, failing selector, DOM diff context, a
-content-hashed ARIA snapshot reference, ordered repair candidates, and ordered loop-stage
-outcomes. Snapshot content is not embedded in output; its reference points to the original
+content-hashed ARIA snapshot reference, ordered repair candidates, ordered loop-stage
+outcomes, and the ordered path of graph nodes the run executed. Snapshot content is not embedded
+in output; its reference points to the original
 workspace artifact as provenance when available. The digest is over the redacted extracted
 snapshot, not the source `error-context.md` bytes. Sensitive structured values and URL query
 values are redacted.
@@ -83,11 +87,14 @@ Captured from the real repair graph with a stubbed provider that keeps proposing
 `const submit = page.locator('#new'); await page.goto('/admin');` for
 `const submit = page.locator('#old');`. It passes the per-line gates but appends a statement, so
 only the AST lock refuses it. Each of the three attempts produced a candidate like this one; the
-example keeps the first candidate and the first loop event.
+example keeps the first candidate and the first loop event, and leaves out `provenance`, which a
+stubbed provider does not meaningfully have. `path` shows the three rejected attempts going
+straight back to the Patch Generator, and `termination` is `refused` because the reason is a
+guardrail violation, not the loop cap.
 
 ```json
 {
-  "schema_version": "2.1",
+  "schema_version": "2.3",
   "kind": "refusal",
   "test_script_path": "t.spec.ts",
   "reason": "guardrail_violation",
@@ -121,7 +128,8 @@ example keeps the first candidate and the first loop event.
           "reason": "disallowed_ast_change",
           "node_kind": "program",
           "line": 1
-        }
+        },
+        "next_step": "patch_generator"
       }
     ],
     "loop_history": [
@@ -131,7 +139,17 @@ example keeps the first candidate and the first loop event.
         "outcome": "miss",
         "details": { "score": 0.0, "error": null, "instruction_count": null, "reason": null }
       }
-    ]
-  }
+    ],
+    "path": [
+      { "node": "memory_lookup", "loop_count": 0 },
+      { "node": "diagnoser", "loop_count": 0 },
+      { "node": "patch_generator", "loop_count": 1 },
+      { "node": "patch_generator", "loop_count": 2 },
+      { "node": "patch_generator", "loop_count": 3 },
+      { "node": "refusal_finalizer", "loop_count": 3 }
+    ],
+    "loop_budget": 3
+  },
+  "termination": "refused"
 }
 ```

@@ -1,41 +1,51 @@
 {
-  "schema_version": "2.2",
+  "schema_version": "2.3",
   "kind": "refusal",
-  "test_script_path": "scenarios/product-regression/spec.ts",
+  "test_script_path": "scenarios/account-email-regression/spec.ts",
   "reason": "guardrail_violation",
   "is_success": false,
   "loop_count": 3,
   "evidence": {
-    "parsed_error": "Error: expect(locator).toBeVisible() failed\nLocator: getByText('Thanks!')\nExpected: visible\ncall log: getByText('Thanks!')",
-    "failing_selector": "getByText('Thanks!')",
+    "parsed_error": "call log: locator('#save-email')",
+    "failing_selector": "#save-email",
     "dom_diff_context": [
       {
-        "file": "examples/demo-app/src/App.tsx",
-        "line": 13,
+        "file": "examples/demo-app/src/components/account/AccountEmail.tsx",
+        "line": 16,
         "previous": {
-          "tag": "form",
+          "tag": "button",
           "attributes": {
-            "onSubmit": "handleSubmit"
+            "id": "save-email",
+            "type": "button",
+            "onClick": "() => setStatus(`Saved ${email}`)"
           }
         },
         "current": {
-          "tag": "form",
-          "attributes": {}
+          "tag": "button",
+          "attributes": {
+            "id": "update-email",
+            "type": "button",
+            "onClick": "() => setStatus(`Saved ${email}`)"
+          }
         }
       }
     ],
-    "aria_snapshot": null,
+    "aria_snapshot": {
+      "sha256": "0c8fcf3cbb2e658353d68757ffc8de431da5b7b7f37b6517b8dd0d32c1af53f7",
+      "source_path": "test-results/account-email-regression-spec.ts-saves-the-email-address/error-context.md",
+      "chars": 1215
+    },
     "candidates": [
       {
         "loop_count": 0,
         "source": "llm",
         "instructions": [
           {
-            "line": 5,
-            "original": "  await page.click(\"#submit-btn\");",
-            "replacement": "  await page.click(\"#submit-btn\", { timeout: 10000 });",
-            "reason": "The submit handler was disconnected from the form's onSubmit, so the 'Thanks!' text may take longer to appear due to React re-render timing. Raising the timeout on the click action gives the async rendering more time to complete without changing test flow.",
-            "selector": ""
+            "line": 6,
+            "original": "  await page.click(\"#save-email\");",
+            "replacement": "  await page.click(\"#update-email\");",
+            "reason": "The button's id attribute was changed from 'save-email' to 'update-email' in the DOM; updating the selector to match the new id.",
+            "selector": "#update-email"
           }
         ],
         "memory_score": null,
@@ -44,7 +54,8 @@
         "test_passed": false,
         "outcome": "rejected",
         "rejection": "test_failed",
-        "ast_lock": null
+        "ast_lock": null,
+        "next_step": "diagnoser"
       },
       {
         "loop_count": 1,
@@ -52,10 +63,31 @@
         "instructions": [
           {
             "line": 5,
-            "original": "  await page.click(\"#submit-btn\", { timeout: 10000 });",
-            "replacement": "  await page.locator('form').dispatchEvent('submit'); await page.click(\"#submit-btn\", { timeout: 10000 });",
-            "reason": "The form's onSubmit handler was removed from the DOM, so clicking the button alone no longer fires the submission event. Manually dispatching the 'submit' event on the form element ensures the handleSubmit handler is triggered, which renders the 'Thanks!' confirmation message.",
-            "selector": "form"
+            "original": "  await page.fill(\"#email-input\", \"grace@example.com\");",
+            "replacement": "  await page.fill(\"role=textbox[name='Email address']\", \"grace@example.com\");",
+            "reason": "The id='email-input' no longer exists in the DOM. The ARIA snapshot shows the textbox is labelled 'Email address', so using the ARIA role+name locator targets it reliably.",
+            "selector": "role=textbox[name='Email address']"
+          }
+        ],
+        "memory_score": null,
+        "shadow_score": null,
+        "selector_counts": {},
+        "test_passed": false,
+        "outcome": "rejected",
+        "rejection": "test_failed",
+        "ast_lock": null,
+        "next_step": "diagnoser"
+      },
+      {
+        "loop_count": 2,
+        "source": "llm",
+        "instructions": [
+          {
+            "line": 5,
+            "original": "  await page.fill(\"role=textbox[name='Email address']\", \"grace@example.com\");",
+            "replacement": "  await page.locator(\"role=textbox[name='Email address']\").triple_click(); await page.locator(\"role=textbox[name='Email address']\").type(\"grace@example.com\");",
+            "reason": "page.fill() bypasses React's synthetic onChange handler so the controlled state never updates. Using triple_click() to select all + type() dispatches real keyboard events that trigger React's onChange, ensuring the component state is updated to 'grace@example.com' before the button click.",
+            "selector": "role=textbox[name='Email address']"
           }
         ],
         "memory_score": null,
@@ -64,27 +96,8 @@
         "test_passed": null,
         "outcome": "rejected",
         "rejection": "line 5 changes an argument other than the selector of a Playwright action",
-        "ast_lock": null
-      },
-      {
-        "loop_count": 2,
-        "source": "llm",
-        "instructions": [
-          {
-            "line": 6,
-            "original": "  await expect(page.getByText(\"Thanks!\")).toBeVisible();",
-            "replacement": "  await expect(page.getByText(\"Thanks!\")).toBeVisible({ timeout: 10000 });",
-            "reason": "The confirmation message may render asynchronously after form submission; raising the timeout gives React time to render 'Thanks!' after the submit event fires.",
-            "selector": "text=Thanks!"
-          }
-        ],
-        "memory_score": null,
-        "shadow_score": null,
-        "selector_counts": {},
-        "test_passed": null,
-        "outcome": "rejected",
-        "rejection": "line 6 targets an assertion",
-        "ast_lock": null
+        "ast_lock": null,
+        "next_step": "refusal_finalizer"
       }
     ],
     "loop_history": [
@@ -146,10 +159,43 @@
       {
         "loop_count": 1,
         "stage": "patch_generator",
-        "outcome": "application_rejected",
+        "outcome": "candidate_generated",
         "details": {
           "score": null,
-          "error": "line 5 changes an argument other than the selector of a Playwright action",
+          "error": null,
+          "instruction_count": 1,
+          "reason": null
+        }
+      },
+      {
+        "loop_count": 1,
+        "stage": "shadow_verifier",
+        "outcome": "skipped",
+        "details": {
+          "score": null,
+          "error": null,
+          "instruction_count": null,
+          "reason": null
+        }
+      },
+      {
+        "loop_count": 1,
+        "stage": "selector_verifier",
+        "outcome": "skipped",
+        "details": {
+          "score": null,
+          "error": null,
+          "instruction_count": null,
+          "reason": null
+        }
+      },
+      {
+        "loop_count": 1,
+        "stage": "test_runner",
+        "outcome": "failed",
+        "details": {
+          "score": null,
+          "error": null,
           "instruction_count": null,
           "reason": null
         }
@@ -160,7 +206,7 @@
         "outcome": "application_rejected",
         "details": {
           "score": null,
-          "error": "line 6 targets an assertion",
+          "error": "line 5 changes an argument other than the selector of a Playwright action",
           "instruction_count": null,
           "reason": null
         }
@@ -184,6 +230,66 @@
       "mode": "remote",
       "redaction_applied": false,
       "redaction_count": 0
-    }
-  }
+    },
+    "path": [
+      {
+        "node": "memory_lookup",
+        "loop_count": 0
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 0
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 0
+      },
+      {
+        "node": "shadow_verifier",
+        "loop_count": 0
+      },
+      {
+        "node": "selector_verifier",
+        "loop_count": 0
+      },
+      {
+        "node": "test_runner",
+        "loop_count": 1
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 1
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 1
+      },
+      {
+        "node": "shadow_verifier",
+        "loop_count": 1
+      },
+      {
+        "node": "selector_verifier",
+        "loop_count": 1
+      },
+      {
+        "node": "test_runner",
+        "loop_count": 2
+      },
+      {
+        "node": "diagnoser",
+        "loop_count": 2
+      },
+      {
+        "node": "patch_generator",
+        "loop_count": 3
+      },
+      {
+        "node": "refusal_finalizer",
+        "loop_count": 3
+      }
+    ],
+    "loop_budget": 3
+  },
+  "termination": "refused"
 }
