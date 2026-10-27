@@ -38,12 +38,12 @@ def test_factory_builds_openai_compatible_client_for_nvidia(monkeypatch):
     monkeypatch.setattr(settings, "llm_provider", "nvidia")
     monkeypatch.setattr(settings, "llm_api_key", "test-key")
     monkeypatch.setattr(settings, "llm_base_url", "https://integrate.api.nvidia.com/v1")
-    monkeypatch.setattr(settings, "llm_model", "openai/gpt-oss-120b")
+    monkeypatch.setattr(settings, "llm_model", "openai/gpt-oss-20b")
 
     model = llm._build_chat_model("nvidia")
 
     assert isinstance(model, ChatOpenAI)
-    assert model.model_name == "openai/gpt-oss-120b"
+    assert model.model_name == "openai/gpt-oss-20b"
     assert str(model.openai_api_base) == "https://integrate.api.nvidia.com/v1"
 
 

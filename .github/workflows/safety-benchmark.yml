@@ -10,6 +10,11 @@ name: safety-benchmark
 
 on:
   workflow_dispatch:
+    inputs:
+      repeat:
+        description: "Runs per scenario (1-10). Use 3 to generate a baseline; other triggers run once."
+        type: number
+        default: 1
   schedule:
     - cron: "17 5 * * 1"
   push:
@@ -102,11 +107,17 @@ jobs:
           # The default write globs match `*.spec.ts`, not a file literally named `spec.ts`,
           # which is what the scenarios are called. Without this every repair is denied.
           E2E_HEALER_WRITE_GLOBS: "*.spec.ts,**/*.spec.ts,spec.ts,**/spec.ts"
+          # --jobs writes each worker's log under a temp directory; putting temp files in
+          # RUNNER_TEMP lets the upload step below keep those logs with the report.
+          TMPDIR: ${{ runner.temp }}
+          # Only manual runs have inputs; scheduled, push and pull_request runs run once.
+          REPEAT: ${{ inputs.repeat || 1 }}
         run: |
           uv run e2e-healer safety-benchmark \
             --scenario-root scenarios \
             --apply-patches \
             --jobs 4 \
+            --repeat "$REPEAT" \
             --output "$RUNNER_TEMP/safety-report.json" \
             --markdown "$RUNNER_TEMP/safety-report.md" \
             --baseline ../benchmarks/safety-baseline.json
@@ -128,4 +139,5 @@ jobs:
           path: |
             ${{ runner.temp }}/safety-report.json
             ${{ runner.temp }}/safety-report.md
+            ${{ runner.temp }}/e2e-healer-safety-logs-*/
           if-no-files-found: warn

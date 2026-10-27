@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **`safety-benchmark` manual runs take a `repeat` input, and the CI artifact keeps the worker
+  logs** (#402). `gh workflow run safety-benchmark.yml -f repeat=3` generates a baseline over three
+  runs per scenario; scheduled, push and pull-request runs still run once. Each `--jobs` worker's
+  log is now uploaded with the report, so a scenario scored as `error` shows the provider's actual
+  response instead of only "the model provider did not return a usable answer". The safety
+  benchmark reference describes how to generate and commit the baseline from CI.
+
+### Fixed
+- **The default NVIDIA model is `openai/gpt-oss-20b`** (#402). The previous default,
+  `openai/gpt-oss-120b`, reached end of life on NVIDIA's API on 2026-09-03 and answers every call
+  with `410 Gone`, so `E2E_HEALER_LLM_PROVIDER=nvidia` without an explicit model ended every run in
+  `provider_error`. Among the models a free NVIDIA developer key could reach, `gpt-oss-20b` was the
+  one that passed the plain completion, the strict-schema patch (with the correct fix) and the
+  strict-schema verdict. An explicit `E2E_HEALER_LLM_MODEL` or `E2E_HEALER_NVIDIA_MODEL` is
+  unaffected.
+
 ## [0.6.0] - 2026-10-25
 
 The first release whose safety gates are enforced on a corpus large enough to mean something:

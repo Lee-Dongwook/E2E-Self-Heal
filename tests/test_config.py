@@ -20,7 +20,7 @@ def test_legacy_nvidia_key_backfills_generic_field():
     settings = make_settings(nvidia_api_key="nvapi-legacy")
     assert settings.llm_api_key == "nvapi-legacy"
     assert settings.llm_base_url == "https://integrate.api.nvidia.com/v1"
-    assert settings.llm_model == "openai/gpt-oss-120b"
+    assert settings.llm_model == "openai/gpt-oss-20b"
 
 
 def test_explicit_generic_field_overrides_legacy():
@@ -111,7 +111,7 @@ def test_blank_model_is_rejected(blank):
 
 def test_nvidia_provider_gets_legacy_default_model():
     # NVIDIA is the one provider with a back-compat default, so no explicit model is needed.
-    assert make_settings().llm_model == "openai/gpt-oss-120b"
+    assert make_settings().llm_model == "openai/gpt-oss-20b"
 
 
 def test_orcarouter_specific_settings_map_to_generic_fields():
