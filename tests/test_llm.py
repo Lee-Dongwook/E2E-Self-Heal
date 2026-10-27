@@ -16,6 +16,7 @@ from app import llm
 from app.config import settings
 from app.nodes.diagnoser import diagnoser
 from app.schemas import DiagnosisVerdict
+from tests.factories import make_state
 
 
 def test_get_client_requires_key(monkeypatch):
@@ -467,19 +468,11 @@ def test_a_configured_secret_never_reaches_the_provider_request(monkeypatch):
     monkeypatch.setattr(llm, "_get_client", lambda: client)
 
     diagnoser(
-        {
-            "test_script_path": "tests/login.spec.ts",
-            "original_code": "",
-            "current_code": "await page.click('#login')\n",
-            "error_log": f"Error: header was authorization: bearer {secret}\n  at a:1:1",
-            "dom_diff_context": [],
-            "dom_snapshot": "",
-            "analysis_report": "",
-            "patch_instructions": {},
-            "verification_report": {},
-            "loop_count": 0,
-            "is_success": False,
-        }
+        make_state(
+            test_script_path="tests/login.spec.ts",
+            current_code="await page.click('#login')\n",
+            error_log=f"Error: header was authorization: bearer {secret}\n  at a:1:1",
+        )
     )
 
     assert sent, "the provider was never called"

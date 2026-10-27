@@ -5,25 +5,7 @@ import pytest
 import app.config as config_module
 from app.provenance import is_local_endpoint, provider_provenance
 from app.schemas import ProviderProvenance
-from app.state import AgentState
-
-
-def _state(**overrides: object) -> AgentState:
-    state: AgentState = {
-        "test_script_path": "tests/login.spec.ts",
-        "original_code": "",
-        "current_code": "",
-        "error_log": "",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "",
-        "patch_instructions": {},
-        "verification_report": {},
-        "loop_count": 0,
-        "is_success": False,
-    }
-    state.update(overrides)  # type: ignore[typeddict-item]
-    return state
+from tests.factories import make_state
 
 
 def _configure(
@@ -80,7 +62,7 @@ def test_anything_else_is_remote(endpoint: str) -> None:
 def test_a_local_provider_is_reported_as_local(monkeypatch: pytest.MonkeyPatch) -> None:
     _configure(monkeypatch, provider="ollama", model="llama3.2")
 
-    assert provider_provenance(_state()) == ProviderProvenance(
+    assert provider_provenance(make_state()) == ProviderProvenance(
         provider="ollama",
         model="llama3.2",
         endpoint="http://localhost:11434",
@@ -97,7 +79,7 @@ def test_a_hosted_provider_reports_the_endpoint_the_client_actually_uses(
     # client falls back to, not the raw configuration.
     _configure(monkeypatch, provider="openai", model="gpt-5-5-medium")
 
-    provenance = provider_provenance(_state())
+    provenance = provider_provenance(make_state())
 
     assert provenance.endpoint == "https://api.openai.com/v1"
     assert provenance.mode == "remote"
@@ -112,7 +94,7 @@ def test_a_private_openai_compatible_endpoint_is_reported_local(
         monkeypatch, provider="openai", model="qwen3-32b", base_url="http://192.168.1.20:8000/v1"
     )
 
-    provenance = provider_provenance(_state())
+    provenance = provider_provenance(make_state())
 
     assert (provenance.endpoint, provenance.mode) == ("http://192.168.1.20:8000/v1", "local")
 
@@ -129,7 +111,7 @@ def test_endpoint_credentials_and_sensitive_query_values_are_removed(
         base_url="https://user:hunter2@llm.example.com/v1?api_key=abc123",
     )
 
-    endpoint = provider_provenance(_state()).endpoint
+    endpoint = provider_provenance(make_state()).endpoint
 
     assert "hunter2" not in endpoint
     assert "abc123" not in endpoint
@@ -141,7 +123,7 @@ def test_redaction_reported_by_the_boundary_reaches_provenance(
 ) -> None:
     _configure(monkeypatch, provider="anthropic", model="claude-sonnet-4-6")
 
-    provenance = provider_provenance(_state(redaction_count=3, redaction_applied=True))
+    provenance = provider_provenance(make_state(redaction_count=3, redaction_applied=True))
 
     assert provenance.redaction_count == 3
     assert provenance.redaction_applied is True
@@ -151,4 +133,4 @@ def test_a_count_alone_marks_redaction_as_applied(monkeypatch: pytest.MonkeyPatc
     # `applied` is derived from the count when a node did not set it explicitly.
     _configure(monkeypatch, provider="anthropic", model="claude-sonnet-4-6")
 
-    assert provider_provenance(_state(redaction_count=1)).redaction_applied is True
+    assert provider_provenance(make_state(redaction_count=1)).redaction_applied is True

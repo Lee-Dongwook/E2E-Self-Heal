@@ -13,24 +13,15 @@ from app.evidence import (
 from app.schemas import AstLockRejection, EvidenceDomDiff, PatchInstruction, ProviderProvenance
 from app.state import AgentState
 from app.verify.ast_lock import AstLockVerdict
+from tests.factories import make_state
 
 
 def _state(**overrides: object) -> AgentState:
-    state: AgentState = {
+    defaults = {
         "test_script_path": "tests/login.spec.ts",
-        "original_code": "",
-        "current_code": "",
         "error_log": "Error: locator('#login') timed out",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "",
-        "patch_instructions": {},
-        "verification_report": {},
-        "loop_count": 0,
-        "is_success": False,
     }
-    state.update(overrides)  # type: ignore[typeddict-item]
-    return state
+    return make_state(**(defaults | overrides))
 
 
 def test_evidence_bundle_redacts_sensitive_values_and_references_snapshot(

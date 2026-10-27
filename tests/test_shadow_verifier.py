@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from app.graph import route_after_shadow
 from app.nodes.shadow_verifier import shadow_verifier
 from app.shadow.config import ShadowConfig
@@ -11,6 +13,17 @@ from app.shadow.schemas import (
 from app.shadow.snapshot_store import SnapshotStore
 from app.shadow.workspace import ShadowWorkspace
 from app.state import AgentState
+from tests.factories import make_state
+
+
+def _state(test_file: Path, **overrides: object) -> AgentState:
+    defaults = {
+        "test_script_path": str(test_file),
+        "original_code": "console.log('original');",
+        "current_code": "console.log('patched');",
+        "analysis_report": "Original analysis report",
+    }
+    return make_state(**(defaults | overrides))
 
 
 def test_shadow_verifier_skips_when_no_snapshot(tmp_path, monkeypatch):
@@ -23,19 +36,7 @@ def test_shadow_verifier_skips_when_no_snapshot(tmp_path, monkeypatch):
         lambda: ShadowConfig(workspace_dir=str(ws_dir)),
     )
 
-    state: AgentState = {
-        "test_script_path": str(test_file),
-        "original_code": "console.log('original');",
-        "current_code": "console.log('patched');",
-        "error_log": "",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "Original analysis report",
-        "patch_instructions": {},
-        "verification_report": {},
-        "loop_count": 0,
-        "is_success": False,
-    }
+    state = _state(test_file)
 
     result = shadow_verifier(state)
 
@@ -83,19 +84,7 @@ def test_shadow_verifier_passes_on_successful_replay(tmp_path, monkeypatch):
         lambda *args, **kwargs: mock_run_result,
     )
 
-    state: AgentState = {
-        "test_script_path": str(test_file),
-        "original_code": "console.log('original');",
-        "current_code": "console.log('patched');",
-        "error_log": "",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "Original analysis report",
-        "patch_instructions": {},
-        "verification_report": {},
-        "loop_count": 0,
-        "is_success": False,
-    }
+    state = _state(test_file)
 
     result = shadow_verifier(state)
 
@@ -139,19 +128,12 @@ def test_shadow_verifier_fails_and_reverts_on_failed_replay(tmp_path, monkeypatc
         lambda *args, **kwargs: mock_run_result,
     )
 
-    state: AgentState = {
-        "test_script_path": str(test_file),
-        "original_code": "console.log('original');\nconsole.log('second-line');",
-        "current_code": "console.log('patched');\nconsole.log('second-line');",
-        "error_log": "",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "Original analysis report",
-        "patch_instructions": {},
-        "verification_report": {},
-        "loop_count": 1,
-        "is_success": False,
-    }
+    state = _state(
+        test_file,
+        original_code="console.log('original');\nconsole.log('second-line');",
+        current_code="console.log('patched');\nconsole.log('second-line');",
+        loop_count=1,
+    )
 
     result = shadow_verifier(state)
 
@@ -187,20 +169,12 @@ def test_shadow_verifier_uses_state_rollback_code_instead_of_stale_disk(tmp_path
         ),
     )
 
-    state: AgentState = {
-        "test_script_path": str(test_file),
-        "original_code": "console.log('original');",
-        "current_code": "console.log('next-candidate');",
-        "rollback_code": rollback_code,
-        "error_log": "",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "Original analysis report",
-        "patch_instructions": {},
-        "verification_report": {},
-        "loop_count": 1,
-        "is_success": False,
-    }
+    state = _state(
+        test_file,
+        current_code="console.log('next-candidate');",
+        rollback_code=rollback_code,
+        loop_count=1,
+    )
 
     result = shadow_verifier(state)
 
@@ -236,19 +210,7 @@ def test_shadow_verifier_reverts_on_placeholder_result(tmp_path, monkeypatch):
         lambda *args, **kwargs: "Shadow Testing runtime is under development",
     )
 
-    state: AgentState = {
-        "test_script_path": str(test_file),
-        "original_code": "console.log('original');",
-        "current_code": "console.log('patched');",
-        "error_log": "",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "Original analysis report",
-        "patch_instructions": {},
-        "verification_report": {},
-        "loop_count": 0,
-        "is_success": False,
-    }
+    state = _state(test_file)
 
     result = shadow_verifier(state)
 
@@ -260,52 +222,13 @@ def test_shadow_verifier_reverts_on_placeholder_result(tmp_path, monkeypatch):
 
 def test_route_after_shadow():
     # 1. Ok / Skipped -> selector_verifier
-    state_ok: AgentState = {
-        "test_script_path": "",
-        "original_code": "",
-        "current_code": "",
-        "error_log": "",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "",
-        "patch_instructions": {},
-        "verification_report": {},
-        "shadow_report": {"ok": True, "skipped": True},
-        "loop_count": 0,
-        "is_success": False,
-    }
+    state_ok = make_state(shadow_report={"ok": True, "skipped": True})
     assert route_after_shadow(state_ok) == "selector_verifier"
 
     # 2. Failed, loop_count under cap -> patch_generator
-    state_fail: AgentState = {
-        "test_script_path": "",
-        "original_code": "",
-        "current_code": "",
-        "error_log": "",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "",
-        "patch_instructions": {},
-        "verification_report": {},
-        "shadow_report": {"ok": False},
-        "loop_count": 1,
-        "is_success": False,
-    }
+    state_fail = make_state(shadow_report={"ok": False}, loop_count=1)
     assert route_after_shadow(state_fail) == "patch_generator"
 
     # 3. Failed, loop_count at cap -> refusal finalizer
-    state_cap: AgentState = {
-        "test_script_path": "",
-        "original_code": "",
-        "current_code": "",
-        "error_log": "",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "",
-        "patch_instructions": {},
-        "verification_report": {},
-        "shadow_report": {"ok": False},
-        "loop_count": 3,
-        "is_success": False,
-    }
+    state_cap = make_state(shadow_report={"ok": False}, loop_count=3)
     assert route_after_shadow(state_cap) == "refusal_finalizer"

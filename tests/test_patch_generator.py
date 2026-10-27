@@ -12,6 +12,7 @@ from app.nodes.patch_generator import (
 )
 from app.schemas import PatchInstruction, PatchOutput, RefusalReason
 from app.state import AgentState
+from tests.factories import make_state
 
 
 def _instruction(
@@ -30,19 +31,12 @@ def _instruction(
 
 
 def _state() -> AgentState:
-    return {
-        "test_script_path": "test.spec.ts",
-        "original_code": "await page.click('#old')\n",
-        "current_code": "await page.click('#old')\n",
-        "error_log": "",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "selector changed",
-        "patch_instructions": {},
-        "verification_report": {},
-        "loop_count": 0,
-        "is_success": False,
-    }
+    return make_state(
+        test_script_path="test.spec.ts",
+        original_code="await page.click('#old')\n",
+        current_code="await page.click('#old')\n",
+        analysis_report="selector changed",
+    )
 
 
 def test_replaces_target_line_only() -> None:
@@ -781,21 +775,15 @@ def test_boundary_violation_ends_immediately() -> None:
 
 
 def _generator_state(**overrides: object) -> AgentState:
-    base: AgentState = {
+    defaults = {
         "test_script_path": "tests/login.spec.ts",
         "original_code": "await page.locator('#old').click()\n",
         "current_code": "await page.locator('#old').click()\n",
         "error_log": "Timeout waiting for #old",
         "dom_diff_context": [{"file": "src/components/LoginForm.vue"}],
-        "dom_snapshot": "",
         "analysis_report": "selector changed",
-        "patch_instructions": {},
-        "verification_report": {},
-        "loop_count": 0,
-        "is_success": False,
     }
-    base.update(overrides)  # type: ignore[typeddict-item]
-    return base
+    return make_state(**(defaults | overrides))
 
 
 def test_patch_generator_uses_detected_framework_guidance(

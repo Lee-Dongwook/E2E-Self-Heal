@@ -24,25 +24,19 @@ from app.schemas import (
     RefusalReason,
 )
 from app.state import AgentState
+from tests.factories import make_state, make_verdict
 
 ORIGINAL = "await page.click('#old')\n"
 FIXED = "await page.click('#new')\n"
 
 
 def _initial_state() -> AgentState:
-    return {
-        "test_script_path": "",  # set per test to the tmp file
-        "original_code": ORIGINAL,
-        "current_code": ORIGINAL,
-        "error_log": "Error: Timeout\nwaiting for locator('#old')",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "",
-        "patch_instructions": {},
-        "verification_report": {},
-        "loop_count": 0,
-        "is_success": False,
-    }
+    return make_state(
+        test_script_path="",  # set per test to the tmp file
+        original_code=ORIGINAL,
+        current_code=ORIGINAL,
+        error_log="Error: Timeout\nwaiting for locator('#old')",
+    )
 
 
 def _declined_output() -> PatchOutput:
@@ -290,10 +284,6 @@ _DOM_CHANGE = [{"file": "src/App.tsx", "line": 22, "previous": {}, "current": {}
 _DIAGNOSIS = "The form's submit handler was removed, so the confirmation never renders."
 
 
-def _verdict(verdict: DiagnosisVerdict) -> DiagnosisVerdictOutput:
-    return DiagnosisVerdictOutput(verdict=verdict, rationale="the handler is gone")
-
-
 def test_a_declined_patch_judged_a_behaviour_change_refuses_without_rerunning_the_test(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
@@ -306,7 +296,7 @@ def test_a_declined_patch_judged_a_behaviour_change_refuses_without_rerunning_th
     monkeypatch.setattr(
         adjudicator_node,
         "generate_diagnosis_verdict",
-        lambda s, u: _verdict(DiagnosisVerdict.BEHAVIOUR_CHANGE),
+        lambda s, u: make_verdict(DiagnosisVerdict.BEHAVIOUR_CHANGE),
     )
     # The candidate changed nothing, so a test run could only repeat the previous answer.
     monkeypatch.setattr(
@@ -343,7 +333,7 @@ def test_an_unclear_verdict_keeps_the_loop_and_asks_only_once(
 
     def adjudicate(system_prompt: str, user_prompt: str) -> DiagnosisVerdictOutput:
         asked.append(1)
-        return _verdict(DiagnosisVerdict.UNCLEAR)
+        return make_verdict(DiagnosisVerdict.UNCLEAR)
 
     def run(path: str) -> tuple[bool, str]:
         runs.append(1)
@@ -377,7 +367,7 @@ def test_a_behaviour_change_verdict_cannot_outrank_a_missing_diff(
     monkeypatch.setattr(
         adjudicator_node,
         "generate_diagnosis_verdict",
-        lambda s, u: _verdict(DiagnosisVerdict.BEHAVIOUR_CHANGE),
+        lambda s, u: make_verdict(DiagnosisVerdict.BEHAVIOUR_CHANGE),
     )
     monkeypatch.setattr(runner_node, "run_playwright", lambda path: (False, "Error: failing"))
 

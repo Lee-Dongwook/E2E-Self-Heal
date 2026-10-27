@@ -16,22 +16,16 @@ from app.preprocess.error_log_parser import parse_error_log
 from app.registry import classify_selector_kind
 from app.schemas import PatchInstruction, RefusalReason, RefusalReport
 from app.state import AgentState
+from tests.factories import make_state
 
 
 def _state() -> AgentState:
-    return {
-        "test_script_path": "tests/login.spec.ts",
-        "original_code": "await page.click('#old')\n",
-        "current_code": "await page.click('#old')\n",
-        "error_log": "Error: waiting for locator('#old') timed out",
-        "dom_diff_context": [],
-        "dom_snapshot": "",
-        "analysis_report": "",
-        "patch_instructions": {},
-        "verification_report": {},
-        "loop_count": 0,
-        "is_success": False,
-    }
+    return make_state(
+        test_script_path="tests/login.spec.ts",
+        original_code="await page.click('#old')\n",
+        current_code="await page.click('#old')\n",
+        error_log="Error: waiting for locator('#old') timed out",
+    )
 
 
 def test_memory_lookup_is_bypassed_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:

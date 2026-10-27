@@ -7,29 +7,20 @@ from app.nodes.decline_adjudicator import decline_adjudicator
 from app.nodes.diagnoser import DIAGNOSIS_UNAVAILABLE
 from app.schemas import DiagnosisVerdict, DiagnosisVerdictOutput
 from app.state import AgentState
+from tests.factories import make_state, make_verdict
 
 
-def _state(**overrides) -> AgentState:
-    base: AgentState = {
-        "test_script_path": "t.spec.ts",
+def _state(**overrides: object) -> AgentState:
+    defaults = {
         "original_code": "await page.click('#submit-btn')\n",
         "current_code": "await page.click('#submit-btn')\n",
         "error_log": "Error: Timed out waiting for 'Thanks!'",
         "dom_diff_context": [{"file": "src/App.tsx", "line": 22}],
-        "dom_snapshot": "",
         "analysis_report": "The submit handler was removed, so the confirmation never renders.",
         "patch_instructions": {"instructions": []},
         "patch_provider_report": {"ok": True},
-        "verification_report": {},
-        "loop_count": 0,
-        "is_success": False,
     }
-    base.update(overrides)  # type: ignore[typeddict-item]
-    return base
-
-
-def _verdict(verdict: DiagnosisVerdict) -> DiagnosisVerdictOutput:
-    return DiagnosisVerdictOutput(verdict=verdict, rationale="the handler is gone")
+    return make_state(**(defaults | overrides))
 
 
 @pytest.fixture
@@ -39,7 +30,7 @@ def prompts(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[str, str]]]:
 
     def fake_generate(system_prompt: str, user_prompt: str) -> DiagnosisVerdictOutput:
         captured.append((system_prompt, user_prompt))
-        return _verdict(DiagnosisVerdict.BEHAVIOUR_CHANGE)
+        return make_verdict(DiagnosisVerdict.BEHAVIOUR_CHANGE)
 
     monkeypatch.setattr(adjudicator_node, "generate_diagnosis_verdict", fake_generate)
     yield captured
@@ -60,7 +51,7 @@ def test_a_non_terminal_verdict_spends_no_loop(
     monkeypatch.setattr(
         adjudicator_node,
         "generate_diagnosis_verdict",
-        lambda _system, _user: _verdict(verdict),
+        lambda _system, _user: make_verdict(verdict),
     )
 
     result = decline_adjudicator(_state(loop_count=1))
