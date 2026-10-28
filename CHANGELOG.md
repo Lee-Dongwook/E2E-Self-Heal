@@ -23,7 +23,8 @@ All notable changes to this project are documented here. The format is based on
 - **The `examples-heal` CI job can write its scenario file** (#402). It had never run, because it
   needs the NVIDIA key; once the key existed, the sandbox denied the write to `spec.ts`, which the
   default write globs (`*.spec.ts`) do not match. The job now sets the same write globs as the
-  safety benchmark.
+  safety benchmark. It is informational (`continue-on-error`) until #404, because the default
+  NVIDIA model's correct patches are often rejected by the stale-line check.
 
 ### Security
 - **Parallel safety-benchmark workers redact their logs** (#402). With `--jobs`, each worker

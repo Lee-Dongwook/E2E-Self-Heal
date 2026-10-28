@@ -139,6 +139,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [check, examples-repro, action-consumer, check-secret]
     if: needs.check-secret.outputs.has-key == 'true'
+    # Informational until #404: the default NVIDIA model often re-types the line it patches
+    # (quotes, indentation), and the stale-line check then rejects a correct patch. Make this
+    # blocking again once that is fixed.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
