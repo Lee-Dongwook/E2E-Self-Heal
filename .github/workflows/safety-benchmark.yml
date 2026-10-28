@@ -95,6 +95,9 @@ jobs:
         working-directory: examples
         env:
           E2E_HEALER_NVIDIA_API_KEY: ${{ secrets.E2E_HEALER_NVIDIA_API_KEY }}
+          # The worker logs are uploaded as an artifact, which GitHub's secret masking does not
+          # cover. Name the key so the engine's own log redaction replaces it wherever it appears.
+          E2E_HEALER_SENSITIVE_ENV_VARS: E2E_HEALER_NVIDIA_API_KEY
           # The example Playwright config adds a reporter that runs `e2e-healer review` on every
           # failing test. Benchmark scenarios fail on purpose, so that would add unrelated model
           # calls and distort latency. Use the plain list reporter.
@@ -102,6 +105,9 @@ jobs:
           # The default write globs match `*.spec.ts`, not a file literally named `spec.ts`,
           # which is what the scenarios are called. Without this every repair is denied.
           E2E_HEALER_WRITE_GLOBS: "*.spec.ts,**/*.spec.ts,spec.ts,**/spec.ts"
+          # --jobs writes each worker's log under a temp directory; putting temp files in
+          # RUNNER_TEMP lets the upload step below keep those logs with the report.
+          TMPDIR: ${{ runner.temp }}
         run: |
           uv run e2e-healer safety-benchmark \
             --scenario-root scenarios \
@@ -120,6 +126,25 @@ jobs:
             echo "The safety benchmark did not produce a report; see the run log." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # Structured logs are already redacted in the worker, but a raw write to stdout or stderr
+      # (Playwright, a dependency) is not. Redact every worker log file before it is uploaded.
+      - name: Redact worker logs
+        id: redact
+        if: always()
+        env:
+          E2E_HEALER_NVIDIA_API_KEY: ${{ secrets.E2E_HEALER_NVIDIA_API_KEY }}
+          E2E_HEALER_SENSITIVE_ENV_VARS: E2E_HEALER_NVIDIA_API_KEY
+        run: |
+          uv run python - <<'EOF'
+          import glob, os
+          from app.shadow.redaction import redact_text
+          for path in glob.glob(os.path.join(os.environ["RUNNER_TEMP"], "e2e-healer-safety-logs-*", "*.log")):
+              with open(path, encoding="utf-8", errors="replace") as handle:
+                  text = handle.read()
+              with open(path, "w", encoding="utf-8") as handle:
+                  handle.write(redact_text(text))
+          EOF
+
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
@@ -128,4 +153,13 @@ jobs:
           path: |
             ${{ runner.temp }}/safety-report.json
             ${{ runner.temp }}/safety-report.md
+          if-no-files-found: warn
+
+      # Fail closed: the logs are published only when every one of them was redacted.
+      - name: Upload worker logs
+        if: always() && steps.redact.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: safety-worker-logs
+          path: ${{ runner.temp }}/e2e-healer-safety-logs-*/
           if-no-files-found: warn

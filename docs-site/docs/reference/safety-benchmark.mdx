@@ -301,8 +301,11 @@ must therefore either apply to the current app or already be applied to it, whic
 
 ## In CI
 
-`.github/workflows/safety-benchmark.yml` runs the benchmark and publishes the Markdown report as
-the run's step summary and the JSON and Markdown files as the `safety-report` artifact.
+`.github/workflows/safety-benchmark.yml` runs the benchmark with the default NVIDIA model and
+publishes the Markdown report as the run's step summary. The `safety-report` artifact holds the
+JSON and Markdown reports. The `safety-worker-logs` artifact holds each worker's log: when a
+scenario ends as `error`, that log has the provider's actual response. The logs are redacted file
+by file before upload, and published only if that redaction succeeded.
 
 - **Never blocks.** The job is `continue-on-error`, time-limited (120 minutes), and has read-only
   permissions. It runs four scenarios at a time (`--jobs 4`), one per runner core. There is no
@@ -312,9 +315,11 @@ the run's step summary and the JSON and Markdown files as the `safety-report` ar
   scenario's final attempt, that scenario is an `error` and `error_count` fails, whatever the
   outcomes. It happens with or without `--jobs` (the logs show no rate limiting), so read a
   single error by its scenario's `error` text before re-running.
-- **Skipped without a key.** It runs only when `E2E_HEALER_NVIDIA_API_KEY` is available, so pull
-  requests from forks, which cannot read secrets, skip it instead of failing. It uses the
-  `pull_request` trigger, never `pull_request_target`, so a fork's code never runs with the key.
+- **Skipped without a key.** It runs only when the `E2E_HEALER_NVIDIA_API_KEY` repository secret
+  is set, so pull requests from forks, which cannot read secrets, skip it instead of failing. It
+  uses the `pull_request` trigger, never `pull_request_target`, so a fork's code never runs with
+  the key. A free NVIDIA developer key from [build.nvidia.com](https://build.nvidia.com/) is
+  enough.
 - **Runs when it can matter.** On pushes to `main`, weekly, on demand, and on pull requests that
   change `app/`, `examples/`, `benchmarks/` or the dependency files, so documentation-only changes
   spend no model calls.
@@ -322,6 +327,28 @@ the run's step summary and the JSON and Markdown files as the `safety-report` ar
 ### Setting a baseline
 
 The comparison reads `benchmarks/safety-baseline.json`. Until that file exists the report simply
-has no deltas. To set or update it, take the JSON from a trusted run (the workflow artifact, or a
-local run with `--output benchmarks/safety-baseline.json`), review it, and commit it. Latency is
-part of the file, so expect it to change a little on every refresh.
+has no deltas. A baseline only means something against the same model and the same number of
+runs per scenario (the latency delta compares totals), so take it from an ordinary single-pass
+run of the CI workflow, the same shape as every run it is compared with:
+
+1. Start a manual run on `main`:
+
+   ```bash
+   gh workflow run safety-benchmark.yml --ref main
+   ```
+
+2. Download that run's report. Filter on the manual trigger, so a newer push or scheduled run is
+   not picked up instead:
+
+   ```bash
+   gh run list --workflow safety-benchmark.yml --event workflow_dispatch --branch main --limit 1
+   gh run download <run-id> -n safety-report
+   ```
+
+3. Review it before committing: `error_count` should be 0 and every scenario should end as
+   labeled. A provider failure in the baseline makes every later comparison noisy.
+4. Commit `safety-report.json` as `benchmarks/safety-baseline.json` in a pull request. That pull
+   request touches `benchmarks/`, so its own benchmark run is the first with deltas.
+
+Regenerate the baseline when the CI model changes. Latency is part of the file, so expect it to
+change a little on every refresh.

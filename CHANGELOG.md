@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **The CI safety benchmark keeps its worker logs** (#402). Each `--jobs` worker's log is uploaded
+  as a `safety-worker-logs` artifact, so a scenario scored as `error` shows the provider's actual
+  response instead of only "the model provider did not return a usable answer". The safety
+  benchmark reference describes how to generate and commit the baseline from a manual CI run.
+
+### Fixed
+- **The default NVIDIA model is `openai/gpt-oss-20b`** (#402). The previous default,
+  `openai/gpt-oss-120b`, reached end of life on NVIDIA's API on 2026-09-03 and answers every call
+  with `410 Gone`, so `E2E_HEALER_LLM_PROVIDER=nvidia` without an explicit model ended every run in
+  `provider_error`. Among the models a free NVIDIA developer key could reach, `gpt-oss-20b` was the
+  one that passed the plain completion, the strict-schema patch (with the correct fix) and the
+  strict-schema verdict. An explicit `E2E_HEALER_LLM_MODEL` or `E2E_HEALER_NVIDIA_MODEL` is
+  unaffected.
+- **The `examples-heal` CI job can write its scenario file** (#402). It had never run, because it
+  needs the NVIDIA key; once the key existed, the sandbox denied the write to `spec.ts`, which the
+  default write globs (`*.spec.ts`) do not match. The job now sets the same write globs as the
+  safety benchmark. It is informational (`continue-on-error`) until #404, because the default
+  NVIDIA model's correct patches are often rejected by the stale-line check.
+
+### Security
+- **Parallel safety-benchmark workers redact their logs** (#402). With `--jobs`, each worker
+  process wrote its log with structlog's defaults: tracebacks rendered every frame's local
+  variables, and the log redaction never ran. A provider error raised where a local held the API
+  key wrote the key into `worker-<n>.log`. Workers now use the same logging configuration as the
+  CLI (plain tracebacks, redacted). The CI workflow, which now uploads those logs, names
+  `E2E_HEALER_NVIDIA_API_KEY` in `E2E_HEALER_SENSITIVE_ENV_VARS` and redacts every log file
+  before upload, which also covers raw writes to stdout and stderr; the logs are published only
+  if that step succeeds. Logs from earlier local `--jobs` runs may contain a key and should be
+  deleted.
+
 ## [0.6.0] - 2026-10-25
 
 The first release whose safety gates are enforced on a corpus large enough to mean something:

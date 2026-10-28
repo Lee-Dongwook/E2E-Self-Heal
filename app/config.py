@@ -43,7 +43,7 @@ class Settings(BaseSettings):
         description="NVIDIA OpenAI-compatible endpoint (legacy)",
     )
     nvidia_model: str = Field(
-        default="openai/gpt-oss-120b", description="Structured-Outputs-capable model (legacy)"
+        default="openai/gpt-oss-20b", description="Structured-Outputs-capable model (legacy)"
     )
     nvidia_max_tokens: int = Field(
         default=4096, ge=1, description="completion token cap (legacy); must be >= 1"

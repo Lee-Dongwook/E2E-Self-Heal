@@ -5,6 +5,9 @@ CI runner), so these tests guard the parts that must not regress silently: it ne
 it is skipped without credentials, and it does not expose a secret to forked pull requests.
 """
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -103,10 +106,52 @@ def test_the_sandbox_lets_the_engine_edit_the_scenarios_named_spec_ts(
     assert not any(glob in {"*", "**/*", "**"} for glob in globs)
 
 
+def _uploads(job: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    steps = [step for step in job["steps"] if "upload-artifact" in step.get("uses", "")]
+    return {step["with"]["name"]: step for step in steps}
+
+
 def test_the_report_is_published_even_when_the_benchmark_step_fails(job: dict[str, Any]) -> None:
     (summary,) = _steps_running(job, "GITHUB_STEP_SUMMARY")
-    (upload,) = [step for step in job["steps"] if "upload-artifact" in step.get("uses", "")]
 
     assert summary["if"] == "always()"
-    assert upload["if"] == "always()"
-    assert upload["with"]["name"] == "safety-report"
+    assert _uploads(job)["safety-report"]["if"] == "always()"
+
+
+def test_worker_logs_are_published_only_after_they_were_redacted(job: dict[str, Any]) -> None:
+    # An artifact is not covered by GitHub's secret masking, so the logs must fail closed: a
+    # redaction step that errors halfway leaves raw files, which must never be uploaded.
+    (redact,) = [step for step in job["steps"] if step.get("id") == "redact"]
+    logs = _uploads(job)["safety-worker-logs"]
+
+    assert "steps.redact.outcome == 'success'" in logs["if"]
+    assert "e2e-healer-safety-logs" not in str(_uploads(job)["safety-report"]["with"]["path"])
+
+
+def test_the_workflow_sanitizer_removes_a_key_written_straight_to_a_worker_log(
+    job: dict[str, Any], tmp_path: Path
+) -> None:
+    # Structured logs are redacted in the worker; raw stdout/stderr writes only by this step.
+    # Run the step's own script, so emptying or breaking it fails here and not in CI.
+    (redact,) = [step for step in job["steps"] if step.get("id") == "redact"]
+    script = redact["run"].split("<<'EOF'\n", 1)[1].rsplit("EOF", 1)[0]
+    key = "nvapi-RAWWRITE0123456789abcdef"
+    logs = tmp_path / "e2e-healer-safety-logs-x"
+    logs.mkdir()
+    log = logs / "worker-0.log"
+    log.write_text(f"print from a dependency: {key}\nPlaywright line\n", encoding="utf-8")
+
+    subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        env={
+            **os.environ,
+            **{name: value for name, value in redact["env"].items() if "secrets." not in value},
+            "RUNNER_TEMP": str(tmp_path),
+            "E2E_HEALER_NVIDIA_API_KEY": key,
+        },
+    )
+
+    redacted = log.read_text(encoding="utf-8")
+    assert key not in redacted
+    assert "Playwright line" in redacted

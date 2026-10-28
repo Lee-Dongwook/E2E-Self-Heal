@@ -6,7 +6,7 @@ structured completion (Pydantic schema in -> validated model out). A factory sel
 concrete chat model from ``settings.llm_provider`` so users can plug in OpenAI, Anthropic,
 Ollama, or any OpenAI-compatible endpoint (NVIDIA NIM) without touching node code.
 
-The default model (``openai/gpt-oss-120b`` on NVIDIA NIM) is a reasoning model, so
+The default model (``openai/gpt-oss-20b`` on NVIDIA NIM) is a reasoning model, so
 completions are given explicit token headroom (``settings.llm_max_tokens``) to leave room
 for its reasoning content.
 """

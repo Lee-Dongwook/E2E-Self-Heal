@@ -119,7 +119,7 @@ cp .env.example .env    # E2E_HEALER_LLM_API_KEY を設定（または利用す�
 
 **NVIDIA NIM（デフォルト）、OpenAI、Anthropic（Claude）、ローカルの Ollama モデル**に対応しています —
 [設定](#設定)からバックエンドを選べます。デフォルトを使う場合は、無料の NVIDIA NIM API キーを
-[build.nvidia.com](https://build.nvidia.com/) で取得できます（デフォルトモデルは `openai/gpt-oss-120b`）。
+[build.nvidia.com](https://build.nvidia.com/) で取得できます（デフォルトモデルは `openai/gpt-oss-20b`）。
 
 ### 自分のプロジェクトで実行（グローバル CLI）
 
@@ -197,7 +197,7 @@ Action の `outcome` 出力は `passed` | `healed` | `unhealed` です。Playwri
 | ------------------------------ | ------------------------------------- | ---------------------------------------------- |
 | `E2E_HEALER_NVIDIA_API_KEY`    | —                                     | NVIDIA NIM API キー                            |
 | `E2E_HEALER_NVIDIA_BASE_URL`   | `https://integrate.api.nvidia.com/v1` | OpenAI 互換エンドポイント                      |
-| `E2E_HEALER_NVIDIA_MODEL`      | `openai/gpt-oss-120b`                 | Structured Outputs 対応モデル                  |
+| `E2E_HEALER_NVIDIA_MODEL`      | `openai/gpt-oss-20b`                  | Structured Outputs 対応モデル                  |
 | `E2E_HEALER_NVIDIA_MAX_TOKENS` | `4096`                                | 完了トークン上限（推論モデル用の余裕）         |
 | `E2E_HEALER_MAX_LOOPS`         | `3`                                   | 修復ループ上限                                 |
 | `E2E_HEALER_PLAYWRIGHT_CMD`    | `npx playwright test`                 | Playwright 呼び出し                            |

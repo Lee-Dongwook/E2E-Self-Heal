@@ -118,7 +118,7 @@ cp .env.example .env    # E2E_HEALER_LLM_API_KEY 설정 (또는 사용하는 프
 
 **NVIDIA NIM(기본값), OpenAI, Anthropic(Claude), 로컬 Ollama 모델**을 지원합니다 —
 [설정](#설정)에서 원하는 백엔드를 선택하세요. 기본값을 쓰려면 무료 NVIDIA NIM API 키를
-[build.nvidia.com](https://build.nvidia.com/)에서 발급받을 수 있습니다(기본 모델 `openai/gpt-oss-120b`).
+[build.nvidia.com](https://build.nvidia.com/)에서 발급받을 수 있습니다(기본 모델 `openai/gpt-oss-20b`).
 
 ### 내 실무 프로젝트에서 돌리기 (전역 CLI)
 
@@ -197,7 +197,7 @@ uv run e2e-healer tests/example.spec.ts --app-url http://localhost:4173
 | ------------------------------ | ------------------------------------- | --------------------------------------------------- |
 | `E2E_HEALER_NVIDIA_API_KEY`    | —                                     | NVIDIA NIM API 키                                   |
 | `E2E_HEALER_NVIDIA_BASE_URL`   | `https://integrate.api.nvidia.com/v1` | OpenAI 호환 엔드포인트                              |
-| `E2E_HEALER_NVIDIA_MODEL`      | `openai/gpt-oss-120b`                 | Structured Outputs 지원 모델                        |
+| `E2E_HEALER_NVIDIA_MODEL`      | `openai/gpt-oss-20b`                  | Structured Outputs 지원 모델                        |
 | `E2E_HEALER_NVIDIA_MAX_TOKENS` | `4096`                                | 응답 토큰 한도(추론 모델 여유분)                    |
 | `E2E_HEALER_MAX_LOOPS`         | `3`                                   | 복구 루프 한도                                      |
 | `E2E_HEALER_PLAYWRIGHT_CMD`    | `npx playwright test`                 | Playwright 실행 명령                                |

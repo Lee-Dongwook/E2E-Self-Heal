@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import structlog
 
 from app.safety_benchmark import (
     ActualOutcome,
@@ -63,6 +64,26 @@ def _break_and_look(scenario: SafetyScenario) -> SafetyScenarioResult:
     return execute_prepared_scenario(scenario, _seen_by_worker)
 
 
+_CREDENTIAL = "nvapi-WORKERLOG0123456789abcdef"
+
+
+def _provider_fails_holding_a_credential(scenario: SafetyScenario) -> SafetyScenarioResult:
+    """Fail the way a provider call does: an exception raised in a frame that holds the key."""
+    params = {"model": "m", "api_key": _CREDENTIAL}
+    try:
+        raise RuntimeError("provider rejected model " + params["model"])
+    except RuntimeError:
+        structlog.get_logger("worker").exception("patch_generation_failed")
+    return SafetyScenarioResult(
+        name=scenario.name,
+        scenario_class=scenario.scenario_class,
+        expected_outcome=scenario.expected_outcome,
+        actual_outcome=ActualOutcome.ERROR,
+        latency_seconds=0,
+        error="provider failed",
+    )
+
+
 @pytest.fixture
 def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
@@ -105,6 +126,25 @@ def test_each_scenario_breaks_its_own_copy_and_never_the_project(
     assert (project / "proj" / "app.txt").read_text() == "old\n"
     logs = "".join(path.read_text() for path in log_dir.glob("worker-*.log"))
     assert logs.count(" ran s") == 8
+
+
+def test_a_worker_log_never_contains_a_credential_from_a_failing_frame(
+    project: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    # CI uploads these logs as an artifact, which GitHub's secret masking does not cover.
+    log_dir = tmp_path_factory.mktemp("logs")
+
+    run_parallel_safety_benchmark(
+        discover_safety_scenarios(Path("scenarios")),
+        jobs=2,
+        log_dir=log_dir,
+        executor=_provider_fails_holding_a_credential,
+    )
+
+    logs = "".join(path.read_text() for path in log_dir.glob("worker-*.log"))
+    # The failure is still diagnosable from the log, without the frame's locals.
+    assert "RuntimeError: provider rejected model m" in logs
+    assert _CREDENTIAL not in logs
 
 
 def test_a_patch_outside_the_project_is_rejected_before_anything_runs(
