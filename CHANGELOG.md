@@ -7,12 +7,10 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
-- **`safety-benchmark` manual runs take a `repeat` input, and the CI artifact keeps the worker
-  logs** (#402). `gh workflow run safety-benchmark.yml -f repeat=3` generates a baseline over three
-  runs per scenario; scheduled, push and pull-request runs still run once. Each `--jobs` worker's
-  log is now uploaded with the report, so a scenario scored as `error` shows the provider's actual
+- **The CI safety benchmark keeps its worker logs** (#402). Each `--jobs` worker's log is uploaded
+  as a `safety-worker-logs` artifact, so a scenario scored as `error` shows the provider's actual
   response instead of only "the model provider did not return a usable answer". The safety
-  benchmark reference describes how to generate and commit the baseline from CI.
+  benchmark reference describes how to generate and commit the baseline from a manual CI run.
 
 ### Fixed
 - **The default NVIDIA model is `openai/gpt-oss-20b`** (#402). The previous default,
@@ -22,15 +20,21 @@ All notable changes to this project are documented here. The format is based on
   one that passed the plain completion, the strict-schema patch (with the correct fix) and the
   strict-schema verdict. An explicit `E2E_HEALER_LLM_MODEL` or `E2E_HEALER_NVIDIA_MODEL` is
   unaffected.
+- **The `examples-heal` CI job can write its scenario file** (#402). It had never run, because it
+  needs the NVIDIA key; once the key existed, the sandbox denied the write to `spec.ts`, which the
+  default write globs (`*.spec.ts`) do not match. The job now sets the same write globs as the
+  safety benchmark.
 
 ### Security
 - **Parallel safety-benchmark workers redact their logs** (#402). With `--jobs`, each worker
   process wrote its log with structlog's defaults: tracebacks rendered every frame's local
   variables, and the log redaction never ran. A provider error raised where a local held the API
   key wrote the key into `worker-<n>.log`. Workers now use the same logging configuration as the
-  CLI (plain tracebacks, redacted). The CI workflow, which now uploads those logs, also names
-  `E2E_HEALER_NVIDIA_API_KEY` in `E2E_HEALER_SENSITIVE_ENV_VARS`, so the key is replaced wherever
-  it appears. Logs from earlier local `--jobs` runs may contain a key and should be deleted.
+  CLI (plain tracebacks, redacted). The CI workflow, which now uploads those logs, names
+  `E2E_HEALER_NVIDIA_API_KEY` in `E2E_HEALER_SENSITIVE_ENV_VARS` and redacts every log file
+  before upload, which also covers raw writes to stdout and stderr; the logs are published only
+  if that step succeeds. Logs from earlier local `--jobs` runs may contain a key and should be
+  deleted.
 
 ## [0.6.0] - 2026-10-25
 

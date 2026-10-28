@@ -20,7 +20,7 @@ existing setups need no changes.
 
 | Provider | Install | Required credentials | Structured outputs | Notes |
 | --- | --- | --- | --- | --- |
-| `nvidia` | built-in (default) | `E2E_HEALER_LLM_API_KEY` or legacy `NVIDIA_API_KEY` | strict `json_schema` | OpenAI-compatible NIM endpoint; default model `openai/gpt-oss-120b`. |
+| `nvidia` | built-in (default) | `E2E_HEALER_LLM_API_KEY` or legacy `NVIDIA_API_KEY` | strict `json_schema` | OpenAI-compatible NIM endpoint; default model `openai/gpt-oss-20b`. |
 | `openai` | built-in | `E2E_HEALER_LLM_API_KEY` or `OPENAI_API_KEY` | strict `json_schema` | Set `E2E_HEALER_LLM_BASE_URL` for Azure or any OpenAI-compatible server. |
 | `anthropic` | `ai-driven-e2e[anthropic]` | `E2E_HEALER_LLM_API_KEY` or `ANTHROPIC_API_KEY` | tool-use | No configurable endpoint; schema enforced through Claude tool-use. |
 | `ollama` | `ai-driven-e2e[ollama]` | none (local) | native JSON-schema `format` | Fully offline; default endpoint `http://localhost:11434`. |

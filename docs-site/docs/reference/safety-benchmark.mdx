@@ -303,8 +303,9 @@ must therefore either apply to the current app or already be applied to it, whic
 
 `.github/workflows/safety-benchmark.yml` runs the benchmark with the default NVIDIA model and
 publishes the Markdown report as the run's step summary. The `safety-report` artifact holds the
-JSON and Markdown reports and, under `e2e-healer-safety-logs-*/`, each worker's log: when a
-scenario ends as `error`, that log has the provider's actual response.
+JSON and Markdown reports. The `safety-worker-logs` artifact holds each worker's log: when a
+scenario ends as `error`, that log has the provider's actual response. The logs are redacted file
+by file before upload, and published only if that redaction succeeded.
 
 - **Never blocks.** The job is `continue-on-error`, time-limited (120 minutes), and has read-only
   permissions. It runs four scenarios at a time (`--jobs 4`), one per runner core. There is no
@@ -326,19 +327,21 @@ scenario ends as `error`, that log has the provider's actual response.
 ### Setting a baseline
 
 The comparison reads `benchmarks/safety-baseline.json`. Until that file exists the report simply
-has no deltas. A baseline only means something against the same model, so take it from the CI
-workflow, which every later CI run is compared with:
+has no deltas. A baseline only means something against the same model and the same number of
+runs per scenario (the latency delta compares totals), so take it from an ordinary single-pass
+run of the CI workflow, the same shape as every run it is compared with:
 
-1. Start a manual run with three runs per scenario, so the baseline is not one sample:
+1. Start a manual run on `main`:
 
    ```bash
-   gh workflow run safety-benchmark.yml --ref main -f repeat=3
+   gh workflow run safety-benchmark.yml --ref main
    ```
 
-2. Download its report:
+2. Download that run's report. Filter on the manual trigger, so a newer push or scheduled run is
+   not picked up instead:
 
    ```bash
-   gh run list --workflow safety-benchmark.yml --limit 1
+   gh run list --workflow safety-benchmark.yml --event workflow_dispatch --branch main --limit 1
    gh run download <run-id> -n safety-report
    ```
 

@@ -103,10 +103,24 @@ def test_the_sandbox_lets_the_engine_edit_the_scenarios_named_spec_ts(
     assert not any(glob in {"*", "**/*", "**"} for glob in globs)
 
 
+def _uploads(job: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    steps = [step for step in job["steps"] if "upload-artifact" in step.get("uses", "")]
+    return {step["with"]["name"]: step for step in steps}
+
+
 def test_the_report_is_published_even_when_the_benchmark_step_fails(job: dict[str, Any]) -> None:
     (summary,) = _steps_running(job, "GITHUB_STEP_SUMMARY")
-    (upload,) = [step for step in job["steps"] if "upload-artifact" in step.get("uses", "")]
 
     assert summary["if"] == "always()"
-    assert upload["if"] == "always()"
-    assert upload["with"]["name"] == "safety-report"
+    assert _uploads(job)["safety-report"]["if"] == "always()"
+
+
+def test_worker_logs_are_published_only_after_they_were_redacted(job: dict[str, Any]) -> None:
+    # An artifact is not covered by GitHub's secret masking, so the logs must fail closed: a
+    # redaction step that errors halfway leaves raw files, which must never be uploaded.
+    (redact,) = [step for step in job["steps"] if step.get("id") == "redact"]
+    logs = _uploads(job)["safety-worker-logs"]
+
+    assert "redact_text" in redact["run"]
+    assert "steps.redact.outcome == 'success'" in logs["if"]
+    assert "e2e-healer-safety-logs" not in str(_uploads(job)["safety-report"]["with"]["path"])

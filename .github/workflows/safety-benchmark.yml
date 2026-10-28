@@ -10,11 +10,6 @@ name: safety-benchmark
 
 on:
   workflow_dispatch:
-    inputs:
-      repeat:
-        description: "Runs per scenario (1-10). Use 3 to generate a baseline; other triggers run once."
-        type: number
-        default: 1
   schedule:
     - cron: "17 5 * * 1"
   push:
@@ -113,14 +108,11 @@ jobs:
           # --jobs writes each worker's log under a temp directory; putting temp files in
           # RUNNER_TEMP lets the upload step below keep those logs with the report.
           TMPDIR: ${{ runner.temp }}
-          # Only manual runs have inputs; scheduled, push and pull_request runs run once.
-          REPEAT: ${{ inputs.repeat || 1 }}
         run: |
           uv run e2e-healer safety-benchmark \
             --scenario-root scenarios \
             --apply-patches \
             --jobs 4 \
-            --repeat "$REPEAT" \
             --output "$RUNNER_TEMP/safety-report.json" \
             --markdown "$RUNNER_TEMP/safety-report.md" \
             --baseline ../benchmarks/safety-baseline.json
@@ -134,6 +126,25 @@ jobs:
             echo "The safety benchmark did not produce a report; see the run log." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # Structured logs are already redacted in the worker, but a raw write to stdout or stderr
+      # (Playwright, a dependency) is not. Redact every worker log file before it is uploaded.
+      - name: Redact worker logs
+        id: redact
+        if: always()
+        env:
+          E2E_HEALER_NVIDIA_API_KEY: ${{ secrets.E2E_HEALER_NVIDIA_API_KEY }}
+          E2E_HEALER_SENSITIVE_ENV_VARS: E2E_HEALER_NVIDIA_API_KEY
+        run: |
+          uv run python - <<'EOF'
+          import glob, os
+          from app.shadow.redaction import redact_text
+          for path in glob.glob(os.path.join(os.environ["RUNNER_TEMP"], "e2e-healer-safety-logs-*", "*.log")):
+              with open(path, encoding="utf-8", errors="replace") as handle:
+                  text = handle.read()
+              with open(path, "w", encoding="utf-8") as handle:
+                  handle.write(redact_text(text))
+          EOF
+
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
@@ -142,5 +153,13 @@ jobs:
           path: |
             ${{ runner.temp }}/safety-report.json
             ${{ runner.temp }}/safety-report.md
-            ${{ runner.temp }}/e2e-healer-safety-logs-*/
+          if-no-files-found: warn
+
+      # Fail closed: the logs are published only when every one of them was redacted.
+      - name: Upload worker logs
+        if: always() && steps.redact.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: safety-worker-logs
+          path: ${{ runner.temp }}/e2e-healer-safety-logs-*/
           if-no-files-found: warn

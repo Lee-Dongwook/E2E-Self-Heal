@@ -187,4 +187,10 @@ jobs:
         working-directory: examples
         env:
           E2E_HEALER_NVIDIA_API_KEY: ${{ secrets.E2E_HEALER_NVIDIA_API_KEY }}
+          # The scenario file is literally named `spec.ts`, which the default write globs
+          # (`*.spec.ts`) do not match, so the sandbox would deny the repair before any model call.
+          E2E_HEALER_WRITE_GLOBS: "*.spec.ts,**/*.spec.ts,spec.ts,**/spec.ts"
+          # The example config's second reporter shells out to `e2e-healer review`, which is not
+          # on PATH here and adds unrelated model calls; the plain list reporter is enough.
+          E2E_HEALER_PLAYWRIGHT_CMD: npx playwright test --reporter=list
         run: uv run e2e-healer scenarios/id-rename/spec.ts --log scenarios/id-rename/playwright.log --diff scenarios/id-rename/change.patch --dry-run
