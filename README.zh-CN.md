@@ -119,7 +119,7 @@ cp .env.example .env    # 设置 E2E_HEALER_LLM_API_KEY（或所用提供商的�
 
 支持 **NVIDIA NIM（默认）、OpenAI、Anthropic（Claude）以及本地 Ollama 模型** —
 请在[配置](#配置)中选择一个后端。若使用默认后端，可前往
-[build.nvidia.com](https://build.nvidia.com/) 免费获取 NVIDIA NIM API 密钥（默认使用 `openai/gpt-oss-20b` 模型）。
+[build.nvidia.com](https://build.nvidia.com/) 免费获取 NVIDIA NIM API 密钥（默认使用 `minimaxai/minimax-m3.1-flash` 模型）。
 
 ### 在自己的项目中运行（全局 CLI）
 
@@ -198,7 +198,7 @@ CI 可据此决定后续流程。
 | ------------------------------ | ------------------------------------- | ---------------------------------------------- |
 | `E2E_HEALER_NVIDIA_API_KEY`    | —                                     | NVIDIA NIM API 密钥                            |
 | `E2E_HEALER_NVIDIA_BASE_URL`   | `https://integrate.api.nvidia.com/v1` | 兼容 OpenAI API 的端点                         |
-| `E2E_HEALER_NVIDIA_MODEL`      | `openai/gpt-oss-20b`                  | 支持结构化输出（Structured Outputs）的模型     |
+| `E2E_HEALER_NVIDIA_MODEL`      | `minimaxai/minimax-m3.1-flash`        | 支持结构化输出（Structured Outputs）的模型     |
 | `E2E_HEALER_NVIDIA_MAX_TOKENS` | `4096`                                | 单次补全的 token 上限（为推理预留余量）        |
 | `E2E_HEALER_MAX_LOOPS`         | `3`                                   | 修复循环次数上限                               |
 | `E2E_HEALER_PLAYWRIGHT_CMD`    | `npx playwright test`                 | Playwright 执行命令                            |
