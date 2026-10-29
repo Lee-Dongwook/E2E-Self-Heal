@@ -33,14 +33,23 @@ All notable changes to this project are documented here. The format is based on
   four workers on a free NVIDIA key got `429 Too Many Requests` on almost every call and 41 of 44
   scenarios ended as `error`. The workflow now passes `--jobs 1`, and the safety benchmark
   reference says to do the same on a free key.
+- **The CI safety benchmark runs on a free Gemini key** (#408). It reads the
+  `E2E_HEALER_GEMINI_API_KEY` secret and runs `gemini-3.5-flash-lite` through the generic `openai`
+  provider and Gemini's OpenAI-compatible endpoint, still one scenario at a time. On the free
+  NVIDIA tier, `openai/gpt-oss-20b` failed `refusal_accuracy` and `incorrect_refusal_rate` because
+  it re-typed the lines it patched (#404), and `minimax-m3.1-flash` was rate-limited. A clean local
+  run of the full corpus on the free Gemini tier scored all 44 scenarios as labeled with every gate
+  passing. Runs for different refs share one job concurrency group, so `main`, the weekly run and
+  pull requests take turns on the key instead of adding up against its per-minute limit. The
+  engine's default provider is unchanged.
 
 ### Security
 - **Parallel safety-benchmark workers redact their logs** (#402). With `--jobs`, each worker
   process wrote its log with structlog's defaults: tracebacks rendered every frame's local
   variables, and the log redaction never ran. A provider error raised where a local held the API
   key wrote the key into `worker-<n>.log`. Workers now use the same logging configuration as the
-  CLI (plain tracebacks, redacted). The CI workflow, which now uploads those logs, names
-  `E2E_HEALER_NVIDIA_API_KEY` in `E2E_HEALER_SENSITIVE_ENV_VARS` and redacts every log file
+  CLI (plain tracebacks, redacted). The CI workflow, which now uploads those logs, names its model
+  key in `E2E_HEALER_SENSITIVE_ENV_VARS` and redacts every log file
   before upload, which also covers raw writes to stdout and stderr; the logs are published only
   if that step succeeds. Logs from earlier local `--jobs` runs may contain a key and should be
   deleted.

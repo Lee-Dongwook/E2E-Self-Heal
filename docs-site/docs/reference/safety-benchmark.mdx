@@ -303,27 +303,40 @@ must therefore either apply to the current app or already be applied to it, whic
 
 ## In CI
 
-`.github/workflows/safety-benchmark.yml` runs the benchmark with the default NVIDIA model and
-publishes the Markdown report as the run's step summary. The `safety-report` artifact holds the
-JSON and Markdown reports. With `--jobs` above 1, the `safety-worker-logs` artifact holds each
-worker's log, redacted file by file before upload and published only if that redaction
-succeeded; at `--jobs 1`, the default in CI, the same output is in the job log itself. Either way,
-when a scenario ends as `error`, its log has the provider's actual response.
+`.github/workflows/safety-benchmark.yml` runs the benchmark on Google's free Gemini tier
+(`gemini-3.5-flash-lite`, through the generic `openai` provider and Gemini's OpenAI-compatible
+endpoint) and publishes the Markdown report as the run's step summary. That is a CI choice, not
+the engine's default provider: it passed every gate on a free key, where the free NVIDIA models
+either re-typed the lines they patched or were rate-limited into errors. The `safety-report`
+artifact holds the JSON and Markdown reports. With `--jobs` above 1, the `safety-worker-logs`
+artifact holds each worker's log, redacted file by file before upload and published only if that
+redaction succeeded; at `--jobs 1`, the default in CI, the same output is in the job log itself.
+Either way, when a scenario ends as `error`, its log has the provider's actual response.
 
 - **Never blocks.** The job is `continue-on-error`, time-limited (120 minutes), and has read-only
-  permissions. It runs one scenario at a time (`--jobs 1`): on a free NVIDIA key, four workers
-  calling a fast model get `429 Too Many Requests` on almost every call. There is no
-  partial-corpus mode for pull requests: a subset would hide a regression, and a run over fewer
-  scenarios already reports its own `n` and `insufficient_sample` rows.
+  permissions. It runs one scenario at a time (`--jobs 1`): free tiers limit requests per minute,
+  and on a free NVIDIA key four workers calling a fast model got `429 Too Many Requests` on almost
+  every call. Runs for different refs (`main`, the weekly schedule, pull requests) share one job
+  concurrency group, so they take turns on the key instead of calling it at once; GitHub keeps one
+  pending run per group, so a newer pending run replaces an older one. There is no partial-corpus
+  mode for pull requests: a subset would hide a regression, and a run over fewer scenarios already
+  reports its own `n` and `insufficient_sample` rows.
 - **A provider glitch fails a run.** If the model returns unparseable output on every retry of a
   scenario's final attempt, that scenario is an `error` and `error_count` fails, whatever the
   outcomes. Rate limiting (`429`) ends the same way once retries are exhausted, so read a
   single error by its scenario's `error` text, or the log, before re-running.
-- **Skipped without a key.** It runs only when the `E2E_HEALER_NVIDIA_API_KEY` repository secret
+- **Skipped without a key.** It runs only when the `E2E_HEALER_GEMINI_API_KEY` repository secret
   is set, so pull requests from forks, which cannot read secrets, skip it instead of failing. It
   uses the `pull_request` trigger, never `pull_request_target`, so a fork's code never runs with
-  the key. A free NVIDIA developer key from [build.nvidia.com](https://build.nvidia.com/) is
-  enough.
+  the key. A free key from [Google AI Studio](https://aistudio.google.com/apikey) is enough; take
+  it from a Google Cloud project without billing enabled, so going over the free tier's limits
+  answers `429` instead of billing. Google may use free-tier requests to improve its products,
+  which is acceptable here because the job sends only the demo app and its scenarios.
+- **About two runs a day.** The free tier caps `gemini-3.5-flash-lite` at 500 requests per day per
+  Google Cloud project (resetting at midnight Pacific time), and one run makes roughly 150 to 250.
+  A run that goes over can end scenarios as `error`, with `RESOURCE_EXHAUSTED` in the
+  log. Give the CI key a project of its own, so local runs never spend its quota, and start a run
+  you mean to keep, such as a baseline, early in the quota day.
 - **Runs when it can matter.** On pushes to `main`, weekly, on demand, and on pull requests that
   change `app/`, `examples/`, `benchmarks/` or the dependency files, so documentation-only changes
   spend no model calls.

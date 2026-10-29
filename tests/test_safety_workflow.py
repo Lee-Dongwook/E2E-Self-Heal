@@ -44,6 +44,14 @@ def test_the_job_is_time_bounded(job: dict[str, Any]) -> None:
     assert job["timeout-minutes"] <= 120
 
 
+def test_runs_for_different_refs_take_turns_on_the_shared_key(job: dict[str, Any]) -> None:
+    # One free key serves every ref: a per-ref job group would let main and pull requests call it
+    # at once, and cancelling in progress would let a pull request kill a running baseline run.
+    concurrency = job["concurrency"]
+    assert "${{" not in concurrency["group"]
+    assert concurrency["cancel-in-progress"] is False
+
+
 def test_the_job_is_skipped_rather_than_failed_without_the_model_key(
     workflow: dict[Any, Any], job: dict[str, Any]
 ) -> None:
@@ -53,7 +61,7 @@ def test_the_job_is_skipped_rather_than_failed_without_the_model_key(
     assert "has-key" in check["outputs"]
     # The probe reads the secret into an environment variable and only ever compares it.
     env = check["steps"][0]["env"]
-    assert env == {"E2E_HEALER_NVIDIA_API_KEY": "${{ secrets.E2E_HEALER_NVIDIA_API_KEY }}"}
+    assert env == {"E2E_HEALER_GEMINI_API_KEY": "${{ secrets.E2E_HEALER_GEMINI_API_KEY }}"}
 
 
 def test_the_secret_is_never_exposed_to_forked_pull_requests(workflow: dict[Any, Any]) -> None:
@@ -135,7 +143,7 @@ def test_the_workflow_sanitizer_removes_a_key_written_straight_to_a_worker_log(
     # Run the step's own script, so emptying or breaking it fails here and not in CI.
     (redact,) = [step for step in job["steps"] if step.get("id") == "redact"]
     script = redact["run"].split("<<'EOF'\n", 1)[1].rsplit("EOF", 1)[0]
-    key = "nvapi-RAWWRITE0123456789abcdef"
+    key = "AIzaRAWWRITE0123456789abcdefghijklmnop"
     logs = tmp_path / "e2e-healer-safety-logs-x"
     logs.mkdir()
     log = logs / "worker-0.log"
@@ -148,7 +156,7 @@ def test_the_workflow_sanitizer_removes_a_key_written_straight_to_a_worker_log(
             **os.environ,
             **{name: value for name, value in redact["env"].items() if "secrets." not in value},
             "RUNNER_TEMP": str(tmp_path),
-            "E2E_HEALER_NVIDIA_API_KEY": key,
+            "E2E_HEALER_LLM_API_KEY": key,
         },
     )
 
