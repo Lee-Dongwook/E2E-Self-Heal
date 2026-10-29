@@ -44,6 +44,14 @@ def test_the_job_is_time_bounded(job: dict[str, Any]) -> None:
     assert job["timeout-minutes"] <= 120
 
 
+def test_runs_for_different_refs_take_turns_on_the_shared_key(job: dict[str, Any]) -> None:
+    # One free key serves every ref: a per-ref job group would let main and pull requests call it
+    # at once, and cancelling in progress would let a pull request kill a running baseline run.
+    concurrency = job["concurrency"]
+    assert "${{" not in concurrency["group"]
+    assert concurrency["cancel-in-progress"] is False
+
+
 def test_the_job_is_skipped_rather_than_failed_without_the_model_key(
     workflow: dict[Any, Any], job: dict[str, Any]
 ) -> None:

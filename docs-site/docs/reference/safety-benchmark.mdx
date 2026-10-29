@@ -316,8 +316,11 @@ Either way, when a scenario ends as `error`, its log has the provider's actual r
 - **Never blocks.** The job is `continue-on-error`, time-limited (120 minutes), and has read-only
   permissions. It runs one scenario at a time (`--jobs 1`): free tiers limit requests per minute,
   and on a free NVIDIA key four workers calling a fast model got `429 Too Many Requests` on almost
-  every call. There is no partial-corpus mode for pull requests: a subset would hide a regression,
-  and a run over fewer scenarios already reports its own `n` and `insufficient_sample` rows.
+  every call. Runs for different refs (`main`, the weekly schedule, pull requests) share one job
+  concurrency group, so they take turns on the key instead of calling it at once; GitHub keeps one
+  pending run per group, so a newer pending run replaces an older one. There is no partial-corpus
+  mode for pull requests: a subset would hide a regression, and a run over fewer scenarios already
+  reports its own `n` and `insufficient_sample` rows.
 - **A provider glitch fails a run.** If the model returns unparseable output on every retry of a
   scenario's final attempt, that scenario is an `error` and `error_count` fails, whatever the
   outcomes. Rate limiting (`429`) ends the same way once retries are exhausted, so read a

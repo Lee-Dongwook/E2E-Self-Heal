@@ -39,7 +39,9 @@ All notable changes to this project are documented here. The format is based on
   NVIDIA tier, `openai/gpt-oss-20b` failed `refusal_accuracy` and `incorrect_refusal_rate` because
   it re-typed the lines it patched (#404), and `minimax-m3.1-flash` was rate-limited. A clean local
   run of the full corpus on the free Gemini tier scored all 44 scenarios as labeled with every gate
-  passing. The engine's default provider is unchanged.
+  passing. Runs for different refs share one job concurrency group, so `main`, the weekly run and
+  pull requests take turns on the key instead of adding up against its per-minute limit. The
+  engine's default provider is unchanged.
 
 ### Security
 - **Parallel safety-benchmark workers redact their logs** (#402). With `--jobs`, each worker
