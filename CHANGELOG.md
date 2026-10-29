@@ -28,6 +28,12 @@ All notable changes to this project are documented here. The format is based on
   safety benchmark. It is informational (`continue-on-error`) until #404, because a model that
   re-types the line it patches has its correct patches rejected by the stale-line check.
 
+### Changed
+- **The CI safety benchmark runs one scenario at a time** (#405). With the faster default model,
+  four workers on a free NVIDIA key got `429 Too Many Requests` on almost every call and 41 of 44
+  scenarios ended as `error`. The workflow now passes `--jobs 1`, and the safety benchmark
+  reference says to do the same on a free key.
+
 ### Security
 - **Parallel safety-benchmark workers redact their logs** (#402). With `--jobs`, each worker
   process wrote its log with structlog's defaults: tracebacks rendered every frame's local
