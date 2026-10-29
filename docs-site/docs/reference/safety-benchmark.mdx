@@ -94,7 +94,9 @@ are comparable run for run; only the wall clock changes.
   parallel run measures the same working tree a sequential one would.
 - **Worker output** (structured logs, Playwright output) goes to one log file per worker instead of
   the terminal, where it would interleave. The directory is printed when the run starts.
-- **Model calls run `N` at a time.** Mind the provider's rate limit.
+- **Model calls run `N` at a time.** Mind the provider's rate limit. On a free NVIDIA developer
+  key, `--jobs 4` with the default model got `429 Too Many Requests` on almost every call, and each
+  scenario ended as `error`; use `--jobs 1` there.
 
 ## Reading the report
 
@@ -303,18 +305,20 @@ must therefore either apply to the current app or already be applied to it, whic
 
 `.github/workflows/safety-benchmark.yml` runs the benchmark with the default NVIDIA model and
 publishes the Markdown report as the run's step summary. The `safety-report` artifact holds the
-JSON and Markdown reports. The `safety-worker-logs` artifact holds each worker's log: when a
-scenario ends as `error`, that log has the provider's actual response. The logs are redacted file
-by file before upload, and published only if that redaction succeeded.
+JSON and Markdown reports. With `--jobs` above 1, the `safety-worker-logs` artifact holds each
+worker's log, redacted file by file before upload and published only if that redaction
+succeeded; at `--jobs 1`, the default in CI, the same output is in the job log itself. Either way,
+when a scenario ends as `error`, its log has the provider's actual response.
 
 - **Never blocks.** The job is `continue-on-error`, time-limited (120 minutes), and has read-only
-  permissions. It runs four scenarios at a time (`--jobs 4`), one per runner core. There is no
+  permissions. It runs one scenario at a time (`--jobs 1`): on a free NVIDIA key, four workers
+  calling a fast model get `429 Too Many Requests` on almost every call. There is no
   partial-corpus mode for pull requests: a subset would hide a regression, and a run over fewer
   scenarios already reports its own `n` and `insufficient_sample` rows.
 - **A provider glitch fails a run.** If the model returns unparseable output on every retry of a
   scenario's final attempt, that scenario is an `error` and `error_count` fails, whatever the
-  outcomes. It happens with or without `--jobs` (the logs show no rate limiting), so read a
-  single error by its scenario's `error` text before re-running.
+  outcomes. Rate limiting (`429`) ends the same way once retries are exhausted, so read a
+  single error by its scenario's `error` text, or the log, before re-running.
 - **Skipped without a key.** It runs only when the `E2E_HEALER_NVIDIA_API_KEY` repository secret
   is set, so pull requests from forks, which cannot read secrets, skip it instead of failing. It
   uses the `pull_request` trigger, never `pull_request_target`, so a fork's code never runs with

@@ -217,7 +217,7 @@ e2e-healer tests/login.spec.ts
 
 Works with **NVIDIA NIM (default), OpenAI, Anthropic (Claude), DeepSeek, OrcaRouter, or a local Ollama model** —
 see [Configuration](#configuration) to pick one. For the default, get a free NVIDIA NIM API
-key at [build.nvidia.com](https://build.nvidia.com/) (default model `openai/gpt-oss-20b`).
+key at [build.nvidia.com](https://build.nvidia.com/) (default model `minimaxai/minimax-m3.1-flash`).
 
 <details>
 <summary>Development install from a local clone</summary>
@@ -450,7 +450,7 @@ PY
 | `E2E_HEALER_SENSITIVE_VALUES`  | —                                   | Literal values to redact (min 4 chars, masked, comma-separated)                   |
 | `E2E_HEALER_NVIDIA_API_KEY`    | —                                     | NVIDIA NIM API key (legacy; maps to `LLM_API_KEY`)                               |
 | `E2E_HEALER_NVIDIA_BASE_URL`   | `https://integrate.api.nvidia.com/v1` | OpenAI-compatible endpoint (legacy)                                              |
-| `E2E_HEALER_NVIDIA_MODEL`      | `openai/gpt-oss-20b`                  | Structured-Outputs-capable model (legacy)                                        |
+| `E2E_HEALER_NVIDIA_MODEL`      | `minimaxai/minimax-m3.1-flash`        | Structured-Outputs-capable model (legacy)                                        |
 | `E2E_HEALER_NVIDIA_MAX_TOKENS` | `4096`                                | Completion token cap (legacy)                                                    |
 | `ORCAROUTER_API_KEY`           | —                                     | OrcaRouter API key (used when provider is `orcarouter`)                          |
 | `ORCAROUTER_BASE_URL`          | `https://api.orcarouter.ai/v1`        | OrcaRouter OpenAI-compatible endpoint                                            |

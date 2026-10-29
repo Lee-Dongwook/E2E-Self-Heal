@@ -13,18 +13,26 @@ All notable changes to this project are documented here. The format is based on
   benchmark reference describes how to generate and commit the baseline from a manual CI run.
 
 ### Fixed
-- **The default NVIDIA model is `openai/gpt-oss-20b`** (#402). The previous default,
+- **The default NVIDIA model is `minimaxai/minimax-m3.1-flash`** (#402, #405). The previous default,
   `openai/gpt-oss-120b`, reached end of life on NVIDIA's API on 2026-09-03 and answers every call
   with `410 Gone`, so `E2E_HEALER_LLM_PROVIDER=nvidia` without an explicit model ended every run in
-  `provider_error`. Among the models a free NVIDIA developer key could reach, `gpt-oss-20b` was the
-  one that passed the plain completion, the strict-schema patch (with the correct fix) and the
-  strict-schema verdict. An explicit `E2E_HEALER_LLM_MODEL` or `E2E_HEALER_NVIDIA_MODEL` is
-  unaffected.
+  `provider_error`. A probe of the models a free NVIDIA developer key can call, using the engine's
+  own client and prompts, found `minimax-m3.1-flash` the only one that passed the plain
+  completion, a strict-schema patch the engine applied with the correct fix, and the
+  strict-schema verdict, at 1-3 s per call. `openai/gpt-oss-20b`, briefly the default, answered
+  but re-typed the line it patched, so the engine rejected its patches (#404). An explicit
+  `E2E_HEALER_LLM_MODEL` or `E2E_HEALER_NVIDIA_MODEL` is unaffected.
 - **The `examples-heal` CI job can write its scenario file** (#402). It had never run, because it
   needs the NVIDIA key; once the key existed, the sandbox denied the write to `spec.ts`, which the
   default write globs (`*.spec.ts`) do not match. The job now sets the same write globs as the
-  safety benchmark. It is informational (`continue-on-error`) until #404, because the default
-  NVIDIA model's correct patches are often rejected by the stale-line check.
+  safety benchmark. It is informational (`continue-on-error`) until #404, because a model that
+  re-types the line it patches has its correct patches rejected by the stale-line check.
+
+### Changed
+- **The CI safety benchmark runs one scenario at a time** (#405). With the faster default model,
+  four workers on a free NVIDIA key got `429 Too Many Requests` on almost every call and 41 of 44
+  scenarios ended as `error`. The workflow now passes `--jobs 1`, and the safety benchmark
+  reference says to do the same on a free key.
 
 ### Security
 - **Parallel safety-benchmark workers redact their logs** (#402). With `--jobs`, each worker

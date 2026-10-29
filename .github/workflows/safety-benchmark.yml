@@ -58,8 +58,8 @@ jobs:
     if: needs.check-secret.outputs.has-key == 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
-    # 44 runnable scenarios, each a full repair loop plus browser runs. --jobs 4 runs four at
-    # once in separate copies of examples/, one per runner core.
+    # 44 runnable scenarios, each a full repair loop plus browser runs, one at a time: the free
+    # NVIDIA tier rate-limits a fast model run four-wide (429 on almost every call, #405).
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -112,7 +112,7 @@ jobs:
           uv run e2e-healer safety-benchmark \
             --scenario-root scenarios \
             --apply-patches \
-            --jobs 4 \
+            --jobs 1 \
             --output "$RUNNER_TEMP/safety-report.json" \
             --markdown "$RUNNER_TEMP/safety-report.md" \
             --baseline ../benchmarks/safety-baseline.json
