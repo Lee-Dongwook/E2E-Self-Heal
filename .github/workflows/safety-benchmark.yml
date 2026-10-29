@@ -45,9 +45,9 @@ jobs:
     steps:
       - id: check
         env:
-          E2E_HEALER_NVIDIA_API_KEY: ${{ secrets.E2E_HEALER_NVIDIA_API_KEY }}
+          E2E_HEALER_GEMINI_API_KEY: ${{ secrets.E2E_HEALER_GEMINI_API_KEY }}
         run: |
-          if [ -n "$E2E_HEALER_NVIDIA_API_KEY" ]; then
+          if [ -n "$E2E_HEALER_GEMINI_API_KEY" ]; then
             echo "has-key=true" >> "$GITHUB_OUTPUT"
           else
             echo "has-key=false" >> "$GITHUB_OUTPUT"
@@ -58,8 +58,9 @@ jobs:
     if: needs.check-secret.outputs.has-key == 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
-    # 44 runnable scenarios, each a full repair loop plus browser runs, one at a time: the free
-    # NVIDIA tier rate-limits a fast model run four-wide (429 on almost every call, #405).
+    # 44 runnable scenarios, each a full repair loop plus browser runs, one at a time: free model
+    # tiers rate-limit per minute, and four workers on a free NVIDIA key got 429 on almost every
+    # call (#405). A clean local run on the free Gemini tier took about 20 minutes (#408).
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -94,10 +95,17 @@ jobs:
       - name: Run safety benchmark
         working-directory: examples
         env:
-          E2E_HEALER_NVIDIA_API_KEY: ${{ secrets.E2E_HEALER_NVIDIA_API_KEY }}
+          # The free Gemini tier, through the generic OpenAI-compatible provider (#408). Gemini
+          # passed every gate on a free key; the free NVIDIA models either re-typed the lines they
+          # patched (#404) or were rate-limited into errors (#405). Use a key from a Google Cloud
+          # project without billing, so exceeding the free tier answers 429 instead of billing.
+          E2E_HEALER_LLM_PROVIDER: openai
+          E2E_HEALER_LLM_BASE_URL: https://generativelanguage.googleapis.com/v1beta/openai/
+          E2E_HEALER_LLM_MODEL: gemini-3.5-flash-lite
+          E2E_HEALER_LLM_API_KEY: ${{ secrets.E2E_HEALER_GEMINI_API_KEY }}
           # The worker logs are uploaded as an artifact, which GitHub's secret masking does not
           # cover. Name the key so the engine's own log redaction replaces it wherever it appears.
-          E2E_HEALER_SENSITIVE_ENV_VARS: E2E_HEALER_NVIDIA_API_KEY
+          E2E_HEALER_SENSITIVE_ENV_VARS: E2E_HEALER_LLM_API_KEY
           # The example Playwright config adds a reporter that runs `e2e-healer review` on every
           # failing test. Benchmark scenarios fail on purpose, so that would add unrelated model
           # calls and distort latency. Use the plain list reporter.
@@ -132,8 +140,8 @@ jobs:
         id: redact
         if: always()
         env:
-          E2E_HEALER_NVIDIA_API_KEY: ${{ secrets.E2E_HEALER_NVIDIA_API_KEY }}
-          E2E_HEALER_SENSITIVE_ENV_VARS: E2E_HEALER_NVIDIA_API_KEY
+          E2E_HEALER_LLM_API_KEY: ${{ secrets.E2E_HEALER_GEMINI_API_KEY }}
+          E2E_HEALER_SENSITIVE_ENV_VARS: E2E_HEALER_LLM_API_KEY
         run: |
           uv run python - <<'EOF'
           import glob, os
