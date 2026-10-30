@@ -147,6 +147,9 @@ def test_quote_conversion_keeps_the_literal_value() -> None:
         "test('t', async ({ page }) => {",
         # Template literals are never matched loosely, even with the same value.
         "await page.click(`#submit-btn`, { timeout: 5000 });",
+        # Joining two identifiers names a different receiver; spacing between tokens is all
+        # that may differ.
+        "awaitpage.click('#submit-btn', { timeout: 5000 });",
     ],
 )
 def test_a_re_typed_line_that_is_not_the_target_is_still_rejected(original: str) -> None:

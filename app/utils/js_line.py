@@ -5,16 +5,23 @@ that line rather than copy it: single quotes for double, the indentation dropped
 parentheses. These helpers let ``_apply`` recognise such a quote as the line it names (#404),
 and write the replacement in the file's own formatting rather than the model's.
 
-Only formatting is forgiven. Two lines match when they have the same code characters outside
-string literals (whitespace there is ignored) and the same string literal *values*, whatever
-quote delimits them. A line with a template literal, a comment, a regex or a division (any
-``/`` or backtick outside a quoted string) is never matched loosely; the caller falls back to
-exact comparison, so anything this scanner cannot read with certainty stays strict.
+Only formatting is forgiven. Two lines match when they have the same code *tokens* outside
+string literals (spacing between tokens is ignored, but ``await page`` never equals
+``awaitpage``, nor ``++`` equal ``+ +``) and the same string literal *values*, whatever quote
+delimits them. A line with a template literal, a comment, a regex or a division (any ``/`` or
+backtick outside a quoted string) is never matched loosely; the caller falls back to exact
+comparison, so anything this scanner cannot read with certainty stays strict.
 """
 
+import re
 from typing import NamedTuple
 
 _QUOTES = ("'", '"')
+# Identifiers, numbers, multi-character operators (longest first), then any other character.
+_TOKEN = re.compile(
+    r"[A-Za-z_$][\w$]*|\d[\w.]*|\.\.\.|===|!==|\*\*=|<<=|>>=|=>|==|!=|<=|>=|&&|\|\||\?\?|\?\."
+    r"|\+\+|--|\*\*|<<|>>|[-+*%&|^]=|\S"
+)
 
 
 class _Segment(NamedTuple):
@@ -85,22 +92,21 @@ def _encode(value: str, quote: str) -> str:
     return quote + "".join(out) + quote
 
 
-def _key(segments: list[_Segment]) -> tuple[tuple[str, bool], ...]:
-    """What a line means for matching: code without whitespace, and literal values."""
+def _tokens(code: str) -> tuple[str, ...]:
+    return tuple(_TOKEN.findall(code))
+
+
+def _key(segments: list[_Segment]) -> tuple[tuple[str, ...], ...]:
+    """What a line means for matching: code tokens, and literal values."""
     return tuple(
-        (_decode(segment.text), True) if segment.quote else ("".join(segment.text.split()), False)
+        ("value", _decode(segment.text)) if segment.quote else ("code", *_tokens(segment.text))
         for segment in segments
         if segment.quote or segment.text.strip()
     )
 
 
 def same_line_ignoring_format(line: str, quoted: str) -> bool:
-    """Whether ``quoted`` is ``line`` re-typed, differing only in whitespace and quote style.
-
-    Whitespace outside literals is ignored entirely, which could equate two different
-    statements (``a + +b`` and ``a++b``). That is acceptable here because the caller compares
-    a quote only against the one line it names, never searches the file with it alone.
-    """
+    """Whether ``quoted`` is ``line`` re-typed, differing only in spacing and quote style."""
     line_segments = _scan(line)
     quoted_segments = _scan(quoted)
     if line_segments is None or quoted_segments is None:
@@ -129,7 +135,7 @@ def _transplant(
     for old, new in zip(before, after, strict=True):
         if (old.quote is None) != (new.quote is None):
             return None
-        if old.quote is None and "".join(old.text.split()) != "".join(new.text.split()):
+        if old.quote is None and _tokens(old.text) != _tokens(new.text):
             return None
     pieces: list[str] = []
     position = 0
