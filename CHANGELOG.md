@@ -29,8 +29,17 @@ All notable changes to this project are documented here. The format is based on
 - **The `examples-heal` CI job can write its scenario file** (#402). It had never run, because it
   needs the NVIDIA key; once the key existed, the sandbox denied the write to `spec.ts`, which the
   default write globs (`*.spec.ts`) do not match. The job now sets the same write globs as the
-  safety benchmark. It is informational (`continue-on-error`) until #404, because a model that
-  re-types the line it patches has its correct patches rejected by the stale-line check.
+  safety benchmark, and is a blocking check again now that #404 is fixed.
+- **A patch whose quoted line was re-typed is no longer rejected** (#404). The Patch Generator
+  names the line it replaces by quoting it, and the engine required that quote to match the file
+  character for character. Models often re-type it instead (single quotes for double, the
+  indentation dropped), so correct patches were rejected as stale and runs ended at the loop cap:
+  84 such rejections in one CI benchmark with `openai/gpt-oss-20b`, 4 with `minimax-m3.1-flash`. A
+  quote that differs from the line only in whitespace and quote style now counts as that line,
+  and the replacement is written in the file's formatting: when only string values change (the
+  usual selector fix), the file's own line is rebuilt with the new values. A line with a template
+  literal, comment or regex still has to match exactly, a quote of a different or changed line is
+  still rejected, and the scope gates and the AST lock judge the line actually written.
 
 ### Changed
 - **The CI safety benchmark runs one scenario at a time** (#405). With the faster default model,

@@ -20,6 +20,7 @@ from app.sandbox import SandboxViolation, assert_patch_boundary_allowed
 from app.schemas import PatchInstruction
 from app.state import AgentState
 from app.utils.files import split_line_ending
+from app.utils.js_line import restyle_like, same_line_ignoring_format
 from app.verify.ast_lock import AstLockVerdict, check_ast_lock
 
 logger = structlog.get_logger(__name__)
@@ -527,15 +528,29 @@ def _apply(code: str, instructions: list[PatchInstruction]) -> str:
 
         current, line_ending = split_line_ending(lines[index])
         if current != instruction.original:
-            found = [
-                n
-                for n, line in enumerate(lines, 1)
-                if split_line_ending(line)[0] == instruction.original
-            ]
-            hint = f" (that text is on line {', '.join(map(str, found))})" if found else ""
-            raise PatchApplicationError(
-                f"line {instruction.line} no longer matches the expected original text{hint}"
+            if not same_line_ignoring_format(current, instruction.original):
+                found = [
+                    n
+                    for n, line in enumerate(lines, 1)
+                    if split_line_ending(line)[0] == instruction.original
+                    or same_line_ignoring_format(split_line_ending(line)[0], instruction.original)
+                ]
+                hint = f" (that text is on line {', '.join(map(str, found))})" if found else ""
+                raise PatchApplicationError(
+                    f"line {instruction.line} no longer matches the expected original text{hint}"
+                )
+            # The model re-typed the line (quotes, indentation, spacing) instead of copying it
+            # (#404). Write its replacement in the file's formatting, and judge that line: the
+            # scope gates and the AST lock below see exactly what reaches the disk.
+            instruction = instruction.model_copy(
+                update={
+                    "original": current,
+                    "replacement": restyle_like(
+                        current, instruction.original, instruction.replacement
+                    ),
+                }
             )
+            logger.info("patch_original_reformatted", line=instruction.line)
         masked_current, _ = split_line_ending(masked_lines[index])
         candidate_lines = lines.copy()
         candidate_lines[index] = instruction.replacement + line_ending

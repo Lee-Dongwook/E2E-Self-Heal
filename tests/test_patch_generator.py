@@ -82,6 +82,106 @@ def test_rejects_mismatched_original_line() -> None:
         )
 
 
+# --- a re-typed original line (#404) -------------------------------------------------------
+
+_SPEC = (
+    'test("t", async ({ page }) => {\n  await page.click("#submit-btn", { timeout: 5000 });\n});\n'
+)
+
+
+@pytest.mark.parametrize(
+    ("original", "replacement", "written"),
+    [
+        # Quotes and indentation re-typed: what gpt-oss models did on most attempts.
+        (
+            "await page.click('#submit-btn', { timeout: 5000 });",
+            "await page.click('#submit', { timeout: 5000 });",
+            '  await page.click("#submit", { timeout: 5000 });',
+        ),
+        # Spacing re-typed: the file's spacing is kept, not the model's.
+        (
+            '    await page.click( "#submit-btn", {timeout: 5000} );',
+            'await page.click( "#submit", {timeout: 5000} );',
+            '  await page.click("#submit", { timeout: 5000 });',
+        ),
+        # The wait changes too, so the line cannot be rebuilt from the file's: the model's
+        # line is written with the file's indentation and quotes.
+        (
+            "await page.click('#submit-btn', { timeout: 5000 });",
+            "await page.click('#submit', { timeout: 10000 });",
+            '  await page.click("#submit", { timeout: 10000 });',
+        ),
+    ],
+)
+def test_a_re_typed_original_line_is_applied_in_the_files_formatting(
+    original: str, replacement: str, written: str
+) -> None:
+    result = _apply(_SPEC, [_instruction(2, original, replacement)])
+
+    assert result.splitlines() == [_SPEC.splitlines()[0], written, "});"]
+
+
+def test_quote_conversion_keeps_the_literal_value() -> None:
+    code = 'await page.getByText("it\'s here").click();\n'
+
+    result = _apply(
+        code,
+        [
+            _instruction(
+                1,
+                "await page.getByText('it\\'s here').click();",
+                "await page.getByText('it\\'s there').click();",
+            )
+        ],
+    )
+
+    assert result == 'await page.getByText("it\'s there").click();\n'
+
+
+@pytest.mark.parametrize(
+    "original",
+    [
+        # The quoted line's selector differs: the file changed since the model saw it.
+        "await page.click('#old-btn', { timeout: 5000 });",
+        # The quoted text is another line's, re-typed.
+        "test('t', async ({ page }) => {",
+        # Template literals are never matched loosely, even with the same value.
+        "await page.click(`#submit-btn`, { timeout: 5000 });",
+        # Joining two identifiers names a different receiver; spacing between tokens is all
+        # that may differ.
+        "awaitpage.click('#submit-btn', { timeout: 5000 });",
+    ],
+)
+def test_a_re_typed_line_that_is_not_the_target_is_still_rejected(original: str) -> None:
+    replacement = "await page.click('#submit', { timeout: 5000 });"
+
+    with pytest.raises(PatchApplicationError, match="no longer matches"):
+        _apply(_SPEC, [_instruction(2, original, replacement)])
+
+
+def test_the_stale_line_hint_names_the_line_a_re_typed_quote_belongs_to() -> None:
+    code = "await page.click('#a');\nawait page.click('#b');\n"
+
+    with pytest.raises(PatchApplicationError, match="that text is on line 2"):
+        _apply(code, [_instruction(1, '  await page.click("#b");', "await page.click('#c');")])
+
+
+def test_the_scope_gates_still_judge_a_re_typed_line() -> None:
+    code = '  await page.fill("#email", "a@b.co");\n'
+
+    with pytest.raises(PatchGuardrailViolation, match="changes an argument other than"):
+        _apply(
+            code,
+            [
+                _instruction(
+                    1,
+                    "await page.fill('#email', 'a@b.co');",
+                    "await page.fill('#email', 'evil@b.co');",
+                )
+            ],
+        )
+
+
 def test_rejects_duplicate_line_targets() -> None:
     instructions = [
         _instruction(1, "await page.click('#old')", "await page.click('#first')"),
