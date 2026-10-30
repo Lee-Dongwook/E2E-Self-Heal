@@ -116,10 +116,11 @@ below) so it is redacted from logs.
   provider's terms. Fine for a demo app, not for code you may not share.
 - **Use a project without billing.** For Gemini, take the key from a Google Cloud project with no
   billing account, so going over the free limits answers `429` instead of billing.
-- **Not measured.** Mistral's Free mode supports strict `json_schema` through
-  `https://api.mistral.ai/v1`, but its limits and which models it covers are shown only in its
-  console. Z.ai's free GLM Flash models support only `json_object`, not the `json_schema` the
-  engine requests, so they don't work as is.
+- **Probed, not benchmarked.** On Mistral's Free mode (`https://api.mistral.ai/v1`, strict
+  `json_schema`), `codestral-2508` answered all three probe calls correctly, a plain completion,
+  a patch the engine applied, and a verdict. `mistral-small-latest` was rate-limited on every call,
+  and Free mode's per-model limits are shown only in its console. Z.ai's free GLM Flash models
+  support only `json_object`, not the `json_schema` the engine requests, so they don't work as is.
 
 ## Redaction boundary
 
