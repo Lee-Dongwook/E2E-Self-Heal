@@ -139,10 +139,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [check, examples-repro, action-consumer, check-secret]
     if: needs.check-secret.outputs.has-key == 'true'
-    # Informational until #404: models that re-type the line they patch (quotes, indentation)
-    # have correct patches rejected by the stale-line check, so this job's result depends on the
-    # model. Make it blocking again once that is fixed.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

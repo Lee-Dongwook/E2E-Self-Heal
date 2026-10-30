@@ -355,8 +355,8 @@ redaction configured or triggered, so `redaction_applied` is `false` with a coun
 patch applied (the button's `id` changes from `submit-btn` to `submit`). Exit code `0`. The first
 candidate quoted the selector with single quotes while the file uses double quotes, so the stale-line
 check refused to apply it: that spends a loop, and `path` shows `patch_generator` running twice in a
-row. The second candidate was applied and passed, so `loop_count` is `1` and its `next_step` is
-`end`.
+row. (The capture predates #404; such a candidate is now applied in the file's formatting.) The
+second candidate was applied and passed, so `loop_count` is `1` and its `next_step` is `end`.
 
 <details>
 <summary>Captured payload</summary>
