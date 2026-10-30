@@ -11,6 +11,10 @@ All notable changes to this project are documented here. The format is based on
   as a `safety-worker-logs` artifact, so a scenario scored as `error` shows the provider's actual
   response instead of only "the model provider did not return a usable answer". The safety
   benchmark reference describes how to generate and commit the baseline from a manual CI run.
+- **The configuration reference lists free hosted tiers that work** (#416): Gemini
+  `gemini-3.5-flash-lite`, Groq `qwen/qwen3.8-27b` and NVIDIA `minimax-m3.1-flash`, each with its
+  settings, its result on the full safety benchmark corpus, its limits, and the data-use caveat of
+  free tiers.
 
 ### Fixed
 - **The default NVIDIA model is `minimaxai/minimax-m3.1-flash`** (#402, #405). The previous default,
