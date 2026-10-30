@@ -79,6 +79,49 @@ DNS lookup, so a hostname that resolves to a private address is reported as `rem
 them when that is intended, and configure the redaction boundary below for any value that must
 not leave the machine.
 
+### Free hosted tiers
+
+These free tiers were measured with the full [safety benchmark](safety-benchmark) corpus
+(`--apply-patches --jobs 1`, one run each) in October 2026. Free limits change without notice, and
+each provider shows your current ones only in its console. Run one scenario at a time on any of
+them (`--jobs 1`): their per-minute limits reject parallel runs.
+
+| Model | Result | Limits |
+| --- | --- | --- |
+| Google `gemini-3.5-flash-lite` | All 44 scenarios as labeled, every gate passing, 19 minutes. The CI benchmark uses it. | 15 requests per minute, 500 per day per Google Cloud project (resets at midnight Pacific). One run is about 150-250 requests. |
+| Groq `qwen/qwen3.8-27b` | All 36 answered scenarios correct, 8 provider errors at the end of the run, 42 minutes. | Daily limit apparently below one full run. See your account's limits page. |
+| NVIDIA `minimaxai/minimax-m3.1-flash` (the default) | 42 of 44 as labeled, `refusal_accuracy` 91.7% (gate: 95%), no errors, 106 minutes. | About 40 requests per minute; four parallel workers got `429` on almost every call. |
+
+```bash
+# Google AI Studio (key from https://aistudio.google.com/apikey)
+E2E_HEALER_LLM_PROVIDER=openai
+E2E_HEALER_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+E2E_HEALER_LLM_MODEL=gemini-3.5-flash-lite
+
+# Groq (key from https://console.groq.com/keys)
+E2E_HEALER_LLM_PROVIDER=openai
+E2E_HEALER_LLM_BASE_URL=https://api.groq.com/openai/v1
+E2E_HEALER_LLM_MODEL=qwen/qwen3.8-27b
+E2E_HEALER_LLM_MAX_TOKENS=1024   # Groq counts the output allowance against its per-minute cap
+
+# NVIDIA (key from https://build.nvidia.com/): the default provider and model, nothing to set
+```
+
+Set `E2E_HEALER_LLM_API_KEY` to the key, and name it in `E2E_HEALER_SENSITIVE_ENV_VARS` (see
+below) so it is redacted from logs.
+
+- **The evidence leaves your machine, and may be kept.** On Gemini's free quota, Google uses
+  what you send and the responses to improve its products, and human reviewers may read them
+  ([Gemini API terms](https://ai.google.dev/gemini-api/terms), "Unpaid Services"). Check each
+  provider's terms. Fine for a demo app, not for code you may not share.
+- **Use a project without billing.** For Gemini, take the key from a Google Cloud project with no
+  billing account, so going over the free limits answers `429` instead of billing.
+- **Probed, not benchmarked.** On Mistral's Free mode (`https://api.mistral.ai/v1`, strict
+  `json_schema`), `codestral-2508` answered all three probe calls correctly, a plain completion,
+  a patch the engine applied, and a verdict. `mistral-small-latest` was rate-limited on every call,
+  and Free mode's per-model limits are shown only in its console. Z.ai's free GLM Flash models
+  support only `json_object`, not the `json_schema` the engine requests, so they don't work as is.
+
 ## Redaction boundary
 
 Two variables extend the built-in credential patterns (authorization headers, `password=`,
