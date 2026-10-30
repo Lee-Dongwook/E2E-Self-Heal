@@ -1,13 +1,19 @@
 import io
 import sys
 from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
 
 import pytest
 import structlog
 from pydantic import SecretStr
+from typer.testing import CliRunner
 
+import app.cli as cli_module
 import app.config as config_module
+from app.cli import app
 from app.logging import configure_logging
+from app.safety_benchmark import ScenarioRestoreError
 
 SECRET = "sk-live-8c7b6a5f4e3d"
 
@@ -128,3 +134,34 @@ def test_ordinary_log_values_are_left_alone(
     assert "diagnoser_finished" in rendered
     assert "loop_count" in rendered
     assert "[REDACTED]" not in rendered
+
+
+def test_a_safety_benchmark_provider_failure_prints_no_key_and_no_locals(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, restore_structlog_config: None
+) -> None:
+    # A sequential safety benchmark logs in the CLI process itself (#413). Start from
+    # structlog's defaults, as a fresh `e2e-healer safety-benchmark` process does: those render
+    # every frame's locals in a traceback and never redact.
+    structlog.reset_defaults()
+    _configure_secret(monkeypatch)
+    unconfigured_local = "local-value-0123456789"
+
+    def failing_run(*_args: Any, **_kwargs: Any) -> None:
+        request_headers = {"authorization": unconfigured_local}  # noqa: F841 - a frame local
+        try:
+            raise RuntimeError(f"upstream rejected {SECRET}")
+        except RuntimeError:
+            structlog.get_logger("safety_probe").exception("diagnosis_failed")
+        raise ScenarioRestoreError("stop the run here")
+
+    monkeypatch.setattr(cli_module, "discover_safety_scenarios", lambda _root: [])
+    monkeypatch.setattr(cli_module, "assert_scenarios_writable", lambda _scenarios: None)
+    monkeypatch.setattr(cli_module, "run_safety_benchmark", failing_run)
+
+    result = CliRunner().invoke(app, ["safety-benchmark", "--scenario-root", str(tmp_path)])
+
+    assert result.exit_code == 1
+    rendered = result.stdout + result.stderr
+    assert "diagnosis_failed" in result.stderr
+    assert SECRET not in rendered
+    assert unconfigured_local not in rendered
