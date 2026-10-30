@@ -55,6 +55,13 @@ All notable changes to this project are documented here. The format is based on
   before upload, which also covers raw writes to stdout and stderr; the logs are published only
   if that step succeeds. Logs from earlier local `--jobs` runs may contain a key and should be
   deleted.
+- **Sequential safety-benchmark runs redact their logs** (#413). `e2e-healer safety-benchmark`
+  was the one model-calling command that never configured logging, so a run without `--jobs`
+  (the default) logged with structlog's defaults: on stdout, tracebacks rendering every frame's
+  local variables, and no redaction, so `E2E_HEALER_SENSITIVE_ENV_VARS` had no effect. A provider
+  failure could print the API key or a request header. The command now uses the same logging
+  configuration as `heal` and `review`. Output from earlier local sequential runs may contain a
+  key; don't paste it anywhere without checking.
 
 ## [0.6.0] - 2026-10-25
 

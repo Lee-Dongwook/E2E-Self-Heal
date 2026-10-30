@@ -750,6 +750,9 @@ def safety_benchmark(
     ``--enforce-gates`` it exits 1 when a release gate fails (#292); a gate whose sample is
     still too small is reported but never fails.
     """
+    # Without this, structlog's defaults apply in this process: tracebacks with every frame's
+    # locals, no redaction, and logs on stdout (#413). Parallel workers configure their own.
+    configure_logging(settings.log_level)
     if not scenario_root.is_dir():
         console.print(f"[red]scenario root does not exist:[/red] {escape(str(scenario_root))}")
         raise typer.Exit(code=2)
