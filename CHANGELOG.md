@@ -41,7 +41,9 @@ All notable changes to this project are documented here. The format is based on
   run of the full corpus on the free Gemini tier scored all 44 scenarios as labeled with every gate
   passing. Runs for different refs share one job concurrency group, so `main`, the weekly run and
   pull requests take turns on the key instead of adding up against its per-minute limit. The
-  engine's default provider is unchanged.
+  engine's default provider is unchanged. The weekly run moved from Monday 05:17 UTC to 08:17 UTC,
+  after the free tier's daily quota resets, so it no longer gets the previous day's leftovers
+  (#411).
 
 ### Security
 - **Parallel safety-benchmark workers redact their logs** (#402). With `--jobs`, each worker

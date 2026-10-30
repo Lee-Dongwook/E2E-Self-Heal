@@ -337,9 +337,9 @@ Either way, when a scenario ends as `error`, its log has the provider's actual r
   A run that goes over can end scenarios as `error`, with `RESOURCE_EXHAUSTED` in the
   log. Give the CI key a project of its own, so local runs never spend its quota, and start a run
   you mean to keep, such as a baseline, early in the quota day.
-- **Runs when it can matter.** On pushes to `main`, weekly, on demand, and on pull requests that
-  change `app/`, `examples/`, `benchmarks/` or the dependency files, so documentation-only changes
-  spend no model calls.
+- **Runs when it can matter.** On pushes to `main`, weekly (Mondays at 08:17 UTC, after the free
+  quota resets), on demand, and on pull requests that change `app/`, `examples/`, `benchmarks/` or
+  the dependency files, so documentation-only changes spend no model calls.
 
 ### Setting a baseline
 
@@ -365,7 +365,10 @@ run of the CI workflow, the same shape as every run it is compared with:
 3. Review it before committing: `error_count` should be 0 and every scenario should end as
    labeled. A provider failure in the baseline makes every later comparison noisy.
 4. Commit `safety-report.json` as `benchmarks/safety-baseline.json` in a pull request. That pull
-   request touches `benchmarks/`, so its own benchmark run is the first with deltas.
+   request touches `benchmarks/`, so both its own run and the run on `main` after it merges start
+   the benchmark. With the manual run, that is three runs, more than the free tier's daily quota
+   allows: cancel the pull request's run, which a baseline file cannot affect, and let the run on
+   `main` show the first deltas. If the day's quota is already partly spent, merge the next day.
 
 Regenerate the baseline when the CI model changes. Latency is part of the file, so expect it to
 change a little on every refresh.
