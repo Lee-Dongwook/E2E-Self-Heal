@@ -11,7 +11,9 @@ name: safety-benchmark
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 5 * * 1"
+    # Mondays after the free Gemini quota resets (midnight Pacific: 07:00 UTC in daylight saving,
+    # 08:00 UTC otherwise), so the weekly run starts with the full daily quota (#411).
+    - cron: "17 8 * * 1"
   push:
     branches: [main]
     paths:
