@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-31
+
+A patch release, mainly because the default NVIDIA model in 0.6.0, `openai/gpt-oss-120b`, has
+reached end of life and answers every call with `410 Gone`: a run on the default provider without
+an explicit model ended in `provider_error`. It also fixes the rejection of correct patches whose
+quoted line the model re-typed, and redacts sequential safety-benchmark logs. The release run was
+the CI baseline run on the release code (`safety-benchmark --apply-patches --jobs 1`,
+`gemini-3.5-flash-lite`, run 41155753108), which scored all 44 scenarios as labeled:
+`false_green_rate` 0% (n=20), `refusal_accuracy` 100% (n=22), `incorrect_refusal_rate` 0% (n=22),
+`error_count` 0.
+
+### Known issues
+- Two `--jobs 1` safety-benchmark runs in one checkout patch the same demo app and corrupt each
+  other's results without saying so (#407). Run one at a time, or use `--jobs` above 1, which
+  works in copies.
+
 ### Added
 - **The CI safety benchmark keeps its worker logs** (#402). Each `--jobs` worker's log is uploaded
   as a `safety-worker-logs` artifact, so a scenario scored as `error` shows the provider's actual
@@ -575,7 +591,8 @@ Preview release. Everything below is shipped and tested; the surfaces added here
 - LLM provider migrated from OpenAI to NVIDIA NIM (`openai/gpt-oss-120b`) via the
   OpenAI-compatible endpoint; Structured Outputs guardrail retained.
 
-[Unreleased]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5-pre...v0.5.0
 [0.5.0-pre]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.4.0...v0.5-pre

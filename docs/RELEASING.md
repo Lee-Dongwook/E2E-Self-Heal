@@ -70,8 +70,9 @@ pip install --index-url https://test.pypi.org/simple/ \
    `revision`. Then move the `## [Unreleased]` section in
    [`CHANGELOG.md`](../CHANGELOG.md) to the new version with today's date.
 3. Commit, then tag: `git tag -a vX.Y.Z -m "..."` and `git push origin main --follow-tags`.
-4. Update the moving major tag so Action users can pin `@vX`:
-   `git tag -f -a v0 -m "..." vX.Y.Z && git push origin v0 --force`.
+4. Update the moving major tag so Action users can pin `@vX`. Point it at the release *commit*
+   (`vX.Y.Z^{}`), not at the `vX.Y.Z` tag object, so `v0` never becomes a tag of a tag:
+   `git tag -f -a v0 -m "..." 'vX.Y.Z^{}' && git push origin v0 --force`.
 5. Draft a **GitHub Release** on tag `vX.Y.Z`; tick **Publish to Marketplace**; publish.
    - Publishing the release triggers `publish.yml` → PyPI.
 6. Verify: `pip install ai-driven-e2e==X.Y.Z` works and the Marketplace listing is live.
