@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **`e2e-healer init --scaffold` pins the Action release it came from** (#421). The scaffolded
+  workflow used `Lee-Dongwook/E2E-Self-Heal@v0.4.0`, whose engine defaults to the retired
+  `openai/gpt-oss-120b`, so a CI set up with `init` failed on the default provider. It now pins
+  `v` plus the installed `ai-driven-e2e` version. The README (every language), docs and demo page
+  pin `@v0.6.1` instead of `@v0.4.0`, the README's provider matrix shows the current NVIDIA
+  default, and the release checklist includes updating those pins.
+
 ## [0.6.1] - 2026-10-31
 
 A patch release, mainly because the default NVIDIA model in 0.6.0, `openai/gpt-oss-120b`, has

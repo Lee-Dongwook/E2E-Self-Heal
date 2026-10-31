@@ -68,7 +68,10 @@ pip install --index-url https://test.pypi.org/simple/ \
    dependency, so its lockfile records the core version too; if it is stale, the `api` job's
    `uv sync --locked` fails. Change only that line if your local `uv` would rewrite the lockfile's
    `revision`. Then move the `## [Unreleased]` section in
-   [`CHANGELOG.md`](../CHANGELOG.md) to the new version with today's date.
+   [`CHANGELOG.md`](../CHANGELOG.md) to the new version with today's date, and update the
+   `uses: Lee-Dongwook/E2E-Self-Heal@vX.Y.Z` pins in the README (every language), the docs
+   site and the demo page (`git grep -n 'E2E-Self-Heal@v'`). `e2e-healer init` needs no
+   change: it pins the installed version.
 3. Commit, then tag: `git tag -a vX.Y.Z -m "..."` and `git push origin main --follow-tags`.
 4. Update the moving major tag so Action users can pin `@vX`. Point it at the release *commit*
    (`vX.Y.Z^{}`), not at the `vX.Y.Z` tag object, so `v0` never becomes a tag of a tag:

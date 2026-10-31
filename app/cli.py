@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import cast
 
@@ -1016,7 +1017,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Review a failing E2E test
         id: healer
-        uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0
+        uses: Lee-Dongwook/E2E-Self-Heal@__ACTION_REF__
         with:
           # Replace this with the test path reported by your failing suite.
           test-path: tests/example.spec.ts
@@ -1037,7 +1038,10 @@ jobs:
             playwright.log
           if-no-files-found: ignore
 """
-                WORKFLOW_TARGET_PATH.write_text(yaml_template)
+                # Pin the Action to the release this CLI came from: a hardcoded tag goes stale
+                # and sends new users to an old engine (#421).
+                action_ref = f"v{package_version('ai-driven-e2e')}"
+                WORKFLOW_TARGET_PATH.write_text(yaml_template.replace("__ACTION_REF__", action_ref))
                 console.print(
                     f"[green]Successfully scaffolded starter workflow at {WORKFLOW_TARGET_PATH}![/green]"
                 )

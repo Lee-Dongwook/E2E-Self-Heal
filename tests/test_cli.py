@@ -1,6 +1,7 @@
 import json
 import re
 import subprocess
+from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import NoReturn
 from unittest.mock import patch
@@ -791,7 +792,8 @@ def test_cli_init_scaffolds_workflow_successfully(monkeypatch, tmp_path) -> None
     target_file = tmp_path / ".github" / "workflows" / "e2e-healer.yml"
     assert target_file.exists()
     workflow = target_file.read_text()
-    assert "uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0" in workflow
+    # The Action is pinned to the release of the CLI that scaffolded it, never a stale tag.
+    assert f"uses: Lee-Dongwook/E2E-Self-Heal@v{package_version('ai-driven-e2e')}\n" in workflow
     assert "mode: review" in workflow
     assert "nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}" in workflow
     assert "permissions:\n  contents: read" in workflow
@@ -819,7 +821,7 @@ def test_cli_init_prevents_overwrite_unless_forced(monkeypatch, tmp_path) -> Non
     # Added "--scaffold" along with "--force"
     result_forced = runner.invoke(app, ["init", "--scaffold", "--force"])
     assert result_forced.exit_code == 0
-    assert "uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0" in target_file.read_text()
+    assert f"E2E-Self-Heal@v{package_version('ai-driven-e2e')}\n" in target_file.read_text()
 
 
 def test_cli_heal_notifies_slack_single_file(monkeypatch, tmp_path) -> None:
