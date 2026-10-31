@@ -6,13 +6,21 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-10-31
+
+A patch release for `e2e-healer init`, whose scaffolded workflow still pinned the v0.4.0 Action
+and so ran an engine whose default model has been retired. The release run was a CI run on the
+release code (`safety-benchmark --apply-patches --jobs 1`, `gemini-3.5-flash-lite`, run
+41237668714), which scored all 44 scenarios as labeled: `false_green_rate` 0% (n=20),
+`refusal_accuracy` 100% (n=22), `incorrect_refusal_rate` 0% (n=22), `error_count` 0.
+
 ### Fixed
 - **`e2e-healer init --scaffold` pins the Action release it came from** (#421). The scaffolded
   workflow used `Lee-Dongwook/E2E-Self-Heal@v0.4.0`, whose engine defaults to the retired
   `openai/gpt-oss-120b`, so a CI set up with `init` failed on the default provider. It now pins
   `v` plus the installed `ai-driven-e2e` version. The README (every language), docs and demo page
-  pin `@v0.6.1` instead of `@v0.4.0`, the README's provider matrix shows the current NVIDIA
-  default, and the release checklist includes updating those pins.
+  pin the current release instead of `@v0.4.0`, the README's provider matrix shows the current
+  NVIDIA default, and the release checklist includes updating those pins.
 
 ## [0.6.1] - 2026-10-31
 
@@ -599,7 +607,8 @@ Preview release. Everything below is shipped and tested; the surfaces added here
 - LLM provider migrated from OpenAI to NVIDIA NIM (`openai/gpt-oss-120b`) via the
   OpenAI-compatible endpoint; Structured Outputs guardrail retained.
 
-[Unreleased]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Lee-Dongwook/E2E-Self-Heal/compare/v0.5-pre...v0.5.0
