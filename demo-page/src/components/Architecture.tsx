@@ -4,7 +4,7 @@ import { CodeBlock, Pane, Prov } from "./ui";
 // From README "Usage (CI / GitHub Action)".
 const WORKFLOW = `- name: E2E self-heal
   id: heal
-  uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0
+  uses: Lee-Dongwook/E2E-Self-Heal@v0.6.1
   with:
     test-path: tests/example.spec.ts
     nvidia-api-key: \${{ secrets.NVIDIA_API_KEY }}

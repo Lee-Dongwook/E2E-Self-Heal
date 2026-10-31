@@ -96,7 +96,7 @@ jobs:
         steps:
             - name: E2E self-heal
               id: heal
-              uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0
+              uses: Lee-Dongwook/E2E-Self-Heal@v0.6.1
               with:
                   test-path: tests/example.spec.ts
                   nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
@@ -130,7 +130,7 @@ comments — a ready-to-copy workflow lives in
 ```yaml
 - name: E2E review
   id: review
-  uses: Lee-Dongwook/E2E-Self-Heal@v0.4.0
+  uses: Lee-Dongwook/E2E-Self-Heal@v0.6.1
   with:
       mode: review
       test-path: tests/example.spec.ts
@@ -313,7 +313,7 @@ changes.
 
 | Provider     | Install                    | Required env                                          | Structured outputs            | Notes                                                                           |
 | ------------ | -------------------------- | ----------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------- |
-| `nvidia`     | built-in (default)         | `E2E_HEALER_LLM_API_KEY` (or legacy `NVIDIA_API_KEY`) | strict `json_schema`          | OpenAI-compatible NIM endpoint; default `openai/gpt-oss-120b`.                  |
+| `nvidia`     | built-in (default)         | `E2E_HEALER_LLM_API_KEY` (or legacy `NVIDIA_API_KEY`) | strict `json_schema`          | OpenAI-compatible NIM endpoint; default `minimaxai/minimax-m3.1-flash`.         |
 | `openai`     | built-in                   | `E2E_HEALER_LLM_API_KEY` **or** `OPENAI_API_KEY`      | strict `json_schema` (native) | Set `LLM_BASE_URL` for Azure / OpenAI-compatible endpoints.                     |
 | `anthropic`  | `ai-driven-e2e[anthropic]` | `E2E_HEALER_LLM_API_KEY` **or** `ANTHROPIC_API_KEY`   | tool-use                      | No OpenAI `response_format`; schema enforced via Claude tool-use.               |
 | `ollama`     | `ai-driven-e2e[ollama]`    | none (local)                                          | native JSON-schema `format`   | Fully offline; smaller models are less reliable at strict JSON.                 |
