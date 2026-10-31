@@ -15,6 +15,10 @@ All notable changes to this project are documented here. The format is based on
   `gemini-3.5-flash-lite`, Groq `qwen/qwen3.8-27b` and NVIDIA `minimax-m3.1-flash`, each with its
   settings, its result on the full safety benchmark corpus, its limits, and the data-use caveat of
   free tiers.
+- **A safety-benchmark baseline for the CI model** (#418). `benchmarks/safety-baseline.json` is
+  the report of a manual CI run on `gemini-3.5-flash-lite`: 44 scored, 0 errors, every gate
+  passing. CI reports now show the change in each rate, each scenario and total latency against
+  it.
 
 ### Fixed
 - **The default NVIDIA model is `minimaxai/minimax-m3.1-flash`** (#402, #405). The previous default,
