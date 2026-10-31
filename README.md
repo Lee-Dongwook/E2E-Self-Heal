@@ -96,7 +96,7 @@ jobs:
         steps:
             - name: E2E self-heal
               id: heal
-              uses: Lee-Dongwook/E2E-Self-Heal@v0.6.1
+              uses: Lee-Dongwook/E2E-Self-Heal@v0.6.2
               with:
                   test-path: tests/example.spec.ts
                   nvidia-api-key: ${{ secrets.NVIDIA_API_KEY }}
@@ -130,7 +130,7 @@ comments — a ready-to-copy workflow lives in
 ```yaml
 - name: E2E review
   id: review
-  uses: Lee-Dongwook/E2E-Self-Heal@v0.6.1
+  uses: Lee-Dongwook/E2E-Self-Heal@v0.6.2
   with:
       mode: review
       test-path: tests/example.spec.ts
