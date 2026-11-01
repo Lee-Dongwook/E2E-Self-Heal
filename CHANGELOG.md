@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **`product/web` type-checks on TypeScript 6** (#448). TypeScript 6 checks side-effect imports,
+  and the dashboard had no declarations for its CSS import (`TS2882`). It now has Vite's standard
+  `src/vite-env.d.ts`, which also works on TypeScript 5.
 - **Dependabot runs** (#424). `.github/dependabot.yml` had been invalid YAML since it was added
   (#349), so Dependabot never opened a PR. It now parses, also covers the engine (`/`, uv) and the
   Playwright demo app (`/examples`), and groups each directory's weekly minor and patch bumps
