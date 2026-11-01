@@ -23,6 +23,11 @@ jobs:
       - name: Check lockfile is up to date
         run: uv lock --check
 
+      # An invalid dependabot.yml fails silently (Dependabot just never runs, #424), so check it
+      # against the published schema here.
+      - name: Validate Dependabot config
+        run: uvx check-jsonschema@0.39.0 --builtin-schema vendor.dependabot .github/dependabot.yml
+
       - name: Install dependencies
         run: uv sync --locked --extra dev
 

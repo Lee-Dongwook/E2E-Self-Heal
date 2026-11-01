@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Dependabot runs** (#424). `.github/dependabot.yml` had been invalid YAML since it was added
+  (#349), so Dependabot never opened a PR. It now parses, also covers the engine (`/`, uv) and the
+  Playwright demo app (`/examples`), and groups each directory's weekly minor and patch bumps
+  into one PR; major bumps stay separate. CI validates the file against the published schema, so
+  a broken config fails a check instead of silently doing nothing.
+
 ## [0.6.2] - 2026-10-31
 
 A patch release for `e2e-healer init`, whose scaffolded workflow still pinned the v0.4.0 Action
