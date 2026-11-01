@@ -4,10 +4,13 @@ The product never runs Playwright or repair logic; it only consumes structured o
 the user's CI sends after running the core (see discussion #332).
 """
 
+import time
+import uuid
 from collections.abc import Awaitable, Callable
 from importlib.metadata import version
 from typing import Annotated, Literal
 
+import structlog
 from app.logging import configure_logging
 from app.schemas import SCHEMA_VERSION
 from fastapi import Depends, FastAPI, Request, Response, status
@@ -23,6 +26,10 @@ from product_api.ingest import (
     require_upload_auth,
     store_run,
 )
+
+logger = structlog.get_logger(__name__)
+
+REQUEST_ID_HEADER = "X-Request-ID"
 
 
 class Health(BaseModel):
@@ -57,6 +64,35 @@ def create_app() -> FastAPI:
                         status_code=413, content={"detail": "request body is too large"}
                     )
         return await call_next(request)
+
+    # Registered after every other middleware, so it runs outermost: responses those return
+    # early (400, 413) carry a request id too, and every log event in between is bound to it.
+    @api.middleware("http")
+    async def bind_request_id(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        request_id = request.headers.get(REQUEST_ID_HEADER) or uuid.uuid4().hex
+        started = time.perf_counter()
+        with structlog.contextvars.bound_contextvars(request_id=request_id):
+            try:
+                response = await call_next(request)
+            except Exception:
+                # Answer here rather than re-raise: Starlette's outer error middleware would
+                # build the 500 outside this request's context, without the request id.
+                logger.exception("request_failed", method=request.method, path=request.url.path)
+                response = JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={"detail": "Internal Server Error"},
+                )
+            logger.info(
+                "request_finished",
+                method=request.method,
+                path=request.url.path,
+                status_code=response.status_code,
+                duration_ms=round((time.perf_counter() - started) * 1000, 1),
+            )
+        response.headers[REQUEST_ID_HEADER] = request_id
+        return response
 
     @api.get("/version")
     def version_info() -> VersionInfo:
