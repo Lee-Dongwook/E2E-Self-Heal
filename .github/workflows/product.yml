@@ -34,7 +34,7 @@ jobs:
       run:
         working-directory: product/api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -62,7 +62,7 @@ jobs:
       run:
         working-directory: product/web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
         with:

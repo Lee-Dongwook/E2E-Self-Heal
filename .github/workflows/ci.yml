@@ -12,7 +12,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -46,7 +46,7 @@ jobs:
   examples-repro:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
         with:
@@ -102,7 +102,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout action
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: action
           persist-credentials: false
@@ -145,7 +145,7 @@ jobs:
     needs: [check, examples-repro, action-consumer, check-secret]
     if: needs.check-secret.outputs.has-key == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
