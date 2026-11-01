@@ -15,7 +15,7 @@ jobs:
     if: github.event.pull_request.draft == false
     steps:
       - name: Request review from maintainers
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const MAINTAINERS = ['Lee-Dongwook', 'Avaneesh635', 'Adityai1411','kamleshkc2002'];
