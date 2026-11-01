@@ -55,7 +55,7 @@ runs:
   using: composite
   steps:
     - name: Install uv
-      uses: astral-sh/setup-uv@v3
+      uses: astral-sh/setup-uv@v7
 
     - name: Check lockfile is up to date
       shell: bash
