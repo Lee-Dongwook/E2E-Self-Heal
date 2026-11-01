@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Ruff's lint rules are pinned** (#450) to its pre-0.17 defaults (`E4`, `E7`, `E9`, `F`), and
+  Markdown is excluded from formatting. Ruff 0.17 widened its defaults and began formatting code
+  blocks in Markdown, so a ruff upgrade alone failed CI on unchanged code. Adopting new rules is
+  now a deliberate change.
+
 ### Fixed
 - **`product/web` type-checks on TypeScript 6** (#448). TypeScript 6 checks side-effect imports,
   and the dashboard had no declarations for its CSS import (`TS2882`). It now has Vite's standard
