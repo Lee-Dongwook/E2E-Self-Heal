@@ -83,3 +83,25 @@ def test_a_response_returned_before_the_endpoint_still_has_a_request_id(
 
     assert response.status_code == 413
     assert re.fullmatch(r"[0-9a-f]{32}", response.headers[REQUEST_ID_HEADER])
+
+
+def test_an_unhandled_error_still_returns_a_request_id_and_logs_a_500(
+    captured: list[structlog.typing.EventDict],
+) -> None:
+    # The requests most worth tracing are the ones that fail.
+    def broken_engine() -> None:
+        raise RuntimeError("engine construction failed")
+
+    api = create_app()
+    api.dependency_overrides[get_engine] = broken_engine
+    client = TestClient(api, raise_server_exceptions=False)
+
+    response = client.get("/healthz", headers={REQUEST_ID_HEADER: "boom-1"})
+
+    assert response.status_code == 500
+    assert response.headers[REQUEST_ID_HEADER] == "boom-1"
+    (failed,) = [event for event in captured if event["event"] == "request_failed"]
+    assert failed["request_id"] == "boom-1"
+    (finished,) = [event for event in captured if event["event"] == "request_finished"]
+    assert finished["status_code"] == 500
+    assert finished["request_id"] == "boom-1"

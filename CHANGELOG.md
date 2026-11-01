@@ -10,7 +10,9 @@ All notable changes to this project are documented here. The format is based on
 - **`product/api` requests carry a request id** (#341). Each request takes its `X-Request-ID`
   header, or gets a generated one, and returns it on the response. Every log event written while
   the request is handled, including from endpoints and the database layer, is bound to it, and
-  one `request_finished` event records the method, path, status code and duration.
+  one `request_finished` event records the method, path, status code and duration. An unhandled
+  error is answered with a 500 that keeps the request id, after a `request_failed` event with
+  the traceback.
 
 ### Changed
 - **Ruff's lint rules are pinned** (#450) to its pre-0.17 defaults (`E4`, `E7`, `E9`, `F`), and

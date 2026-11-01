@@ -77,8 +77,13 @@ def create_app() -> FastAPI:
             try:
                 response = await call_next(request)
             except Exception:
+                # Answer here rather than re-raise: Starlette's outer error middleware would
+                # build the 500 outside this request's context, without the request id.
                 logger.exception("request_failed", method=request.method, path=request.url.path)
-                raise
+                response = JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={"detail": "Internal Server Error"},
+                )
             logger.info(
                 "request_finished",
                 method=request.method,
