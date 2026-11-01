@@ -84,7 +84,7 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --locked --extra dev
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: examples/package.json
 
