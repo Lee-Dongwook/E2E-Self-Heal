@@ -332,11 +332,16 @@ Either way, when a scenario ends as `error`, its log has the provider's actual r
   it from a Google Cloud project without billing enabled, so going over the free tier's limits
   answers `429` instead of billing. Google may use free-tier requests to improve its products,
   which is acceptable here because the job sends only the demo app and its scenarios.
-- **About two runs a day.** The free tier caps `gemini-3.5-flash-lite` at 500 requests per day per
-  Google Cloud project (resetting at midnight Pacific time), and one run makes roughly 150 to 250.
-  A run that goes over can end scenarios as `error`, with `RESOURCE_EXHAUSTED` in the
-  log. Give the CI key a project of its own, so local runs never spend its quota, and start a run
-  you mean to keep, such as a baseline, early in the quota day.
+- **About three runs a day.** The free tier caps `gemini-3.5-flash-lite` at 500 requests per day
+  per Google Cloud project (resetting at midnight Pacific time), and one run makes about 160. A
+  run that goes over can end scenarios as `error`, with `RESOURCE_EXHAUSTED` in the log. Give the
+  CI key a project of its own, so local runs never spend its quota, and start a run you mean to
+  keep, such as a baseline, early in the quota day.
+- **Each Dependabot merge can cost a run.** Dependabot PRs themselves skip the benchmark (they get
+  no secrets), but merging one that touches `uv.lock`, `examples/` or this workflow starts a run on
+  `main`. The engine and `examples/` updates arrive as separate weekly PRs, plus one per major
+  bump, so merging them all on the same day can exhaust the quota. Spread them across days, at
+  most two a day, leaving room for a pull request's own run.
 - **Runs when it can matter.** On pushes to `main`, weekly (Mondays at 08:17 UTC, after the free
   quota resets), on demand, and on pull requests that change `app/`, `examples/`, `benchmarks/` or
   the dependency files, so documentation-only changes spend no model calls.

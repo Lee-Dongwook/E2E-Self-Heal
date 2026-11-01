@@ -11,7 +11,9 @@ All notable changes to this project are documented here. The format is based on
   (#349), so Dependabot never opened a PR. It now parses, also covers the engine (`/`, uv) and the
   Playwright demo app (`/examples`), and groups each directory's weekly minor and patch bumps
   into one PR; major bumps stay separate. CI validates the file against the published schema, so
-  a broken config fails a check instead of silently doing nothing.
+  a broken config fails a check instead of silently doing nothing. Each merge of an engine,
+  `examples/` or benchmark-workflow update starts a safety-benchmark run on `main`; the safety
+  benchmark reference says to spread those merges across quota days.
 
 ## [0.6.2] - 2026-10-31
 
