@@ -1,9 +1,5 @@
 # Weekly dependency updates (#349, #424). Minor and patch bumps arrive as one PR per directory;
 # each major bump gets its own PR, because those are the ones to read before merging.
-#
-# Dependabot PRs get no repository secrets, so the safety benchmark skips itself on them. Merging
-# one that touches the engine's lockfile or examples/ starts a benchmark run on main, about 160
-# of the free Gemini tier's 500 daily requests; weekly grouping keeps that to about one a week.
 version: 2
 updates:
   # The engine: langgraph, langchain-openai, openai, structlog, tenacity, ...
