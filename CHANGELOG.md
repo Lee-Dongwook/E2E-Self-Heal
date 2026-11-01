@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **`product/api` migrations are tested** (#340). A test upgrades a scratch Postgres database
+  to the head revision, checks the tables exist, downgrades it to base, and checks they're gone.
+  A broken migration, or a `downgrade()` that leaves tables behind, now fails the `product`
+  workflow instead of surfacing on someone's machine.
+
 ### Changed
 - **Ruff's lint rules are pinned** (#450) to its pre-0.17 defaults (`E4`, `E7`, `E9`, `F`), and
   Markdown is excluded from formatting. Ruff 0.17 widened its defaults and began formatting code
