@@ -68,6 +68,13 @@ packages = ["app"]
 [tool.ruff]
 target-version = "py313"
 line-length = 100
+# Ruff 0.17 also formats Python inside Markdown; the docs' code blocks are written by hand.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+# Ruff's defaults before 0.17. Pinned so a ruff upgrade can't change what CI enforces; widening
+# the rule set is its own change.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pyright]
 pythonVersion = "3.13"
