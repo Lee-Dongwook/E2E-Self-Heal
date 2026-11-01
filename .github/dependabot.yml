@@ -1,16 +1,54 @@
+# Weekly dependency updates (#349, #424). Minor and patch bumps arrive as one PR per directory;
+# each major bump gets its own PR, because those are the ones to read before merging.
+#
+# Dependabot PRs get no repository secrets, so the safety benchmark skips itself on them. Merging
+# one that touches the engine's lockfile or examples/ starts a benchmark run on main, about 160
+# of the free Gemini tier's 500 daily requests; weekly grouping keeps that to about one a week.
 version: 2
 updates:
-    - package-ecosystem: "uv"
-    directory: "/product/api"
-    schedule:
-      interval: "weekly"
-
-    - package-ecosystem: "npm"
-    directory: "/product/web"
-    schedule:
-      interval: "weekly"
-
-    - package-ecosystem: "github-actions"
+  # The engine: langgraph, langchain-openai, openai, structlog, tenacity, ...
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "tuesday"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # The Playwright demo app and safety-benchmark scenarios (pnpm; Dependabot's npm ecosystem).
+  - package-ecosystem: "npm"
+    directory: "/examples"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "uv"
+    directory: "/product/api"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/product/web"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
