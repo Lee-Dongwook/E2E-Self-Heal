@@ -7,6 +7,12 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`product/api` requests carry a request id** (#341). Each request takes its `X-Request-ID`
+  header, or gets a generated one, and returns it on the response. Every log event written while
+  the request is handled, including from endpoints and the database layer, is bound to it, and
+  one `request_finished` event records the method, path, status code and duration. An unhandled
+  error is answered with a 500 that keeps the request id, after a `request_failed` event with
+  the traceback.
 - **`product/api` migrations are tested** (#340). A test upgrades a scratch Postgres database
   to the head revision, checks the tables exist, downgrades it to base, and checks they're gone.
   A broken migration, or a `downgrade()` that leaves tables behind, now fails the `product`
@@ -22,6 +28,9 @@ All notable changes to this project are documented here. The format is based on
 - **`product/web` type-checks on TypeScript 6** (#448). TypeScript 6 checks side-effect imports,
   and the dashboard had no declarations for its CSS import (`TS2882`). It now has Vite's standard
   `src/vite-env.d.ts`, which also works on TypeScript 5.
+- **`alembic revision --autogenerate` works for `product/api`** (#339). `migrations/env.py` still
+  had `target_metadata = None`, so autogenerate refused to run even though the ORM models existed.
+  It now uses the models' `Base.metadata`, and the Alembic template comments are gone.
 - **Dependabot runs** (#424). `.github/dependabot.yml` had been invalid YAML since it was added
   (#349), so Dependabot never opened a PR. It now parses, also covers the engine (`/`, uv) and the
   Playwright demo app (`/examples`), and groups each directory's weekly minor and patch bumps
