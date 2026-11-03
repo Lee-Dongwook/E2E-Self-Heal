@@ -10,7 +10,8 @@ in ``uv.lock`` and ``product/api/uv.lock``), and the default NVIDIA model.
 
 The version comes from ``pyproject.toml`` and the model from ``app.config.Settings``, so a
 release only has to change those. Action pins are found in every tracked file except the
-changelog, which records history. The default model is replaced only in the specific sentences
+changelog, which records history, and files under a ``tests`` directory, which hold sample
+versions on purpose. The default model is replaced only in the specific sentences
 and table rows that state it, never by searching the whole tree: other text, such as the
 measured free-tier results in the configuration reference, names models for other reasons.
 Each of those spots must match exactly where expected, so rewording one fails ``--check``
@@ -33,8 +34,15 @@ from app.config import Settings
 ROOT = Path(__file__).resolve().parents[1]
 console = Console(stderr=True)
 
-# History is never rewritten.
+# History is never rewritten, and tests hold sample versions on purpose (they would also be
+# rewritten into agreement with the release, hiding what they check).
 _NEVER_TOUCHED = {"CHANGELOG.md"}
+
+
+def _never_touched(name: str) -> bool:
+    return name in _NEVER_TOUCHED or "tests" in Path(name).parts
+
+
 _VERSION = r"\d+\.\d+\.\d+"
 
 
@@ -130,12 +138,12 @@ def tracked_files(root: Path = ROOT) -> list[str]:
 def sync(root: Path, values: dict[str, str], files: list[str], *, write: bool) -> Report:
     """Compare (and with ``write``, rewrite) every rule's matches against ``values``."""
     report = Report()
-    candidates = sorted(set(files) - _NEVER_TOUCHED)
+    candidates = sorted(name for name in set(files) if not _never_touched(name))
     texts: dict[str, str] = {}
     for rule in RULES:
         targets = rule.files if rule.files is not None else candidates
         for name in targets:
-            if name in _NEVER_TOUCHED:
+            if _never_touched(name):
                 continue
             if name not in texts:
                 try:

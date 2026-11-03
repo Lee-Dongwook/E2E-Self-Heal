@@ -116,3 +116,16 @@ def test_a_pin_in_a_newly_added_doc_is_found_without_a_rule_change(
     sync(root, _NEW, [*files, "docs-site/docs/guides/new-guide.mdx"], write=True)
 
     assert new_doc.read_text(encoding="utf-8") == "- uses: Lee-Dongwook/E2E-Self-Heal@v9.8.7\n"
+
+
+def test_test_files_keep_their_sample_pins(tree: tuple[Path, list[str]]) -> None:
+    # Tests hold deliberately different versions; syncing them would erase what they check.
+    root, files = tree
+    fixture = root / "tests/test_example.py"
+    fixture.parent.mkdir(parents=True, exist_ok=True)
+    fixture.write_text('PIN = "Lee-Dongwook/E2E-Self-Heal@v0.1.0"\n', encoding="utf-8")
+
+    report = sync(root, _NEW, [*files, "tests/test_example.py"], write=True)
+
+    assert fixture.read_text(encoding="utf-8") == 'PIN = "Lee-Dongwook/E2E-Self-Heal@v0.1.0"\n'
+    assert all(name != "tests/test_example.py" for name, *_ in report.changes)
