@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install lint format format-check typecheck check test coverage run clean
+.PHONY: help install lint format format-check typecheck check test coverage run clean sync-pins check-pins
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -29,6 +29,14 @@ test: ## Run tests with pytest
 
 coverage: ## Run tests with coverage and enforce the configured floor
 	uv run pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=90
+
+# --frozen: a plain `uv run` re-locks uv.lock after a version bump before the script starts, so
+# `check-pins` would no longer be read-only and the lockfile line would be uv's doing, not ours.
+sync-pins: ## Update release pins and documented defaults from pyproject.toml and app/config.py
+	uv run --frozen python scripts/sync_release_pins.py
+
+check-pins: ## Fail if a release pin or documented default is out of date
+	uv run --frozen python scripts/sync_release_pins.py --check
 
 run: ## Run the healer, e.g. make run ARGS="tests/example.spec.ts --log playwright.log"
 	uv run e2e-healer $(ARGS)
