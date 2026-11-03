@@ -13,6 +13,10 @@ All notable changes to this project are documented here. The format is based on
   one `request_finished` event records the method, path, status code and duration. An unhandled
   error is answered with a 500 that keeps the request id, after a `request_failed` event with
   the traceback.
+- **`product/api` migrations are tested** (#340). A test upgrades a scratch Postgres database
+  to the head revision, checks the tables exist, downgrades it to base, and checks they're gone.
+  A broken migration, or a `downgrade()` that leaves tables behind, now fails the `product`
+  workflow instead of surfacing on someone's machine.
 
 ### Changed
 - **Ruff's lint rules are pinned** (#450) to its pre-0.17 defaults (`E4`, `E7`, `E9`, `F`), and
