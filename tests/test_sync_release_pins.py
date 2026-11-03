@@ -129,3 +129,34 @@ def test_test_files_keep_their_sample_pins(tree: tuple[Path, list[str]]) -> None
 
     assert fixture.read_text(encoding="utf-8") == 'PIN = "Lee-Dongwook/E2E-Self-Heal@v0.1.0"\n'
     assert all(name != "tests/test_example.py" for name, *_ in report.changes)
+
+
+@pytest.mark.parametrize("version", ["1.2.3rc1", "1.2.3.post1", "1.2.3+local.7"])
+def test_a_suffixed_version_is_written_whole_and_stays_idempotent(
+    tree: tuple[Path, list[str]], version: str
+) -> None:
+    # A pin like @v1.2.3rc1 must be matched whole, or each sync appends the suffix again.
+    root, files = tree
+    values = {**_NEW, "version": version}
+    sync(root, values, files, write=True)
+    synced = _snapshot(root, files)
+
+    report = sync(root, values, files, write=True)
+
+    assert report.clean
+    assert _snapshot(root, files) == synced
+    readme = synced["README.md"]
+    assert f"E2E-Self-Heal@v{version}\n" in readme
+    assert f'name = "ai-driven-e2e"\nversion = "{version}"' in synced["uv.lock"]
+
+
+def test_an_unsupported_version_is_refused_before_anything_is_written(
+    tree: tuple[Path, list[str]],
+) -> None:
+    root, files = tree
+    before = _snapshot(root, files)
+
+    with pytest.raises(ValueError, match="unsupported version"):
+        sync(root, {**_NEW, "version": "1.2"}, files, write=True)
+
+    assert _snapshot(root, files) == before

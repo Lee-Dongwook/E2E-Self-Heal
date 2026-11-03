@@ -5,8 +5,11 @@ Two values are written by hand across the README (every language), the docs site
 GitHub Action examples' ``Lee-Dongwook/E2E-Self-Heal@vX.Y.Z`` pins and the core's locked version
 in ``uv.lock`` and ``product/api/uv.lock``), and the default NVIDIA model.
 
-    uv run python scripts/sync_release_pins.py          # rewrite every mismatch
-    uv run python scripts/sync_release_pins.py --check  # change nothing; exit 1 on a mismatch
+    make sync-pins   # uv run --frozen python scripts/sync_release_pins.py: rewrite mismatches
+    make check-pins  # same with --check: change nothing; exit 1 on a mismatch
+
+``--frozen`` matters: a plain ``uv run`` re-locks ``uv.lock`` after a version bump before this
+script starts, so the check would not be read-only.
 
 The version comes from ``pyproject.toml`` and the model from ``app.config.Settings``, so a
 release only has to change those. Action pins are found in every tracked file except the
@@ -43,7 +46,10 @@ def _never_touched(name: str) -> bool:
     return name in _NEVER_TOUCHED or "tests" in Path(name).parts
 
 
-_VERSION = r"\d+\.\d+\.\d+"
+# X.Y.Z plus any pre-release, post-release or local suffix (1.2.3rc1, 1.2.3.post1, 1.2.3+local.7),
+# matched whole: a prefix match would append the suffix again on every sync. Each suffix segment
+# must contain an alphanumeric, so a sentence-ending period is never part of the version.
+_VERSION = r"\d+\.\d+\.\d+(?:[-+.]?[0-9A-Za-z]+)*"
 
 
 @dataclass(frozen=True)
@@ -136,7 +142,12 @@ def tracked_files(root: Path = ROOT) -> list[str]:
 
 
 def sync(root: Path, values: dict[str, str], files: list[str], *, write: bool) -> Report:
-    """Compare (and with ``write``, rewrite) every rule's matches against ``values``."""
+    """Compare (and with ``write``, rewrite) every rule's matches against ``values``.
+
+    Raises ``ValueError`` before reading any file if the version isn't one the rules can match.
+    """
+    if not re.fullmatch(_VERSION, values["version"]):
+        raise ValueError(f"unsupported version {values['version']!r}: expected X.Y.Z[suffix]")
     report = Report()
     candidates = sorted(name for name in set(files) if not _never_touched(name))
     texts: dict[str, str] = {}
