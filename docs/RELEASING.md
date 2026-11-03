@@ -63,15 +63,16 @@ pip install --index-url https://test.pypi.org/simple/ \
    not block; they mean the corpus is still too small for that rate to be enforced, and each such
    row's **Needs** column (also `scenarios_needed` in the JSON, and the last line on stderr) says
    how many more distinct scenarios it is missing.
-2. Bump `version` in `pyproject.toml` and the `ai-driven-e2e` version line in **both** lockfiles:
-   `uv.lock` and `product/api/uv.lock`. The product API locks the core as an editable path
-   dependency, so its lockfile records the core version too; if it is stale, the `api` job's
-   `uv sync --locked` fails. Change only that line if your local `uv` would rewrite the lockfile's
-   `revision`. Then move the `## [Unreleased]` section in
-   [`CHANGELOG.md`](../CHANGELOG.md) to the new version with today's date, and update the
-   `uses: Lee-Dongwook/E2E-Self-Heal@vX.Y.Z` pins in the README (every language), the docs
-   site and the demo page (`git grep -n 'E2E-Self-Heal@v'`). `e2e-healer init` needs no
-   change: it pins the installed version.
+2. Bump `version` in `pyproject.toml`, then run `make sync-pins`. It writes the new version
+   everywhere it is pinned: the core's version line in **both** lockfiles (`uv.lock` and
+   `product/api/uv.lock`; the product API locks the core as an editable path dependency, and a
+   stale line fails the `api` job's `uv sync --locked`), and every
+   `uses: Lee-Dongwook/E2E-Self-Heal@vX.Y.Z` pin in the README (every language), the docs site and
+   the demo page. If the release changes the default NVIDIA model in `app/config.py`, the same
+   command updates the docs that state it. Running it twice changes nothing; `make check-pins`
+   (also enforced by the test suite) fails if anything is left behind. `e2e-healer init` needs no
+   change: it pins the installed version. Then move the `## [Unreleased]` section in
+   [`CHANGELOG.md`](../CHANGELOG.md) to the new version with today's date.
 3. Commit, then tag: `git tag -a vX.Y.Z -m "..."` and `git push origin main --follow-tags`.
 4. Update the moving major tag so Action users can pin `@vX`. Point it at the release *commit*
    (`vX.Y.Z^{}`), not at the `vX.Y.Z` tag object, so `v0` never becomes a tag of a tag:

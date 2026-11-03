@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`make sync-pins` updates release pins and documented defaults** (#457).
+  `scripts/sync_release_pins.py` writes the version from `pyproject.toml` into every
+  `Lee-Dongwook/E2E-Self-Heal@vX.Y.Z` pin (README in every language, docs site, demo page) and the
+  core's line in both lockfiles, and the default NVIDIA model from `app/config.py` into the docs
+  that state it. `make check-pins` and the test suite fail when anything is out of date, and a
+  reworded sentence the script can no longer find is reported rather than skipped. The release
+  checklist now uses it instead of a list of files to edit by hand.
 - **`product/api` requests carry a request id** (#341). Each request takes its `X-Request-ID`
   header, or gets a generated one, and returns it on the response. Every log event written while
   the request is handled, including from endpoints and the database layer, is bound to it, and
