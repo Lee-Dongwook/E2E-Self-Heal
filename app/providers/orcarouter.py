@@ -15,6 +15,7 @@ class OrcaRouterProvider:
     api_key: str
     model: str
     max_tokens: int
+    timeout_seconds: float
     base_url: str = DEFAULT_BASE_URL
 
     def build_chat_model(self) -> BaseChatModel:
@@ -23,5 +24,7 @@ class OrcaRouterProvider:
             "api_key": self.api_key,
             "base_url": self.base_url,
             "max_tokens": self.max_tokens,
+            "timeout": self.timeout_seconds,
+            "max_retries": 0,  # tenacity in app/llm.py is the only retry layer (#471)
         }
         return ChatOpenAI(**params)

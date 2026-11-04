@@ -29,7 +29,10 @@ existing setups need no changes.
 
 `E2E_HEALER_LLM_PROVIDER` is a closed set; any other value is rejected at load. On a
 structured-output parse failure the engine retries with tenacity, then falls back to the Patch
-Generator feedback loop, so a flaky JSON response never crashes a run.
+Generator feedback loop, so a flaky JSON response never crashes a run. Each provider request
+gives up after `E2E_HEALER_LLM_TIMEOUT_SECONDS` (default `120`) and is handled the same way, so
+a provider that never answers can't hang a run; raise it for a slow local model, such as
+Ollama on a CPU.
 
 ## Choosing where the evidence goes
 

@@ -144,6 +144,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [check, examples-repro, action-consumer, check-secret]
     if: needs.check-secret.outputs.has-key == 'true'
+    # A safety net only: provider calls time out in the engine itself (#471). One scenario,
+    # retries included, finishes in a few minutes.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
