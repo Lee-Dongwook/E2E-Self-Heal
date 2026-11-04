@@ -32,6 +32,14 @@ All notable changes to this project are documented here. The format is based on
   now a deliberate change.
 
 ### Fixed
+- **A provider that never answers no longer hangs a run** (#471). No model client set a request
+  timeout, and LangChain's defaults pass `timeout=None` to the SDKs, disabling their own limits;
+  the tenacity retries can't end a call that never returns. Every provider's client (NVIDIA,
+  OpenAI, OrcaRouter, Anthropic, Ollama, DeepSeek) now gives up after
+  `E2E_HEALER_LLM_TIMEOUT_SECONDS` (default 120, must be > 0), and a timeout is retried and
+  then handled like any other provider error. Raise it for a slow local model. The
+  `examples-heal` CI job, which hung for over 25 minutes on a silent NVIDIA call, also gets a
+  20-minute cap as a safety net.
 - **`product/web` type-checks on TypeScript 6** (#448). TypeScript 6 checks side-effect imports,
   and the dashboard had no declarations for its CSS import (`TS2882`). It now has Vite's standard
   `src/vite-env.d.ts`, which also works on TypeScript 5.

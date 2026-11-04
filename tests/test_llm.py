@@ -273,6 +273,7 @@ def _make_deepseek_client(
         base_url="https://api.deepseek.com",
         model="deepseek-v4-flash",
         max_output_tokens=512,
+        timeout_seconds=30.0,
     )
     return client, fake_openai.responses
 

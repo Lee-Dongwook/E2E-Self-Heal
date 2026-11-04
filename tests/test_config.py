@@ -92,6 +92,17 @@ def test_token_limits_accept_positive_values(field):
     assert make_settings(**{field: 512}).model_dump()[field] == 512
 
 
+@pytest.mark.parametrize("bad", [0, -1, -0.5])
+def test_the_request_timeout_rejects_zero_and_negative(bad):
+    # Zero or less would make every call fail at once, or mean no timeout at all.
+    with pytest.raises(ValidationError, match="llm_timeout_seconds"):
+        make_settings(llm_timeout_seconds=bad)
+
+
+def test_the_request_timeout_accepts_fractions_of_a_second():
+    assert make_settings(llm_timeout_seconds=0.5).llm_timeout_seconds == 0.5
+
+
 # --- fail-fast model requirement --------------------------------------------------
 
 

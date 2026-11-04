@@ -446,6 +446,7 @@ PY
 | `E2E_HEALER_LLM_BASE_URL`      | —                                     | OpenAI-compatible endpoint (empty = SDK default)                                 |
 | `E2E_HEALER_LLM_MODEL`         | —                                     | Structured-Outputs-capable model                                                 |
 | `E2E_HEALER_LLM_MAX_TOKENS`    | `4096`                                | Completion token cap (headroom for reasoning)                                    |
+| `E2E_HEALER_LLM_TIMEOUT_SECONDS` | `120`                               | Seconds before one provider request gives up; raise it for slow local models     |
 | `E2E_HEALER_SENSITIVE_ENV_VARS` | —                                   | Variable names whose values are redacted from prompts, JSON, and logs             |
 | `E2E_HEALER_SENSITIVE_VALUES`  | —                                   | Literal values to redact (min 4 chars, masked, comma-separated)                   |
 | `E2E_HEALER_NVIDIA_API_KEY`    | —                                     | NVIDIA NIM API key (legacy; maps to `LLM_API_KEY`)                               |

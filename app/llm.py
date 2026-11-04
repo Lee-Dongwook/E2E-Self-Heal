@@ -140,8 +140,9 @@ class DeepSeekResponsesClient:
         base_url: str,
         model: str,
         max_output_tokens: int,
+        timeout_seconds: float,
     ) -> None:
-        self._client = OpenAI(api_key=api_key, base_url=base_url)
+        self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout_seconds)
         self._model = model
         self._max_output_tokens = max_output_tokens
 
@@ -270,6 +271,7 @@ def _build_deepseek_client() -> DeepSeekResponsesClient:
         base_url=base_url,
         model=model,
         max_output_tokens=settings.llm_max_tokens,
+        timeout_seconds=settings.llm_timeout_seconds,
     )
 
 
@@ -278,6 +280,11 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
 
     Model kwargs are splatted from a dict because the chat-model classes expose ``model`` /
     ``max_tokens`` as pydantic aliases the type checker can't see on the constructor.
+
+    Every client gets ``settings.llm_timeout_seconds`` (#471): LangChain's defaults pass
+    ``timeout=None`` to the SDKs, which disables their own limits, so a provider that accepts
+    the connection and never answers would block forever; the tenacity retries can't help with
+    a call that never returns. A timeout raises like any other provider error.
     """
     if provider == "anthropic":
         if ChatAnthropic is None:
@@ -292,6 +299,7 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
             "model": settings.llm_model,
             "api_key": _anthropic_api_key(),
             "max_tokens": settings.llm_max_tokens,
+            "timeout": settings.llm_timeout_seconds,
         }
         return ChatAnthropic(**params)
     if provider == "ollama":
@@ -309,6 +317,8 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
             "model": settings.llm_model,
             "base_url": resolved_endpoint("ollama"),
             "num_predict": settings.llm_max_tokens,
+            # ChatOllama has no timeout field; its httpx client takes one.
+            "client_kwargs": {"timeout": settings.llm_timeout_seconds},
         }
         return ChatOllama(**params)
     if provider == "openai":
@@ -319,6 +329,7 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
             "api_key": _openai_api_key(),
             "base_url": resolved_endpoint("openai"),
             "max_tokens": settings.llm_max_tokens,
+            "timeout": settings.llm_timeout_seconds,
         }
         return ChatOpenAI(**params)
     if provider == "orcarouter":
@@ -327,6 +338,7 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
             base_url=resolved_endpoint("orcarouter"),
             model=settings.llm_model,
             max_tokens=settings.llm_max_tokens,
+            timeout_seconds=settings.llm_timeout_seconds,
         ).build_chat_model()
     # nvidia: OpenAI-compatible NIM endpoint driven by the OpenAI SDK; needs an explicit
     # base_url (folded in from the legacy nvidia_* settings by the config layer).
@@ -335,6 +347,7 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
         "api_key": _require_key(),
         "base_url": resolved_endpoint("nvidia"),
         "max_tokens": settings.llm_max_tokens,
+        "timeout": settings.llm_timeout_seconds,
     }
     return ChatOpenAI(**params)
 

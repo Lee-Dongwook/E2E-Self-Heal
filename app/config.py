@@ -34,6 +34,14 @@ class Settings(BaseSettings):
         ge=1,
         description="completion token cap (reasoning models need headroom); must be >= 1",
     )
+    llm_timeout_seconds: float = Field(
+        default=120.0,
+        gt=0,
+        description=(
+            "seconds before one provider request gives up; without it a provider that never "
+            "answers hangs the run (#471). Raise it for slow local models; must be > 0"
+        ),
+    )
 
     # Legacy NVIDIA-specific fields, kept for backward compatibility. Prefer the generic
     # llm_* fields above; these are folded into them when llm_provider is "nvidia".
