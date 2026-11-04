@@ -25,5 +25,6 @@ class OrcaRouterProvider:
             "base_url": self.base_url,
             "max_tokens": self.max_tokens,
             "timeout": self.timeout_seconds,
+            "max_retries": 0,  # tenacity in app/llm.py is the only retry layer (#471)
         }
         return ChatOpenAI(**params)

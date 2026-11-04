@@ -142,7 +142,10 @@ class DeepSeekResponsesClient:
         max_output_tokens: int,
         timeout_seconds: float,
     ) -> None:
-        self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout_seconds)
+        # max_retries=0: tenacity, around every call, is the only retry layer (#471).
+        self._client = OpenAI(
+            api_key=api_key, base_url=base_url, timeout=timeout_seconds, max_retries=0
+        )
         self._model = model
         self._max_output_tokens = max_output_tokens
 
@@ -285,6 +288,10 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
     ``timeout=None`` to the SDKs, which disables their own limits, so a provider that accepts
     the connection and never answers would block forever; the tenacity retries can't help with
     a call that never returns. A timeout raises like any other provider error.
+
+    SDK-level retries are off (``max_retries=0``) so tenacity, wrapped around every call, is
+    the only retry layer: otherwise each tenacity attempt hides up to three SDK attempts, and
+    one logical call could take 3 x 3 x the timeout. Ollama's client has no retries of its own.
     """
     if provider == "anthropic":
         if ChatAnthropic is None:
@@ -300,6 +307,7 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
             "api_key": _anthropic_api_key(),
             "max_tokens": settings.llm_max_tokens,
             "timeout": settings.llm_timeout_seconds,
+            "max_retries": 0,
         }
         return ChatAnthropic(**params)
     if provider == "ollama":
@@ -330,6 +338,7 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
             "base_url": resolved_endpoint("openai"),
             "max_tokens": settings.llm_max_tokens,
             "timeout": settings.llm_timeout_seconds,
+            "max_retries": 0,
         }
         return ChatOpenAI(**params)
     if provider == "orcarouter":
@@ -348,6 +357,7 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
         "base_url": resolved_endpoint("nvidia"),
         "max_tokens": settings.llm_max_tokens,
         "timeout": settings.llm_timeout_seconds,
+        "max_retries": 0,
     }
     return ChatOpenAI(**params)
 
