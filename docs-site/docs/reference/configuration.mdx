@@ -32,7 +32,9 @@ structured-output parse failure the engine retries with tenacity, then falls bac
 Generator feedback loop, so a flaky JSON response never crashes a run. Each provider request
 gives up after `E2E_HEALER_LLM_TIMEOUT_SECONDS` (default `120`) and is handled the same way, so
 a provider that never answers can't hang a run; raise it for a slow local model, such as
-Ollama on a CPU.
+Ollama on a CPU. A response cut off by the output limit (`E2E_HEALER_LLM_MAX_TOKENS`, which
+reasoning models can spend entirely on thinking) is retried with double the budget, up to four
+times the configured value; if it is still cut off, the error says to raise the setting.
 
 ## Choosing where the evidence goes
 

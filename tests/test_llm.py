@@ -421,10 +421,12 @@ def test_extract_text_flattens_content_blocks():
 class _RecordingClient:
     """A stand-in LLMClient that returns canned, schema-valid results."""
 
-    def complete(self, _system_prompt: str, _user_prompt: str) -> str:
+    def complete(self, _system_prompt: str, _user_prompt: str, *, max_tokens=None) -> str:
         return "diagnosis"
 
-    def structured(self, _system_prompt: str, _user_prompt: str, schema: type) -> object:
+    def structured(
+        self, _system_prompt: str, _user_prompt: str, schema: type, *, max_tokens=None
+    ) -> object:
         if schema is llm.ReviewOutput:
             return llm.ReviewOutput(findings=[])
         if schema is llm.DiagnosisVerdictOutput:

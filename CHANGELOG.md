@@ -32,6 +32,16 @@ All notable changes to this project are documented here. The format is based on
   now a deliberate change.
 
 ### Fixed
+- **A response cut off by the output-token limit is retried with a larger budget** (#453).
+  Reasoning models can spend the whole `E2E_HEALER_LLM_MAX_TOKENS` budget thinking and return
+  nothing usable (an empty DeepSeek completion, or `LengthFinishReasonError` from an
+  OpenAI-compatible endpoint); retrying with the same budget failed the same way, three times.
+  Such a call is now retried with double the budget, up to four times the configured value
+  (4096, then 8192, then 16384), and a final failure says to raise the setting. A diagnosis
+  cut off mid-answer counts too, since a truncated diagnosis would mislead the patch. The cut-off
+  is detected from each provider's own signal (OpenAI-compatible `finish_reason`, Anthropic
+  `stop_reason`, Ollama `done_reason`, DeepSeek's incomplete status). Other failures still retry
+  with the configured budget.
 - **A provider that never answers no longer hangs a run** (#471). No model client set a request
   timeout, and LangChain's defaults pass `timeout=None` to the SDKs, disabling their own limits;
   the tenacity retries can't end a call that never returns. Every provider's client (NVIDIA,
