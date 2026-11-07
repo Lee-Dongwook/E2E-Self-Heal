@@ -11,6 +11,7 @@ models, such as some NVIDIA NIM models, spend part of it on reasoning content be
 """
 
 import os
+from contextvars import ContextVar
 from functools import lru_cache
 from typing import Any, Protocol, TypeVar
 
@@ -18,9 +19,9 @@ import structlog
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_openai import ChatOpenAI
-from openai import OpenAI
+from openai import LengthFinishReasonError, OpenAI
 from pydantic import BaseModel, ValidationError
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import RetryCallState, retry, stop_after_attempt, wait_exponential
 
 from app.config import LLMProvider, settings
 from app.providers.orcarouter import OrcaRouterProvider
@@ -63,17 +64,56 @@ _STRICT_JSON_SCHEMA: dict[str, Any] = {"method": "json_schema", "strict": True}
 _STRICT_SCHEMA_PROVIDERS: frozenset[str] = frozenset({"openai", "nvidia"})
 
 
+class OutputLimitReached(ValueError):
+    """The provider stopped at the output-token limit before the answer was complete (#453).
+
+    Reasoning models can spend the whole budget thinking and return nothing usable. The
+    tenacity wrappers below retry such a call with a larger budget instead of the same one.
+    """
+
+    def __init__(self, budget: int | None) -> None:
+        self.budget = budget
+        limit = f"the {budget}-token" if budget else "the"
+        super().__init__(
+            f"the model stopped at {limit} output limit before finishing its answer; "
+            "raise E2E_HEALER_LLM_MAX_TOKENS if this keeps happening"
+        )
+
+
+class EmptyResponse(ValueError):
+    """The provider answered with nothing, and didn't say it hit the output limit (#453).
+
+    Most often the budget went to reasoning anyway (DeepSeek's empty completions on long
+    diagnoses are the case #453 reports), so it is retried with a larger budget too.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "llm_returned_empty_completion: the model returned no answer; "
+            "raise E2E_HEALER_LLM_MAX_TOKENS if this keeps happening"
+        )
+
+
 class LLMClient(Protocol):
     """Provider-agnostic surface the nodes call: free-text and structured completion.
 
     Implementations must ``raise`` on an empty/unparsed response (never return ``None``)
-    so the tenacity retry and the Patch Generator feedback loop keep working.
+    so the tenacity retry and the Patch Generator feedback loop keep working, and raise
+    :class:`OutputLimitReached` when the response was cut off by the output-token limit.
+    ``max_tokens`` overrides the configured output budget for one call; ``None`` keeps it.
     """
 
-    def complete(self, system_prompt: str, user_prompt: str) -> str: ...
+    def complete(
+        self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None
+    ) -> str: ...
 
     def structured(
-        self, system_prompt: str, user_prompt: str, schema: type[SchemaT]
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        schema: type[SchemaT],
+        *,
+        max_tokens: int | None = None,
     ) -> SchemaT: ...
 
 
@@ -86,6 +126,21 @@ def _extract_text(message: BaseMessage) -> str:
     return "".join(parts)
 
 
+def _stopped_at_output_limit(message: BaseMessage) -> bool:
+    """Whether the provider reports the message was cut off by the output-token limit.
+
+    Each LangChain chat model reports it under its own key: OpenAI-compatible endpoints
+    ``finish_reason="length"``, Anthropic ``stop_reason="max_tokens"``, Ollama
+    ``done_reason="length"``.
+    """
+    metadata = getattr(message, "response_metadata", None) or {}
+    return (
+        metadata.get("finish_reason") == "length"
+        or metadata.get("stop_reason") == "max_tokens"
+        or metadata.get("done_reason") == "length"
+    )
+
+
 class LangChainClient:
     """Adapts a LangChain ``BaseChatModel`` to the ``LLMClient`` interface.
 
@@ -96,30 +151,83 @@ class LangChainClient:
     """
 
     def __init__(
-        self, model: BaseChatModel, structured_kwargs: dict[str, Any] | None = None
+        self,
+        model: BaseChatModel,
+        structured_kwargs: dict[str, Any] | None = None,
+        budget_field: str = "max_tokens",
     ) -> None:
         self._model = model
         # Per-provider Structured Outputs tuning (e.g. OpenAI/NVIDIA use strict json_schema,
         # which is OpenAI's native Structured Outputs). Empty = the model's default method.
         self._structured_kwargs = structured_kwargs or {}
+        # The chat model's output-budget field: `max_tokens`, or Ollama's `num_predict`.
+        self._budget_field = budget_field
 
-    def complete(self, system_prompt: str, user_prompt: str) -> str:
+    def _model_with_budget(self, max_tokens: int | None) -> BaseChatModel:
+        if max_tokens is None:
+            return self._model
+        # A shallow copy shares the underlying HTTP clients; only the budget differs.
+        return self._model.model_copy(update={self._budget_field: max_tokens})
+
+    def _budget(self, max_tokens: int | None) -> int | None:
+        return (
+            max_tokens if max_tokens is not None else getattr(self._model, self._budget_field, None)
+        )
+
+    def complete(
+        self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None
+    ) -> str:
         messages = [("system", system_prompt), ("human", user_prompt)]
-        response = self._model.invoke(messages)
+        response = self._model_with_budget(max_tokens).invoke(messages)
+        if _stopped_at_output_limit(response):
+            # Even a non-empty answer is incomplete; a truncated diagnosis misleads the patch.
+            logger.warning("llm_output_limit_reached", budget=self._budget(max_tokens))
+            raise OutputLimitReached(self._budget(max_tokens))
         content = _extract_text(response)
         if not content:
-            logger.warning("llm_returned_empty_completion")
-            raise ValueError("llm_returned_empty_completion")
+            logger.warning("llm_returned_empty_completion", budget=self._budget(max_tokens))
+            raise EmptyResponse()
         return content
 
-    def structured(self, system_prompt: str, user_prompt: str, schema: type[SchemaT]) -> SchemaT:
+    def structured(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        schema: type[SchemaT],
+        *,
+        max_tokens: int | None = None,
+    ) -> SchemaT:
         messages = [("system", system_prompt), ("human", user_prompt)]
-        runnable = self._model.with_structured_output(schema, **self._structured_kwargs)
-        parsed = runnable.invoke(messages)
-        if not isinstance(parsed, schema):
-            logger.warning("llm_returned_no_parsed_output", schema=schema.__name__)
-            raise ValueError("llm_returned_no_parsed_output")
-        return parsed
+        model = self._model_with_budget(max_tokens)
+        # include_raw: a failed parse comes back with the raw message, so an empty or cut-off
+        # answer can be told apart from an invalid one.
+        runnable = model.with_structured_output(schema, include_raw=True, **self._structured_kwargs)
+        try:
+            result = runnable.invoke(messages)
+        except LengthFinishReasonError as exc:
+            # OpenAI-compatible strict json_schema parsing raises this on finish_reason=length.
+            logger.warning(
+                "llm_output_limit_reached", budget=self._budget(max_tokens), schema=schema.__name__
+            )
+            raise OutputLimitReached(self._budget(max_tokens)) from exc
+        raw = result.get("raw") if isinstance(result, dict) else None
+        parsed = result.get("parsed") if isinstance(result, dict) else result
+        if isinstance(parsed, schema):
+            return parsed
+        if raw is not None and _stopped_at_output_limit(raw):
+            logger.warning(
+                "llm_output_limit_reached", budget=self._budget(max_tokens), schema=schema.__name__
+            )
+            raise OutputLimitReached(self._budget(max_tokens))
+        if raw is not None and not _extract_text(raw) and not getattr(raw, "tool_calls", None):
+            logger.warning(
+                "llm_returned_empty_completion",
+                budget=self._budget(max_tokens),
+                schema=schema.__name__,
+            )
+            raise EmptyResponse()
+        logger.warning("llm_returned_no_parsed_output", schema=schema.__name__)
+        raise ValueError("llm_returned_no_parsed_output")
 
 
 class DeepSeekResponsesClient:
@@ -149,25 +257,45 @@ class DeepSeekResponsesClient:
         self._model = model
         self._max_output_tokens = max_output_tokens
 
-    def complete(self, system_prompt: str, user_prompt: str) -> str:
+    def _budget(self, max_tokens: int | None) -> int:
+        return max_tokens if max_tokens is not None else self._max_output_tokens
+
+    def _create(self, max_tokens: int | None, **request: Any) -> Any:
+        budget = self._budget(max_tokens)
         response = self._client.responses.create(
-            model=self._model,
-            instructions=system_prompt,
-            input=user_prompt,
-            max_output_tokens=self._max_output_tokens,
+            model=self._model, max_output_tokens=budget, **request
         )
+        details = getattr(response, "incomplete_details", None)
+        if (
+            getattr(response, "status", None) == "incomplete"
+            and getattr(details, "reason", None) == "max_output_tokens"
+        ):
+            logger.warning("llm_output_limit_reached", budget=budget)
+            raise OutputLimitReached(budget)
+        return response
+
+    def complete(
+        self, system_prompt: str, user_prompt: str, *, max_tokens: int | None = None
+    ) -> str:
+        response = self._create(max_tokens, instructions=system_prompt, input=user_prompt)
         text = response.output_text or ""
         if not text:
-            logger.warning("llm_returned_empty_completion")
-            raise ValueError("llm_returned_empty_completion")
+            logger.warning("llm_returned_empty_completion", budget=self._budget(max_tokens))
+            raise EmptyResponse()
         return text
 
-    def structured(self, system_prompt: str, user_prompt: str, schema: type[SchemaT]) -> SchemaT:
-        response = self._client.responses.create(
-            model=self._model,
+    def structured(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        schema: type[SchemaT],
+        *,
+        max_tokens: int | None = None,
+    ) -> SchemaT:
+        response = self._create(
+            max_tokens,
             instructions=system_prompt,
             input=user_prompt,
-            max_output_tokens=self._max_output_tokens,
             text={
                 "format": {
                     "type": "json_schema",
@@ -178,6 +306,13 @@ class DeepSeekResponsesClient:
             },
         )
         text = response.output_text or ""
+        if not text:
+            logger.warning(
+                "llm_returned_empty_completion",
+                budget=self._budget(max_tokens),
+                schema=schema.__name__,
+            )
+            raise EmptyResponse()
         try:
             parsed = schema.model_validate_json(text)
         except ValidationError:
@@ -375,40 +510,88 @@ def _get_client() -> LLMClient:
         # DeepSeek uses the Responses API (stateless), not the LangChain chat path.
         return _build_deepseek_client()
     structured_kwargs = _STRICT_JSON_SCHEMA if provider in _STRICT_SCHEMA_PROVIDERS else {}
-    return LangChainClient(_build_chat_model(provider), structured_kwargs)
+    budget_field = "num_predict" if provider == "ollama" else "max_tokens"
+    return LangChainClient(_build_chat_model(provider), structured_kwargs, budget_field)
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+# The output budget for the current attempt of an LLM call. `None` means the configured
+# `settings.llm_max_tokens`; it only changes after a response was cut off (#453).
+_output_budget: ContextVar[int | None] = ContextVar("llm_output_budget", default=None)
+# A cut-off doubles the budget for the next attempt, up to this multiple of the configured one:
+# 4096 -> 8192 -> 16384 over tenacity's three attempts.
+_OUTPUT_BUDGET_CEILING_FACTOR = 4
+
+
+def _reset_output_budget(retry_state: RetryCallState) -> None:
+    if retry_state.attempt_number == 1:
+        _output_budget.set(None)
+
+
+def _raise_output_budget_after_cut_off(retry_state: RetryCallState) -> None:
+    """Before the next attempt, double the budget if the last one ran out of it.
+
+    Retrying a cut-off or empty answer with the same budget fails the same way: a reasoning
+    model that spent all of it thinking will do so again. Other failures keep the budget.
+    """
+    outcome = retry_state.outcome
+    if outcome is None or not outcome.failed:
+        return
+    if not isinstance(outcome.exception(), (OutputLimitReached, EmptyResponse)):
+        return
+    configured = settings.llm_max_tokens
+    current = _output_budget.get() or configured
+    raised = min(current * 2, configured * _OUTPUT_BUDGET_CEILING_FACTOR)
+    if raised > current:
+        logger.info("llm_output_budget_raised", from_tokens=current, to_tokens=raised)
+        _output_budget.set(raised)
+
+
+def _llm_retry() -> Any:
+    return retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        before=_reset_output_budget,
+        after=_raise_output_budget_after_cut_off,
+    )
+
+
+@_llm_retry()
 def generate_diagnosis(system_prompt: str, user_prompt: str) -> str:
     """Call the LLM for a free-text failure diagnosis (the Diagnoser node)."""
-    return _get_client().complete(system_prompt, user_prompt)
+    return _get_client().complete(system_prompt, user_prompt, max_tokens=_output_budget.get())
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+@_llm_retry()
 def generate_patch(system_prompt: str, user_prompt: str) -> PatchOutput:
     """Call the LLM with an enforced PatchOutput schema and return the parsed result.
 
     Raises on a missing/malformed parse so tenacity retries; the Patch Generator node
     is responsible for the feedback loop when retries are exhausted.
     """
-    return _get_client().structured(system_prompt, user_prompt, PatchOutput)
+    return _get_client().structured(
+        system_prompt, user_prompt, PatchOutput, max_tokens=_output_budget.get()
+    )
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+@_llm_retry()
 def generate_review(system_prompt: str, user_prompt: str) -> ReviewOutput:
     """Call the LLM with an enforced ReviewOutput schema for source-level suggestions.
 
     Mirrors ``generate_patch``: Structured Outputs keep the Reviewer to advisory findings
     (never free-form rewrites). Raises on a missing parse so tenacity retries.
     """
-    return _get_client().structured(system_prompt, user_prompt, ReviewOutput)
+    return _get_client().structured(
+        system_prompt, user_prompt, ReviewOutput, max_tokens=_output_budget.get()
+    )
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+@_llm_retry()
 def generate_diagnosis_verdict(system_prompt: str, user_prompt: str) -> DiagnosisVerdictOutput:
     """Call the LLM with an enforced DiagnosisVerdictOutput schema (the decline adjudicator).
 
     Mirrors ``generate_patch``: a structured call, so an unparseable verdict retries and then
     raises. The adjudicator treats exhausted retries as "no verdict" rather than as evidence.
     """
-    return _get_client().structured(system_prompt, user_prompt, DiagnosisVerdictOutput)
+    return _get_client().structured(
+        system_prompt, user_prompt, DiagnosisVerdictOutput, max_tokens=_output_budget.get()
+    )
