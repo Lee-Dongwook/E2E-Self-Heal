@@ -80,6 +80,20 @@ class OutputLimitReached(ValueError):
         )
 
 
+class EmptyResponse(ValueError):
+    """The provider answered with nothing, and didn't say it hit the output limit (#453).
+
+    Most often the budget went to reasoning anyway (DeepSeek's empty completions on long
+    diagnoses are the case #453 reports), so it is retried with a larger budget too.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "llm_returned_empty_completion: the model returned no answer; "
+            "raise E2E_HEALER_LLM_MAX_TOKENS if this keeps happening"
+        )
+
+
 class LLMClient(Protocol):
     """Provider-agnostic surface the nodes call: free-text and structured completion.
 
@@ -171,8 +185,8 @@ class LangChainClient:
             raise OutputLimitReached(self._budget(max_tokens))
         content = _extract_text(response)
         if not content:
-            logger.warning("llm_returned_empty_completion")
-            raise ValueError("llm_returned_empty_completion")
+            logger.warning("llm_returned_empty_completion", budget=self._budget(max_tokens))
+            raise EmptyResponse()
         return content
 
     def structured(
@@ -185,19 +199,35 @@ class LangChainClient:
     ) -> SchemaT:
         messages = [("system", system_prompt), ("human", user_prompt)]
         model = self._model_with_budget(max_tokens)
-        runnable = model.with_structured_output(schema, **self._structured_kwargs)
+        # include_raw: a failed parse comes back with the raw message, so an empty or cut-off
+        # answer can be told apart from an invalid one.
+        runnable = model.with_structured_output(schema, include_raw=True, **self._structured_kwargs)
         try:
-            parsed = runnable.invoke(messages)
+            result = runnable.invoke(messages)
         except LengthFinishReasonError as exc:
             # OpenAI-compatible strict json_schema parsing raises this on finish_reason=length.
             logger.warning(
                 "llm_output_limit_reached", budget=self._budget(max_tokens), schema=schema.__name__
             )
             raise OutputLimitReached(self._budget(max_tokens)) from exc
-        if not isinstance(parsed, schema):
-            logger.warning("llm_returned_no_parsed_output", schema=schema.__name__)
-            raise ValueError("llm_returned_no_parsed_output")
-        return parsed
+        raw = result.get("raw") if isinstance(result, dict) else None
+        parsed = result.get("parsed") if isinstance(result, dict) else result
+        if isinstance(parsed, schema):
+            return parsed
+        if raw is not None and _stopped_at_output_limit(raw):
+            logger.warning(
+                "llm_output_limit_reached", budget=self._budget(max_tokens), schema=schema.__name__
+            )
+            raise OutputLimitReached(self._budget(max_tokens))
+        if raw is not None and not _extract_text(raw) and not getattr(raw, "tool_calls", None):
+            logger.warning(
+                "llm_returned_empty_completion",
+                budget=self._budget(max_tokens),
+                schema=schema.__name__,
+            )
+            raise EmptyResponse()
+        logger.warning("llm_returned_no_parsed_output", schema=schema.__name__)
+        raise ValueError("llm_returned_no_parsed_output")
 
 
 class DeepSeekResponsesClient:
@@ -227,8 +257,11 @@ class DeepSeekResponsesClient:
         self._model = model
         self._max_output_tokens = max_output_tokens
 
+    def _budget(self, max_tokens: int | None) -> int:
+        return max_tokens if max_tokens is not None else self._max_output_tokens
+
     def _create(self, max_tokens: int | None, **request: Any) -> Any:
-        budget = max_tokens if max_tokens is not None else self._max_output_tokens
+        budget = self._budget(max_tokens)
         response = self._client.responses.create(
             model=self._model, max_output_tokens=budget, **request
         )
@@ -247,8 +280,8 @@ class DeepSeekResponsesClient:
         response = self._create(max_tokens, instructions=system_prompt, input=user_prompt)
         text = response.output_text or ""
         if not text:
-            logger.warning("llm_returned_empty_completion")
-            raise ValueError("llm_returned_empty_completion")
+            logger.warning("llm_returned_empty_completion", budget=self._budget(max_tokens))
+            raise EmptyResponse()
         return text
 
     def structured(
@@ -273,6 +306,13 @@ class DeepSeekResponsesClient:
             },
         )
         text = response.output_text or ""
+        if not text:
+            logger.warning(
+                "llm_returned_empty_completion",
+                budget=self._budget(max_tokens),
+                schema=schema.__name__,
+            )
+            raise EmptyResponse()
         try:
             parsed = schema.model_validate_json(text)
         except ValidationError:
@@ -488,15 +528,15 @@ def _reset_output_budget(retry_state: RetryCallState) -> None:
 
 
 def _raise_output_budget_after_cut_off(retry_state: RetryCallState) -> None:
-    """Before the next attempt, double the budget if the last one was cut off by it.
+    """Before the next attempt, double the budget if the last one ran out of it.
 
-    Retrying a cut-off call with the same budget fails the same way: a reasoning model
-    that spent all of it thinking will do so again. Other failures keep the budget.
+    Retrying a cut-off or empty answer with the same budget fails the same way: a reasoning
+    model that spent all of it thinking will do so again. Other failures keep the budget.
     """
     outcome = retry_state.outcome
     if outcome is None or not outcome.failed:
         return
-    if not isinstance(outcome.exception(), OutputLimitReached):
+    if not isinstance(outcome.exception(), (OutputLimitReached, EmptyResponse)):
         return
     configured = settings.llm_max_tokens
     current = _output_budget.get() or configured

@@ -25,10 +25,15 @@ _PATCH = json.dumps({"instructions": []})
 
 @dataclass
 class FakeChat:
-    """Answers with ``content`` only when a request allows ``needs_tokens`` output tokens."""
+    """Answers with ``content`` only when a request allows ``needs_tokens`` output tokens.
+
+    Below that it returns an empty answer, flagged ``finish_reason="length"`` when
+    ``signals_cut_off`` (most providers) or as a normal ``"stop"`` otherwise (#453's case).
+    """
 
     needs_tokens: int
     content: str = _PATCH
+    signals_cut_off: bool = True
     budgets: list[int] = field(default_factory=list)
     url: str = ""
 
@@ -51,7 +56,7 @@ def fake_chat() -> Iterator[FakeChat]:
                 "choices": [
                     {
                         "index": 0,
-                        "finish_reason": "stop" if fits else "length",
+                        "finish_reason": "stop" if fits or not chat.signals_cut_off else "length",
                         "message": {"role": "assistant", "content": chat.content if fits else ""},
                     }
                 ],
@@ -148,6 +153,22 @@ def test_each_call_starts_again_from_the_configured_budget(nvidia_client: FakeCh
     assert nvidia_client.budgets == [1000, 2000, 1000]
 
 
+@pytest.mark.parametrize("call", ["generate_patch", "generate_diagnosis"])
+def test_an_empty_answer_without_a_cut_off_signal_is_retried_with_a_larger_budget(
+    nvidia_client: FakeChat, call: str
+) -> None:
+    # #453's case: the provider returns nothing and reports a normal finish.
+    nvidia_client.needs_tokens = 2000
+    nvidia_client.signals_cut_off = False
+    if call == "generate_diagnosis":
+        nvidia_client.content = "The button id changed."
+
+    result = getattr(llm, call)("system", "user")
+
+    assert result in (llm.PatchOutput(instructions=[]), nvidia_client.content)
+    assert nvidia_client.budgets == [1000, 2000]
+
+
 class _Incomplete:
     status = "incomplete"
     output_text = ""
@@ -189,4 +210,48 @@ def test_deepseek_reports_a_response_cut_off_by_its_output_limit(
     with pytest.raises(llm.OutputLimitReached):
         client.complete("system", "user")
     assert client.complete("system", "user", max_tokens=2000) == "diagnosis"
+    assert budgets == [1000, 2000]
+
+
+class _EmptyCompleted:
+    status = "completed"
+    incomplete_details = None
+    output_text = ""
+
+
+@pytest.mark.parametrize("call", ["generate_diagnosis", "generate_patch"])
+def test_an_empty_deepseek_answer_is_retried_with_a_larger_budget(
+    monkeypatch: pytest.MonkeyPatch, call: str
+) -> None:
+    # #453 exactly: DeepSeek returns an empty completion with no incomplete status.
+    budgets: list[int] = []
+
+    class Answer:
+        status = "completed"
+        incomplete_details = None
+        output_text = "diagnosis" if call == "generate_diagnosis" else _PATCH
+
+    class Responses:
+        def create(self, **request: Any) -> object:
+            budgets.append(request["max_output_tokens"])
+            return _EmptyCompleted() if request["max_output_tokens"] < 2000 else Answer()
+
+    class FakeOpenAI:
+        def __init__(self, **_kwargs: Any) -> None:
+            self.responses = Responses()
+
+    monkeypatch.setattr(llm, "OpenAI", FakeOpenAI)
+    monkeypatch.setattr(settings, "llm_provider", "deepseek")
+    monkeypatch.setattr(settings, "llm_api_key", "test-key")
+    monkeypatch.setattr(settings, "llm_model", "")
+    monkeypatch.setattr(settings, "llm_base_url", "")
+    monkeypatch.setattr(settings, "llm_max_tokens", 1000)
+    monkeypatch.setattr(cast(Any, getattr(llm, call)).retry, "wait", wait_none())
+    llm._get_client.cache_clear()
+    try:
+        result = getattr(llm, call)("system", "user")
+    finally:
+        llm._get_client.cache_clear()
+
+    assert result in ("diagnosis", llm.PatchOutput(instructions=[]))
     assert budgets == [1000, 2000]

@@ -198,7 +198,7 @@ def test_openai_and_nvidia_use_strict_json_schema():
     result = client.structured("sys", "usr", llm.PatchOutput)
 
     assert isinstance(result, llm.PatchOutput)
-    assert captured == {"method": "json_schema", "strict": True}
+    assert captured == {"method": "json_schema", "strict": True, "include_raw": True}
 
 
 def test_structured_raises_on_none_parse():
