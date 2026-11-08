@@ -221,8 +221,9 @@ class ScenarioSandboxError(RuntimeError):
     """The sandbox forbids editing scenario test files, so no repair could be applied."""
 
 
-class BenchmarkLockedError(RuntimeError):
-    """Another safety benchmark is running in this checkout, so this one must not start."""
+class CheckoutLockError(RuntimeError):
+    """The run could not lock its checkout, so it must not start: another run holds the lock,
+    or the platform has no file lock to take."""
 
 
 def discover_safety_scenarios(root: Path) -> tuple[SafetyScenario, ...]:
@@ -438,13 +439,17 @@ def checkout_lock(scenario_root: Path) -> Iterator[Path]:
     a lock file left by a crashed or killed run never blocks the next one. The file itself is
     left in place; deleting it would let two runs lock two different files.
 
-    Raises :class:`BenchmarkLockedError` when another run holds the lock.
+    Raises :class:`CheckoutLockError` when another run holds the lock, or when the platform has
+    no ``fcntl`` (Windows): an unlocked run could corrupt another, so it fails closed.
     """
     path = benchmark_lock_path(scenario_root)
     if fcntl is None:
-        logger.warning("safety_benchmark_lock_unavailable", platform=sys.platform)
-        yield path
-        return
+        logger.warning("safety_benchmark_lock_unavailable", platform=sys.platform, lock=str(path))
+        raise CheckoutLockError(
+            f"this platform ({sys.platform}) has no fcntl file lock, so the safety benchmark "
+            "can't make sure it is the only run in this checkout. Run it on Linux or macOS "
+            "(on Windows, inside WSL)."
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
     try:
@@ -453,7 +458,7 @@ def checkout_lock(scenario_root: Path) -> Iterator[Path]:
         except BlockingIOError:
             holder = _lock_holder(descriptor)
             logger.warning("safety_benchmark_locked", lock=str(path), holder=holder)
-            raise BenchmarkLockedError(
+            raise CheckoutLockError(
                 f"another safety benchmark is running in this checkout ({holder}). Wait for it "
                 "to finish, or run this one in a separate git worktree (`git worktree add`). "
                 f"Lock: {path}"

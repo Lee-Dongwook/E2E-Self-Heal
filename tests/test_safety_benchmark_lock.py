@@ -17,7 +17,9 @@ import pytest
 from typer.testing import CliRunner
 
 from app.cli import app
-from app.safety_benchmark import BenchmarkLockedError, benchmark_lock_path, checkout_lock
+import app.cli as cli
+import app.safety_benchmark as safety_benchmark
+from app.safety_benchmark import CheckoutLockError, benchmark_lock_path, checkout_lock
 
 _HOLD = textwrap.dedent(
     """
@@ -103,7 +105,7 @@ def test_separate_worktrees_of_one_repository_can_run_at_once(
 
     with checkout_lock(worktree / "scenarios"):
         pass
-    with pytest.raises(BenchmarkLockedError):
+    with pytest.raises(CheckoutLockError):
         with checkout_lock(checkout / "scenarios"):
             pass
 
@@ -111,3 +113,20 @@ def test_separate_worktrees_of_one_repository_can_run_at_once(
 def test_the_lock_never_shows_in_git_status(checkout: Path) -> None:
     with checkout_lock(checkout / "scenarios"):
         assert _git(checkout, "status", "--porcelain", "--untracked-files=all") == ""
+
+
+def test_without_a_file_lock_the_benchmark_refuses_to_run(
+    checkout: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Windows has no fcntl. An unlocked run could corrupt another, so it must not start.
+    started: list[object] = []
+    monkeypatch.setattr(safety_benchmark, "fcntl", None)
+    monkeypatch.setattr(cli, "run_safety_benchmark", lambda *args, **kwargs: started.append(args))
+
+    result = CliRunner().invoke(
+        app, ["safety-benchmark", "--scenario-root", str(checkout / "scenarios")]
+    )
+
+    assert result.exit_code == 2
+    assert "has no fcntl file lock" in " ".join(result.output.split())
+    assert started == []

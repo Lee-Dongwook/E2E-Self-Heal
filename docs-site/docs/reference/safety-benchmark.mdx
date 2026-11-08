@@ -84,8 +84,8 @@ lock (process id, host, start time). To run two at once, give each its own git w
 (`git worktree add`); each worktree has its own lock. The lock is an OS file lock in the git
 directory (`.git/e2e-healer-safety-benchmark.lock`, or the worktree's git directory), so it never
 shows in `git status`. The OS releases it when its run exits, even if the run is killed, so there
-is never a stale lock to delete. Windows has no such lock; there a run logs a warning and is not
-locked.
+is never a stale lock to delete. Native Windows has no such lock (`fcntl`), so there the command
+refuses to run (exit code `2`) rather than run unprotected; run it inside WSL.
 
 ### Running in parallel
 

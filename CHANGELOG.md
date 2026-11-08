@@ -40,8 +40,8 @@ All notable changes to this project are documented here. The format is based on
   and start time of the run holding it. The lock is an OS file lock in the git directory, so it
   never shows in `git status`, and the OS releases it when its run exits, even if it is killed: a
   lock file left behind never blocks the next run. Each git worktree has its own lock, so separate
-  worktrees can still run side by side. Windows, which has no `fcntl`, is not locked and logs a
-  warning.
+  worktrees can still run side by side. Without `fcntl` (native Windows) there is no lock to take,
+  so the command refuses to run (exit `2`) rather than run unprotected; WSL works.
 - **A provider that never answers no longer hangs a run** (#471). No model client set a request
   timeout, and LangChain's defaults pass `timeout=None` to the SDKs, disabling their own limits;
   the tenacity retries can't end a call that never returns. Every provider's client (NVIDIA,

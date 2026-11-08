@@ -44,7 +44,7 @@ from app.preprocess.selector_diff_check import untouched_failing_selector
 from app.runner import run_playwright
 from app.safety_benchmark import (
     ActualOutcome,
-    BenchmarkLockedError,
+    CheckoutLockError,
     GateStatus,
     ScenarioRestoreError,
     ScenarioSandboxError,
@@ -800,7 +800,7 @@ def safety_benchmark(
                 report = run_safety_benchmark(
                     scenarios, executor, repeats=repeat, on_result=on_result
                 )
-    except BenchmarkLockedError as exc:
+    except CheckoutLockError as exc:
         console.print(f"[red]{escape(str(exc))}[/red]")
         raise typer.Exit(code=2) from exc
     except ScenarioRestoreError as exc:
