@@ -44,10 +44,12 @@ from app.preprocess.selector_diff_check import untouched_failing_selector
 from app.runner import run_playwright
 from app.safety_benchmark import (
     ActualOutcome,
+    BenchmarkLockedError,
     GateStatus,
     ScenarioRestoreError,
     ScenarioSandboxError,
     assert_scenarios_writable,
+    checkout_lock,
     discover_safety_scenarios,
     execute_prepared_scenario,
     execute_safety_scenario,
@@ -785,7 +787,8 @@ def safety_benchmark(
     executor = execute_prepared_scenario if apply_patches else execute_safety_scenario
     runs = sum(1 for scenario in scenarios if scenario.runnable) * repeat
     try:
-        with _benchmark_progress(runs, jobs) as on_result:
+        # One run per checkout (#452): a second would patch, or copy, the same demo app.
+        with checkout_lock(scenario_root), _benchmark_progress(runs, jobs) as on_result:
             if jobs > 1:
                 log_dir = Path(tempfile.mkdtemp(prefix="e2e-healer-safety-logs-"))
                 # Named up front so a run that aborts still says where its workers logged.
@@ -797,6 +800,9 @@ def safety_benchmark(
                 report = run_safety_benchmark(
                     scenarios, executor, repeats=repeat, on_result=on_result
                 )
+    except BenchmarkLockedError as exc:
+        console.print(f"[red]{escape(str(exc))}[/red]")
+        raise typer.Exit(code=2) from exc
     except ScenarioRestoreError as exc:
         # The working tree is still modified, so continuing would benchmark a wrong app.
         console.print(f"[red]aborting, working tree not restored:[/red] {escape(str(exc))}")
