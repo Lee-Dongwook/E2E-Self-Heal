@@ -42,6 +42,16 @@ All notable changes to this project are documented here. The format is based on
   `stop_reason`, Ollama `done_reason`, DeepSeek's incomplete status), a diagnosis cut off
   mid-answer, since a truncated one would mislead the patch, and an empty answer the provider
   reports as finished normally. Other failures still retry with the configured budget.
+- **A second safety benchmark in the same checkout is refused** (#452, #407). A `--jobs 1` run
+  patches the demo app in the checkout and a parallel run copies it, so two runs at once scored
+  each other's broken app without saying so: scenarios reported as `error`, and a product
+  regression scored as a repair, a false green. A run now holds a lock on its checkout from start
+  to finish, whatever `--jobs` is, and a second one exits with code `2`, naming the process, host
+  and start time of the run holding it. The lock is an OS file lock in the git directory, so it
+  never shows in `git status`, and the OS releases it when its run exits, even if it is killed: a
+  lock file left behind never blocks the next run. Each git worktree has its own lock, so separate
+  worktrees can still run side by side. Without `fcntl` (native Windows) there is no lock to take,
+  so the command refuses to run (exit `2`) rather than run unprotected; WSL works.
 - **A provider that never answers no longer hangs a run** (#471). No model client set a request
   timeout, and LangChain's defaults pass `timeout=None` to the SDKs, disabling their own limits;
   the tenacity retries can't end a call that never returns. Every provider's client (NVIDIA,
