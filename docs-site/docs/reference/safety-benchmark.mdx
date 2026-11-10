@@ -77,6 +77,16 @@ If a patch that was applied cannot be reversed, the run stops with exit code `1`
 report, because every later scenario would run on a modified app. The error includes the
 `git apply --reverse` command that restores it.
 
+**One run per checkout.** A run locks its checkout for its whole length, whatever `--jobs` is: a
+sequential run patches the demo app, and a parallel one copies it, so a second run at the same
+time would score the wrong app. The second run exits with code `2` and names the run holding the
+lock (process id, host, start time). To run two at once, give each its own git worktree
+(`git worktree add`); each worktree has its own lock. The lock is an OS file lock in the git
+directory (`.git/e2e-healer-safety-benchmark.lock`, or the worktree's git directory), so it never
+shows in `git status`. The OS releases it when its run exits, even if the run is killed, so there
+is never a stale lock to delete. Native Windows has no such lock (`fcntl`), so there the command
+refuses to run (exit code `2`) rather than run unprotected; run it inside WSL.
+
 ### Running in parallel
 
 On one checkout the scenarios must run one after another, because each breaks the same demo app.

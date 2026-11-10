@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
+import socket
 import subprocess
+import sys
 import time
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import cast
@@ -20,6 +24,12 @@ from app.state import AgentState
 from app.utils.files import atomic_write
 
 logger = structlog.get_logger(__name__)
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows has no fcntl module.
+    fcntl = None
+
+BENCHMARK_LOCK_NAME = "e2e-healer-safety-benchmark.lock"
 
 # Release-gate policy (#292). Gates block a release, never a merge: PR and main CI runs stay
 # informational. A rate is only enforced once its population reaches ``GATE_MIN_SAMPLE``, so
@@ -211,6 +221,11 @@ class ScenarioSandboxError(RuntimeError):
     """The sandbox forbids editing scenario test files, so no repair could be applied."""
 
 
+class CheckoutLockError(RuntimeError):
+    """The run could not lock its checkout, so it must not start: another run holds the lock,
+    or the platform has no file lock to take."""
+
+
 def discover_safety_scenarios(root: Path) -> tuple[SafetyScenario, ...]:
     """Load scenario metadata in deterministic directory-name order.
 
@@ -378,6 +393,87 @@ def _git(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
     except OSError as exc:
         raise ScenarioPatchError(f"could not run git: {exc}") from exc
+
+
+def benchmark_lock_path(scenario_root: Path) -> Path:
+    """Where the lock for ``scenario_root``'s checkout lives.
+
+    Inside the git directory, so it never shows in ``git status``. Every git worktree has its
+    own git directory, so separate worktrees can still run benchmarks side by side. Outside git
+    (scenarios that ship already broken need none), it sits in the scenario root.
+    """
+    outside_git = scenario_root.resolve() / f".{BENCHMARK_LOCK_NAME}"
+    try:
+        found = _git(
+            ["rev-parse", "--path-format=absolute", "--git-path", BENCHMARK_LOCK_NAME],
+            cwd=scenario_root,
+        )
+    except ScenarioPatchError:  # git is not installed
+        return outside_git
+    if found.returncode != 0 or not found.stdout.strip():
+        return outside_git
+    return Path(found.stdout.strip())
+
+
+def _lock_holder(descriptor: int) -> str:
+    """Describe the run holding the lock, from what it wrote into the lock file."""
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    try:
+        holder = json.loads(os.read(descriptor, 4096) or b"{}")
+    except ValueError:
+        holder = {}
+    if not isinstance(holder, dict) or "pid" not in holder:
+        return "another process"
+    return (
+        f"pid {holder['pid']} on {holder.get('host', '?')}, started {holder.get('started_at', '?')}"
+    )
+
+
+@contextmanager
+def checkout_lock(scenario_root: Path) -> Iterator[Path]:
+    """Hold an exclusive lock on the checkout for the whole benchmark run (#452).
+
+    A sequential run patches the demo app in the checkout and a parallel one copies it, so a
+    second run in the same checkout would benchmark, or copy, an app the first one has broken.
+    The lock is an OS file lock: the kernel drops it when the holder exits, however it exits, so
+    a lock file left by a crashed or killed run never blocks the next one. The file itself is
+    left in place; deleting it would let two runs lock two different files.
+
+    Raises :class:`CheckoutLockError` when another run holds the lock, or when the platform has
+    no ``fcntl`` (Windows): an unlocked run could corrupt another, so it fails closed.
+    """
+    path = benchmark_lock_path(scenario_root)
+    if fcntl is None:
+        logger.warning("safety_benchmark_lock_unavailable", platform=sys.platform, lock=str(path))
+        raise CheckoutLockError(
+            f"this platform ({sys.platform}) has no fcntl file lock, so the safety benchmark "
+            "can't make sure it is the only run in this checkout. Run it on Linux or macOS "
+            "(on Windows, inside WSL)."
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            holder = _lock_holder(descriptor)
+            logger.warning("safety_benchmark_locked", lock=str(path), holder=holder)
+            raise CheckoutLockError(
+                f"another safety benchmark is running in this checkout ({holder}). Wait for it "
+                "to finish, or run this one in a separate git worktree (`git worktree add`). "
+                f"Lock: {path}"
+            ) from None
+        record = {
+            "pid": os.getpid(),
+            "host": socket.gethostname(),
+            "started_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
+        os.ftruncate(descriptor, 0)
+        os.pwrite(descriptor, json.dumps(record).encode(), 0)
+        logger.info("safety_benchmark_lock_acquired", lock=str(path))
+        yield path
+    finally:
+        os.close(descriptor)  # closing the descriptor releases the lock
 
 
 @contextmanager
