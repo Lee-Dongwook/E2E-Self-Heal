@@ -10,6 +10,7 @@ Completions are given explicit token headroom (``settings.llm_max_tokens``) beca
 models, such as some NVIDIA NIM models, spend part of it on reasoning content before the answer.
 """
 
+import json
 import os
 from contextvars import ContextVar
 from functools import lru_cache
@@ -26,7 +27,7 @@ from tenacity import RetryCallState, retry, stop_after_attempt, wait_exponential
 from app.config import LLMProvider, settings
 from app.providers.orcarouter import OrcaRouterProvider
 from app.schemas import DiagnosisVerdictOutput, PatchOutput, ReviewOutput
-from app.shadow.redaction import redact_text
+from app.shadow.redaction import redact_text, redact_value
 
 # Anthropic and Ollama are optional dependencies: users who don't use them shouldn't have to
 # install langchain-anthropic / langchain-ollama. The guarded imports stay at module top per
@@ -563,12 +564,25 @@ def _response_body(exc: BaseException) -> str | None:
     if isinstance(text, str) and text.strip():
         return text
     detail = getattr(exc, "body", None) or getattr(exc, "error", None)
-    return None if detail is None else str(detail)
+    if detail is None:
+        return None
+    # The SDK's parsed body is a mapping: serialize it as JSON, which _excerpt parses back.
+    return detail if isinstance(detail, str) else json.dumps(detail, default=str)
 
 
 def _excerpt(text: str) -> str:
-    # Redact the whole text before cutting it: a secret split at the cut would no longer
-    # match a redaction pattern, and its first half would be logged.
+    """The start of a provider's error body, safe to log.
+
+    A JSON body is redacted as a structure first: a secret under a sensitive key
+    (``"api_key": "..."``, ``"password": "..."``) matches no free-text pattern, and the log
+    processor only ever sees the finished string. Then the free-text patterns run, and only
+    then is the text cut: a secret split at the cut would no longer match, and its first half
+    would be logged.
+    """
+    try:
+        text = json.dumps(redact_value(json.loads(text)), ensure_ascii=False)
+    except ValueError:
+        pass  # not JSON: free-text redaction below still applies
     flat = " ".join(redact_text(text).split())
     if len(flat) <= _BODY_EXCERPT_CHARS:
         return flat
