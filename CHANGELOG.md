@@ -25,8 +25,10 @@ All notable changes to this project are documented here. The format is based on
   provider's error `type` and `code` buried in text (LangChain's wrapper keeps only the message).
   Every failed attempt now logs `llm_attempt_failed` with `call`, `attempt` and `error_type`, and,
   for an HTTP error from any provider, `status_code` and `body_excerpt`: the first 300 characters
-  of the raw body, redacted before the cut so a secret split by it can't escape the redaction.
-  Retries are unchanged.
+  of the raw body, redacted before the cut so a secret split by it can't escape the redaction. A
+  JSON body is also redacted by key, like the `--json` evidence, so a value under `api_key`,
+  `password` or another sensitive key is hidden even when it isn't configured anywhere. Retries
+  are unchanged.
 - **`make sync-pins` updates release pins and documented defaults** (#457).
   `scripts/sync_release_pins.py` writes the version from `pyproject.toml` into every
   `Lee-Dongwook/E2E-Self-Heal@vX.Y.Z` pin (README in every language, docs site, demo page) and the

@@ -37,7 +37,9 @@ reasoning models can spend entirely on thinking), or an empty one, is retried wi
 budget, up to four times the configured value; if it still fails, the error says to raise the
 setting. Every failed attempt logs a `llm_attempt_failed` warning with the attempt number and
 error type; when the provider answered with an HTTP error, it also has the `status_code` and a
-`body_excerpt`: the first 300 characters of the response body, redacted before it is cut.
+`body_excerpt`: the first 300 characters of the response body, redacted before it is cut. A JSON
+body is redacted by key as well, so a value under `api_key`, `password` or another sensitive key
+is hidden even if it isn't configured.
 
 A `429` (rate limited) is retried after as long as the provider asked: its `Retry-After` header,
 or on Gemini the `retryDelay` in the body, capped at 90 seconds; without a hint, 10 seconds. The

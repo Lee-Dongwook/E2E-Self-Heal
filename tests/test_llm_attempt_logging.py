@@ -10,6 +10,7 @@ import json
 import re
 import threading
 from collections.abc import Iterator
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast
 
@@ -149,3 +150,59 @@ def test_a_failure_without_an_http_response_still_logs_the_attempt(
     (failed,) = _failed_attempts(capsys.readouterr().err)
     assert "error_type=EmptyResponse" in failed
     assert "status_code" not in failed
+
+
+_UNCONFIGURED = ("private-api-key-value-1", "hunter2-password-value")
+
+
+def test_a_secret_under_a_sensitive_json_key_is_redacted_without_being_configured(
+    provider: Replies, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # No pattern matches `"api_key": "..."` as free text; only redacting the parsed JSON does.
+    body = json.dumps(
+        {
+            "error": {
+                "message": "invalid request",
+                "echo": {"api_key": _UNCONFIGURED[0], "user": {"password": _UNCONFIGURED[1]}},
+            }
+        }
+    )
+    provider.queue = [(400, body), (200, json.dumps(_OK))]
+
+    llm.generate_diagnosis("system", "user")
+
+    (failed,) = _failed_attempts(capsys.readouterr().err)
+    assert not any(secret in failed for secret in _UNCONFIGURED)
+    assert failed.count("[REDACTED]") == 2
+    assert "invalid request" in failed
+
+
+class _ParsedBodyOnly(Exception):
+    """An SDK error that kept only the parsed body, with no readable HTTP response."""
+
+    status_code = 400
+    response = None
+    body = {"error": {"message": "bad key", "api_key": _UNCONFIGURED[0]}}
+
+
+def test_a_parsed_body_is_redacted_by_key_too(
+    provider: Replies, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    attempts: list[int] = []
+
+    class Client:
+        def complete(self, *_args: object, **_kwargs: object) -> str:
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise _ParsedBodyOnly()
+            return "The button id changed."
+
+    # lru_cache gives the stub the cache_clear the fixture's teardown calls.
+    monkeypatch.setattr(llm, "_get_client", lru_cache(maxsize=1)(lambda: Client()))
+
+    llm.generate_diagnosis("system", "user")
+
+    (failed,) = _failed_attempts(capsys.readouterr().err)
+    assert "status_code=400" in failed
+    assert _UNCONFIGURED[0] not in failed
+    assert "[REDACTED]" in failed and "bad key" in failed
