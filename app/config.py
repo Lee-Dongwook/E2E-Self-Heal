@@ -42,6 +42,15 @@ class Settings(BaseSettings):
             "answers hangs the run (#471). Raise it for slow local models; must be > 0"
         ),
     )
+    llm_requests_per_minute: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "most model calls to start per minute, across every process using the same key and "
+            "endpoint (all --jobs workers); 0 = no limit. Set it to a free tier's per-minute "
+            "limit to avoid 429s instead of recovering from them (#456)"
+        ),
+    )
 
     # Legacy NVIDIA-specific fields, kept for backward compatibility. Prefer the generic
     # llm_* fields above; these are folded into them when llm_provider is "nvidia".

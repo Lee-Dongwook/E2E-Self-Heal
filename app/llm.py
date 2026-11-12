@@ -21,10 +21,17 @@ from langchain_core.messages import BaseMessage
 from langchain_openai import ChatOpenAI
 from openai import LengthFinishReasonError, OpenAI
 from pydantic import BaseModel, ValidationError
-from tenacity import RetryCallState, retry, stop_after_attempt, wait_exponential
+from tenacity import (
+    RetryCallState,
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    wait_random,
+)
 
 from app.config import LLMProvider, settings
 from app.providers.orcarouter import OrcaRouterProvider
+from app.rate_limit import DEFAULT_COOLDOWN_SECONDS, Pacer, RateLimit, pacing_path, rate_limit_of
 from app.schemas import DiagnosisVerdictOutput, PatchOutput, ReviewOutput
 from app.shadow.redaction import redact_text
 
@@ -525,9 +532,17 @@ _OUTPUT_BUDGET_CEILING_FACTOR = 4
 _BODY_EXCERPT_CHARS = 300
 
 
-def _reset_output_budget(retry_state: RetryCallState) -> None:
+def _before_attempt(retry_state: RetryCallState) -> None:
     if retry_state.attempt_number == 1:
         _output_budget.set(None)
+    # Every attempt, first ones included, waits out a cooldown another worker's 429 set (#456).
+    waited = _pacer().wait_turn()
+    if waited >= 1:
+        logger.info(
+            "llm_call_paced",
+            call=getattr(retry_state.fn, "__name__", None),
+            seconds=round(waited, 1),
+        )
 
 
 def _raise_output_budget_after_cut_off(retry_state: RetryCallState) -> None:
@@ -594,6 +609,7 @@ def _log_failed_attempt(retry_state: RetryCallState) -> None:
         )
         return
     body = _response_body(exc)
+    limit = rate_limit_of(exc, body)
     logger.warning(
         "llm_attempt_failed",
         call=call,
@@ -601,19 +617,104 @@ def _log_failed_attempt(retry_state: RetryCallState) -> None:
         error_type=type(exc).__name__,
         status_code=status,
         body_excerpt=_excerpt(body) if body else None,
+        retry_in_seconds=_retry_in(limit),
+    )
+    if limit is not None and limit.exhausted:
+        logger.warning(
+            "llm_quota_exhausted",
+            call=call,
+            daily=limit.daily,
+            retry_after_seconds=limit.retry_after,
+            guidance=(
+                "the provider's quota for this key is used up and waiting won't clear it within "
+                "the run: retry after it resets, or use another key or model. To stay under a "
+                "per-minute limit, set E2E_HEALER_LLM_REQUESTS_PER_MINUTE."
+            ),
+        )
+
+
+def _retry_in(limit: RateLimit | None) -> float | None:
+    """How long the next attempt waits after a 429, as ``llm_attempt_failed`` reports it."""
+    if limit is None or limit.exhausted:
+        return None
+    return round(
+        limit.retry_after if limit.retry_after is not None else DEFAULT_COOLDOWN_SECONDS, 1
+    )
+
+
+def _rate_limit(exc: BaseException | None) -> RateLimit | None:
+    return None if exc is None else rate_limit_of(exc, _response_body(exc))
+
+
+def _cool_down_after_rate_limit(retry_state: RetryCallState) -> None:
+    """A 429 pauses every process sharing this key until the provider's retry time (#456)."""
+    outcome = retry_state.outcome
+    if outcome is None or not outcome.failed:
+        return
+    limit = _rate_limit(outcome.exception())
+    retry_in = _retry_in(limit)
+    if retry_in is not None:
+        _pacer().cool_down(retry_in)
+
+
+def _worth_retrying(retry_state: RetryCallState) -> bool:
+    """Retry every failure except a quota that waiting won't clear within the run.
+
+    tenacity runs the ``after`` hook only when it will retry, so the attempt that stops the
+    retries is logged here instead.
+    """
+    outcome = retry_state.outcome
+    if outcome is None or not outcome.failed:
+        return False
+    limit = _rate_limit(outcome.exception())
+    if limit is not None and limit.exhausted:
+        _log_failed_attempt(retry_state)
+        return False
+    return True
+
+
+_BACKOFF = wait_exponential(multiplier=1, min=4, max=10) + wait_random(0, 2)
+
+
+def _wait_before_retry(retry_state: RetryCallState) -> float:
+    """Exponential backoff with jitter, so parallel workers don't retry in lockstep.
+
+    After a 429 the shared cooldown already holds the next attempt back for as long as the
+    provider asked (``_before_attempt``), so no backoff is added on top.
+    """
+    outcome = retry_state.outcome
+    if outcome is not None and _retry_in(_rate_limit(outcome.exception())) is not None:
+        return 0.0
+    return _BACKOFF(retry_state)
+
+
+@lru_cache(maxsize=8)
+def _pacer_for(provider: str, endpoint: str, api_key: str, requests_per_minute: int) -> Pacer:
+    return Pacer(pacing_path(provider, endpoint, api_key), requests_per_minute)
+
+
+def _pacer() -> Pacer:
+    provider = settings.llm_provider
+    return _pacer_for(
+        provider,
+        resolved_endpoint(provider),
+        settings.llm_api_key,
+        settings.llm_requests_per_minute,
     )
 
 
 def _after_attempt(retry_state: RetryCallState) -> None:
     _log_failed_attempt(retry_state)
+    _cool_down_after_rate_limit(retry_state)
     _raise_output_budget_after_cut_off(retry_state)
 
 
 def _llm_retry() -> Any:
     return retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-        before=_reset_output_budget,
+        wait=_wait_before_retry,
+        retry=_worth_retrying,
+        before=_before_attempt,
         after=_after_attempt,
     )
 

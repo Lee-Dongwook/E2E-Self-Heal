@@ -39,6 +39,16 @@ setting. Every failed attempt logs a `llm_attempt_failed` warning with the attem
 error type; when the provider answered with an HTTP error, it also has the `status_code` and a
 `body_excerpt`: the first 300 characters of the response body, redacted before it is cut.
 
+A `429` (rate limited) is retried after as long as the provider asked: its `Retry-After` header,
+or on Gemini the `retryDelay` in the body, capped at 90 seconds; without a hint, 10 seconds. The
+pause is shared by every process calling the same endpoint with the same key (all `--jobs`
+workers, or two runs on one machine), so when one is rate limited, they all back off. A `429`
+that waiting won't clear within the run (a per-day quota, or a wait beyond the cap) isn't retried:
+the run logs `llm_quota_exhausted`, and that call ends as a provider error. To stay under a
+per-minute limit instead of recovering from it, set `E2E_HEALER_LLM_REQUESTS_PER_MINUTE` (default
+`0`, no limit): calls then start at most that often, across all those processes. Other failures
+back off exponentially (4-10 seconds) with up to 2 seconds of random jitter.
+
 ## Choosing where the evidence goes
 
 Every provider receives the repair evidence: the failure log, the DOM diff around the failing
@@ -92,7 +102,9 @@ not leave the machine.
 These free tiers were measured with the full [safety benchmark](safety-benchmark) corpus
 (`--apply-patches --jobs 1`, one run each) in October 2026. Free limits change without notice, and
 each provider shows your current ones only in its console. Run one scenario at a time on any of
-them (`--jobs 1`): their per-minute limits reject parallel runs.
+them (`--jobs 1`): their per-minute limits reject parallel runs. With `--jobs` above 1, set
+`E2E_HEALER_LLM_REQUESTS_PER_MINUTE` to the tier's per-minute limit (15 on Gemini) so the workers
+share it.
 
 | Model | Result | Limits |
 | --- | --- | --- |

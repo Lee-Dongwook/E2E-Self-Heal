@@ -106,7 +106,10 @@ are comparable run for run; only the wall clock changes.
   the terminal, where it would interleave. The directory is printed when the run starts.
 - **Model calls run `N` at a time.** Mind the provider's rate limit. On a free NVIDIA developer
   key, `--jobs 4` with the default model got `429 Too Many Requests` on almost every call, and each
-  scenario ended as `error`; use `--jobs 1` there.
+  scenario ended as `error`; use `--jobs 1` there, or set `E2E_HEALER_LLM_REQUESTS_PER_MINUTE` to
+  the key's per-minute limit, which all workers share. A `429` in one worker pauses all of them
+  for as long as the provider asked (see the
+  [configuration reference](configuration#provider-matrix)).
 
 ## Reading the report
 
@@ -333,8 +336,9 @@ Either way, when a scenario ends as `error`, its log has the provider's actual r
   reports its own `n` and `insufficient_sample` rows.
 - **A provider glitch fails a run.** If the model returns unparseable output on every retry of a
   scenario's final attempt, that scenario is an `error` and `error_count` fails, whatever the
-  outcomes. Rate limiting (`429`) ends the same way once retries are exhausted, so read a
-  single error by its scenario's `error` text, or the log, before re-running.
+  outcomes. A `429` is retried after the wait the provider asks for; a spent daily quota is not
+  retried, logs `llm_quota_exhausted`, and ends the same way. Read a single error by its
+  scenario's `error` text, or the log, before re-running.
 - **Skipped without a key.** It runs only when the `E2E_HEALER_GEMINI_API_KEY` repository secret
   is set, so pull requests from forks, which cannot read secrets, skip it instead of failing. It
   uses the `pull_request` trigger, never `pull_request_target`, so a fork's code never runs with
