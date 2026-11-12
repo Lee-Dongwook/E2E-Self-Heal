@@ -26,6 +26,7 @@ from tenacity import RetryCallState, retry, stop_after_attempt, wait_exponential
 from app.config import LLMProvider, settings
 from app.providers.orcarouter import OrcaRouterProvider
 from app.schemas import DiagnosisVerdictOutput, PatchOutput, ReviewOutput
+from app.shadow.redaction import redact_text
 
 # Anthropic and Ollama are optional dependencies: users who don't use them shouldn't have to
 # install langchain-anthropic / langchain-ollama. The guarded imports stay at module top per
@@ -520,6 +521,8 @@ _output_budget: ContextVar[int | None] = ContextVar("llm_output_budget", default
 # A cut-off doubles the budget for the next attempt, up to this multiple of the configured one:
 # 4096 -> 8192 -> 16384 over tenacity's three attempts.
 _OUTPUT_BUDGET_CEILING_FACTOR = 4
+# How much of a provider's error body ``llm_attempt_failed`` keeps (#480).
+_BODY_EXCERPT_CHARS = 300
 
 
 def _reset_output_budget(retry_state: RetryCallState) -> None:
@@ -546,12 +549,72 @@ def _raise_output_budget_after_cut_off(retry_state: RetryCallState) -> None:
         _output_budget.set(raised)
 
 
+def _response_body(exc: BaseException) -> str | None:
+    """The raw body of a provider's HTTP error, if the exception carries one.
+
+    OpenAI-compatible and Anthropic errors keep the HTTP response; Ollama's ``ResponseError``
+    keeps only the error text. The raw body is preferred: LangChain's wrapper of a 400 keeps
+    the provider's message and drops its error ``type`` and ``code``.
+    """
+    try:
+        text = getattr(getattr(exc, "response", None), "text", None)
+    except RuntimeError:  # httpx.ResponseNotRead: a streamed body that was never read
+        text = None
+    if isinstance(text, str) and text.strip():
+        return text
+    detail = getattr(exc, "body", None) or getattr(exc, "error", None)
+    return None if detail is None else str(detail)
+
+
+def _excerpt(text: str) -> str:
+    # Redact the whole text before cutting it: a secret split at the cut would no longer
+    # match a redaction pattern, and its first half would be logged.
+    flat = " ".join(redact_text(text).split())
+    if len(flat) <= _BODY_EXCERPT_CHARS:
+        return flat
+    return flat[:_BODY_EXCERPT_CHARS] + "…"
+
+
+def _log_failed_attempt(retry_state: RetryCallState) -> None:
+    """Log every failed model call, not just the last: retries otherwise hide them (#480)."""
+    outcome = retry_state.outcome
+    if outcome is None or not outcome.failed:
+        return
+    exc = outcome.exception()
+    if exc is None:
+        return
+    call = getattr(retry_state.fn, "__name__", None)
+    status = getattr(exc, "status_code", None)
+    if not isinstance(status, int):
+        logger.warning(
+            "llm_attempt_failed",
+            call=call,
+            attempt=retry_state.attempt_number,
+            error_type=type(exc).__name__,
+        )
+        return
+    body = _response_body(exc)
+    logger.warning(
+        "llm_attempt_failed",
+        call=call,
+        attempt=retry_state.attempt_number,
+        error_type=type(exc).__name__,
+        status_code=status,
+        body_excerpt=_excerpt(body) if body else None,
+    )
+
+
+def _after_attempt(retry_state: RetryCallState) -> None:
+    _log_failed_attempt(retry_state)
+    _raise_output_budget_after_cut_off(retry_state)
+
+
 def _llm_retry() -> Any:
     return retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=4, max=10),
         before=_reset_output_budget,
-        after=_raise_output_budget_after_cut_off,
+        after=_after_attempt,
     )
 
 

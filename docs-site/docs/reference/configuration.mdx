@@ -35,7 +35,9 @@ a provider that never answers can't hang a run; raise it for a slow local model,
 Ollama on a CPU. A response cut off by the output limit (`E2E_HEALER_LLM_MAX_TOKENS`, which
 reasoning models can spend entirely on thinking), or an empty one, is retried with double the
 budget, up to four times the configured value; if it still fails, the error says to raise the
-setting.
+setting. Every failed attempt logs a `llm_attempt_failed` warning with the attempt number and
+error type; when the provider answered with an HTTP error, it also has the `status_code` and a
+`body_excerpt`: the first 300 characters of the response body, redacted before it is cut.
 
 ## Choosing where the evidence goes
 

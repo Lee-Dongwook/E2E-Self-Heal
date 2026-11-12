@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Each failed model call is logged, with its HTTP status and a redacted body excerpt** (#480).
+  tenacity retries a call up to three times, and nothing was logged for a failed attempt: only
+  the last error reached the log, inside the node's traceback, with the status and the
+  provider's error `type` and `code` buried in text (LangChain's wrapper keeps only the message).
+  Every failed attempt now logs `llm_attempt_failed` with `call`, `attempt` and `error_type`, and,
+  for an HTTP error from any provider, `status_code` and `body_excerpt`: the first 300 characters
+  of the raw body, redacted before the cut so a secret split by it can't escape the redaction.
+  Retries are unchanged.
 - **`make sync-pins` updates release pins and documented defaults** (#457).
   `scripts/sync_release_pins.py` writes the version from `pyproject.toml` into every
   `Lee-Dongwook/E2E-Self-Heal@vX.Y.Z` pin (README in every language, docs site, demo page) and the
