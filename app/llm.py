@@ -10,6 +10,7 @@ Completions are given explicit token headroom (``settings.llm_max_tokens``) beca
 models, such as some NVIDIA NIM models, spend part of it on reasoning content before the answer.
 """
 
+import json
 import os
 from contextvars import ContextVar
 from functools import lru_cache
@@ -21,11 +22,19 @@ from langchain_core.messages import BaseMessage
 from langchain_openai import ChatOpenAI
 from openai import LengthFinishReasonError, OpenAI
 from pydantic import BaseModel, ValidationError
-from tenacity import RetryCallState, retry, stop_after_attempt, wait_exponential
+from tenacity import (
+    RetryCallState,
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    wait_random,
+)
 
 from app.config import LLMProvider, settings
 from app.providers.orcarouter import OrcaRouterProvider
+from app.rate_limit import DEFAULT_COOLDOWN_SECONDS, Pacer, RateLimit, pacing_path, rate_limit_of
 from app.schemas import DiagnosisVerdictOutput, PatchOutput, ReviewOutput
+from app.shadow.redaction import redact_text, redact_value
 
 # Anthropic and Ollama are optional dependencies: users who don't use them shouldn't have to
 # install langchain-anthropic / langchain-ollama. The guarded imports stay at module top per
@@ -520,11 +529,21 @@ _output_budget: ContextVar[int | None] = ContextVar("llm_output_budget", default
 # A cut-off doubles the budget for the next attempt, up to this multiple of the configured one:
 # 4096 -> 8192 -> 16384 over tenacity's three attempts.
 _OUTPUT_BUDGET_CEILING_FACTOR = 4
+# How much of a provider's error body ``llm_attempt_failed`` keeps (#480).
+_BODY_EXCERPT_CHARS = 300
 
 
-def _reset_output_budget(retry_state: RetryCallState) -> None:
+def _before_attempt(retry_state: RetryCallState) -> None:
     if retry_state.attempt_number == 1:
         _output_budget.set(None)
+    # Every attempt, first ones included, waits out a cooldown another worker's 429 set (#456).
+    waited = _pacer().wait_turn()
+    if waited >= 1:
+        logger.info(
+            "llm_call_paced",
+            call=getattr(retry_state.fn, "__name__", None),
+            seconds=round(waited, 1),
+        )
 
 
 def _raise_output_budget_after_cut_off(retry_state: RetryCallState) -> None:
@@ -546,12 +565,171 @@ def _raise_output_budget_after_cut_off(retry_state: RetryCallState) -> None:
         _output_budget.set(raised)
 
 
+def _response_body(exc: BaseException) -> str | None:
+    """The raw body of a provider's HTTP error, if the exception carries one.
+
+    OpenAI-compatible and Anthropic errors keep the HTTP response; Ollama's ``ResponseError``
+    keeps only the error text. The raw body is preferred: LangChain's wrapper of a 400 keeps
+    the provider's message and drops its error ``type`` and ``code``.
+    """
+    try:
+        text = getattr(getattr(exc, "response", None), "text", None)
+    except RuntimeError:  # httpx.ResponseNotRead: a streamed body that was never read
+        text = None
+    if isinstance(text, str) and text.strip():
+        return text
+    detail = getattr(exc, "body", None) or getattr(exc, "error", None)
+    if detail is None:
+        return None
+    # The SDK's parsed body is a mapping: serialize it as JSON, which _excerpt parses back.
+    return detail if isinstance(detail, str) else json.dumps(detail, default=str)
+
+
+def _excerpt(text: str) -> str:
+    """The start of a provider's error body, safe to log.
+
+    A JSON body is redacted as a structure first: a secret under a sensitive key
+    (``"api_key": "..."``, ``"password": "..."``) matches no free-text pattern, and the log
+    processor only ever sees the finished string. Then the free-text patterns run, and only
+    then is the text cut: a secret split at the cut would no longer match, and its first half
+    would be logged.
+    """
+    try:
+        text = json.dumps(redact_value(json.loads(text)), ensure_ascii=False)
+    except ValueError:
+        pass  # not JSON: free-text redaction below still applies
+    flat = " ".join(redact_text(text).split())
+    if len(flat) <= _BODY_EXCERPT_CHARS:
+        return flat
+    return flat[:_BODY_EXCERPT_CHARS] + "…"
+
+
+def _log_failed_attempt(retry_state: RetryCallState) -> None:
+    """Log every failed model call, not just the last: retries otherwise hide them (#480)."""
+    outcome = retry_state.outcome
+    if outcome is None or not outcome.failed:
+        return
+    exc = outcome.exception()
+    if exc is None:
+        return
+    call = getattr(retry_state.fn, "__name__", None)
+    status = getattr(exc, "status_code", None)
+    if not isinstance(status, int):
+        logger.warning(
+            "llm_attempt_failed",
+            call=call,
+            attempt=retry_state.attempt_number,
+            error_type=type(exc).__name__,
+        )
+        return
+    body = _response_body(exc)
+    limit = rate_limit_of(exc, body)
+    logger.warning(
+        "llm_attempt_failed",
+        call=call,
+        attempt=retry_state.attempt_number,
+        error_type=type(exc).__name__,
+        status_code=status,
+        body_excerpt=_excerpt(body) if body else None,
+        retry_in_seconds=_retry_in(limit),
+    )
+    if limit is not None and limit.exhausted:
+        logger.warning(
+            "llm_quota_exhausted",
+            call=call,
+            daily=limit.daily,
+            retry_after_seconds=limit.retry_after,
+            guidance=(
+                "the provider's quota for this key is used up and waiting won't clear it within "
+                "the run: retry after it resets, or use another key or model. To stay under a "
+                "per-minute limit, set E2E_HEALER_LLM_REQUESTS_PER_MINUTE."
+            ),
+        )
+
+
+def _retry_in(limit: RateLimit | None) -> float | None:
+    """How long the next attempt waits after a 429, as ``llm_attempt_failed`` reports it."""
+    if limit is None or limit.exhausted:
+        return None
+    return round(
+        limit.retry_after if limit.retry_after is not None else DEFAULT_COOLDOWN_SECONDS, 1
+    )
+
+
+def _rate_limit(exc: BaseException | None) -> RateLimit | None:
+    return None if exc is None else rate_limit_of(exc, _response_body(exc))
+
+
+def _cool_down_after_rate_limit(retry_state: RetryCallState) -> None:
+    """A 429 pauses every process sharing this key until the provider's retry time (#456)."""
+    outcome = retry_state.outcome
+    if outcome is None or not outcome.failed:
+        return
+    limit = _rate_limit(outcome.exception())
+    retry_in = _retry_in(limit)
+    if retry_in is not None:
+        _pacer().cool_down(retry_in)
+
+
+def _worth_retrying(retry_state: RetryCallState) -> bool:
+    """Retry every failure except a quota that waiting won't clear within the run.
+
+    tenacity runs the ``after`` hook only when it will retry, so the attempt that stops the
+    retries is logged here instead.
+    """
+    outcome = retry_state.outcome
+    if outcome is None or not outcome.failed:
+        return False
+    limit = _rate_limit(outcome.exception())
+    if limit is not None and limit.exhausted:
+        _log_failed_attempt(retry_state)
+        return False
+    return True
+
+
+_BACKOFF = wait_exponential(multiplier=1, min=4, max=10) + wait_random(0, 2)
+
+
+def _wait_before_retry(retry_state: RetryCallState) -> float:
+    """Exponential backoff with jitter, so parallel workers don't retry in lockstep.
+
+    After a 429 the shared cooldown already holds the next attempt back for as long as the
+    provider asked (``_before_attempt``), so no backoff is added on top.
+    """
+    outcome = retry_state.outcome
+    if outcome is not None and _retry_in(_rate_limit(outcome.exception())) is not None:
+        return 0.0
+    return _BACKOFF(retry_state)
+
+
+@lru_cache(maxsize=8)
+def _pacer_for(provider: str, endpoint: str, api_key: str, requests_per_minute: int) -> Pacer:
+    return Pacer(pacing_path(provider, endpoint, api_key), requests_per_minute)
+
+
+def _pacer() -> Pacer:
+    provider = settings.llm_provider
+    return _pacer_for(
+        provider,
+        resolved_endpoint(provider),
+        settings.llm_api_key,
+        settings.llm_requests_per_minute,
+    )
+
+
+def _after_attempt(retry_state: RetryCallState) -> None:
+    _log_failed_attempt(retry_state)
+    _cool_down_after_rate_limit(retry_state)
+    _raise_output_budget_after_cut_off(retry_state)
+
+
 def _llm_retry() -> Any:
     return retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-        before=_reset_output_budget,
-        after=_raise_output_budget_after_cut_off,
+        wait=_wait_before_retry,
+        retry=_worth_retrying,
+        before=_before_attempt,
+        after=_after_attempt,
     )
 
 

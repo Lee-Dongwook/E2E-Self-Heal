@@ -7,6 +7,28 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Rate limits on free tiers: the provider's retry time, a shared pause, and an optional pace**
+  (#456). A `429` got the same fixed 4-10 s backoff as any failure, so every `--jobs` worker hit
+  the limit on its own, and a spent daily quota was retried as if it would clear in seconds.
+  Now a `429` is retried after as long as the provider asked (`Retry-After`, `retry-after-ms`,
+  Gemini's `retryDelay`, or "retry in 34s" in the message; capped at 90 s, 10 s without a hint),
+  and that pause is shared, through a small state file under an OS lock, by every process calling
+  the same endpoint with the same key: when one worker is rate limited, all of them back off. A
+  per-day quota, or a wait beyond the cap, isn't retried; the run logs `llm_quota_exhausted` with
+  what to do. The new `E2E_HEALER_LLM_REQUESTS_PER_MINUTE` (default `0`, off) paces calls
+  across those processes, to stay under a per-minute limit instead of recovering from it. Other
+  failures keep their exponential backoff, now with up to 2 s of jitter, and `llm_attempt_failed`
+  gains `retry_in_seconds`. Without `fcntl` (Windows) the pause is per process.
+- **Each failed model call is logged, with its HTTP status and a redacted body excerpt** (#480).
+  tenacity retries a call up to three times, and nothing was logged for a failed attempt: only
+  the last error reached the log, inside the node's traceback, with the status and the
+  provider's error `type` and `code` buried in text (LangChain's wrapper keeps only the message).
+  Every failed attempt now logs `llm_attempt_failed` with `call`, `attempt` and `error_type`, and,
+  for an HTTP error from any provider, `status_code` and `body_excerpt`: the first 300 characters
+  of the raw body, redacted before the cut so a secret split by it can't escape the redaction. A
+  JSON body is also redacted by key, like the `--json` evidence, so a value under `api_key`,
+  `password` or another sensitive key is hidden even when it isn't configured anywhere. Retries
+  are unchanged.
 - **`make sync-pins` updates release pins and documented defaults** (#457).
   `scripts/sync_release_pins.py` writes the version from `pyproject.toml` into every
   `Lee-Dongwook/E2E-Self-Heal@vX.Y.Z` pin (README in every language, docs site, demo page) and the
