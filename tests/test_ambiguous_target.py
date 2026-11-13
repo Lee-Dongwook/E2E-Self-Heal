@@ -247,3 +247,33 @@ def test_a_rename_beside_a_button_without_a_type_is_still_a_rename() -> None:
     context = [_removed(SUBMIT), _added(_button("submit"), 4), _added(close, 7)]
 
     assert ambiguous_replacements(CLICK_TIMEOUT, context) == []
+
+
+# Two tests failing in one spec file, as `npx playwright test --reporter=list` prints them.
+_TIMEOUT_BLOCK = """  1) scenarios/form/spec.ts:3:1 › submits the form ──────────────────────────────
+
+    TimeoutError: page.click: Timeout 3000ms exceeded.
+    Error: page.click: Timeout 3000ms exceeded.
+    Call log:
+      - waiting for locator('#submit-btn')
+"""
+_STRICT_BLOCK = (
+    """  2) scenarios/form/spec.ts:9:1 › saves a draft ──────────────────────────────────
+
+"""
+    + STRICT_MODE
+)
+
+
+def test_a_later_tests_strict_mode_violation_does_not_refuse_the_first_failure() -> None:
+    # parse_error_log and failing_locator repair the first failure, a plain timeout; the
+    # violation belongs to another test in the same log.
+    log = _TIMEOUT_BLOCK + "\n" + _STRICT_BLOCK
+
+    assert ambiguous_replacements(log, []) == []
+
+
+def test_a_strict_mode_violation_in_the_first_failure_refuses_whatever_follows() -> None:
+    log = _STRICT_BLOCK + "\n" + _TIMEOUT_BLOCK
+
+    assert ambiguous_replacements(log, []) == ["#submit-btn", "#submit-footer"]

@@ -47,6 +47,8 @@ _SUBMIT_CONTROLS = {("button", "submit"), ("input", "submit"), ("input", "image"
 _STRICT_MODE = re.compile(
     r"strict mode violation: (?P<locator>.+?) resolved to (?P<count>\d+) elements"
 )
+# The failure under repair: the first `Error:` line, as parse_error_log selects it.
+_FIRST_ERROR = re.compile(r"^\s*Error:.*$", re.MULTILINE)
 # "    1) <button ... id="a">Submit</button> aka locator('#a')"
 _MATCH_LINE = re.compile(r"^\s*\d+\)\s+(?P<element><.*?)(?:\s+aka\s+(?P<aka>.+?))?\s*$")
 _LOCATOR_CALL = re.compile(r"""^locator\((['"])(?P<selector>.+)\1\)$""")
@@ -98,15 +100,21 @@ def _selector_for(element: dict, line: int) -> str:
 def _strict_mode_matches(raw_log: str) -> list[str]:
     """The elements Playwright says the failing locator resolved to, or ``[]``.
 
-    Each is named by Playwright's own suggested locator (``aka``), unwrapped to a bare
-    selector when it is a plain ``locator('...')``, so it can go straight into
-    ``--selector-hint``; an element without one is named by its HTML.
+    Only the failure being repaired counts: the violation must be on the log's first
+    ``Error:`` line, the one ``parse_error_log`` hands the model. A later test's violation in
+    the same log says nothing about this one. Each match is named by Playwright's own
+    suggested locator (``aka``), unwrapped to a bare selector when it is a plain
+    ``locator('...')``, so it can go straight into ``--selector-hint``; an element without one
+    is named by its HTML.
     """
-    violation = _STRICT_MODE.search(raw_log)
+    error = _FIRST_ERROR.search(raw_log)
+    if error is None:
+        return []
+    violation = _STRICT_MODE.search(error.group(0))
     if violation is None or int(violation.group("count")) < _MIN_LOOK_ALIKES:
         return []
     candidates: list[str] = []
-    for line in raw_log[violation.end() :].splitlines()[1:]:
+    for line in raw_log[error.end() :].splitlines()[1:]:
         match = _MATCH_LINE.match(line)
         if match is None:
             break
