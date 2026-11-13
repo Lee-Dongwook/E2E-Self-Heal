@@ -7,17 +7,28 @@ model asked to repair it picks one anyway, and the repair reads as a success. Th
 recognizes the situation from the abstracted DOM diff alone, so the graph can refuse it as
 ``ambiguous_target`` before any model call.
 
-It is deliberately narrow. It fires only when all of these hold:
+It is deliberately narrow. It fires in two situations, and never when a ``--selector-hint`` was
+given, because a hint is a person's answer to the question:
 
-* the failing locator names an identifying attribute (``id``, a class, ``data-testid`` or
-  ``name``) of an element the diff removes;
-* the same file gains at least two elements with that element's tag and ``type`` that do not
-  carry the old name;
-* no ``--selector-hint`` was given, because a hint is a person's answer to the question.
+* **Playwright reports a strict-mode violation**: the failing locator resolved to several
+  elements. That is Playwright's own evidence, so it covers every kind of locator, role and
+  text ones included, and its ``aka`` lines name each match (#458).
+* **The diff shows a look-alike split.** The failing locator names an identifying attribute
+  of an element the diff removes (``id``, a class, ``data-testid``, ``name``, or an
+  accessible-name attribute: ``aria-label``, ``placeholder``, ``title``, ``alt``), and the same
+  file gains at least two elements of the same kind that do not carry the old name. Explicit
+  submit controls (``<button type="submit">``, ``<input type="submit">``, ``<input
+  type="image">``) are one kind, and an ``<input>`` without a ``type`` is a text input.
 
-A locator that names an element only by role or text never matches, so such tests are left to
-the repair loop.
+A locator that names an element only by its text never matches the diff check, because the
+abstracted diff keeps tags and attributes, not text: such tests are left to the repair loop
+unless Playwright reports the strict-mode violation itself.
+
+There is no setting to tune or turn this off: a configuration value may never lower a refusal
+check (see the guardrails in ``.claude/CLAUDE.md``). The only way past it is ``--selector-hint``.
 """
+
+import re
 
 import structlog
 
@@ -25,14 +36,26 @@ from app.preprocess.selector_diff_check import failing_locator, locator_terms
 
 logger = structlog.get_logger(__name__)
 
-# Attributes whose values a CSS-style locator names an element by. ``type`` is left out on
-# purpose: ``type="submit"`` is shared by every submit button, so it identifies none of them.
+# Attributes whose values a locator names an element by. ``type`` is left out on purpose:
+# ``type="submit"`` is shared by every submit button, so it identifies none of them.
 _IDENTIFYING = ("id", "className", "class", "data-testid", "name")
+# Accessible-name attributes, matched whole: getByRole's ``name``, getByLabel, getByPlaceholder,
+# getByTitle and getByAltText name an element by these.
+_ACCESSIBLE_NAMES = ("aria-label", "placeholder", "title", "alt")
 _MIN_LOOK_ALIKES = 2
+_SUBMIT_CONTROLS = {("button", "submit"), ("input", "submit"), ("input", "image")}
+_STRICT_MODE = re.compile(
+    r"strict mode violation: (?P<locator>.+?) resolved to (?P<count>\d+) elements"
+)
+# "    1) <button ... id="a">Submit</button> aka locator('#a')"
+_MATCH_LINE = re.compile(r"^\s*\d+\)\s+(?P<element><.*?)(?:\s+aka\s+(?P<aka>.+?))?\s*$")
+_LOCATOR_CALL = re.compile(r"""^locator\((['"])(?P<selector>.+)\1\)$""")
+_QUOTED = re.compile(r"'([^']*)'|\"([^\"]*)\"")
 
 
 def _names(element: dict) -> set[str]:
-    """Every identifying token of an element: ids, test ids, names, and each class."""
+    """Every identifying token of an element: ids, test ids, names, each class, and its
+    accessible-name attributes (whole)."""
     attributes = element.get("attributes", {})
     tokens: set[str] = set()
     for key in _IDENTIFYING:
@@ -40,11 +63,21 @@ def _names(element: dict) -> set[str]:
         if not value:
             continue
         tokens.update(value.split() if key in ("className", "class") else [value])
+    for key in _ACCESSIBLE_NAMES:
+        value = str(attributes.get(key, "")).strip()
+        if value:
+            tokens.add(value)
     return tokens
 
 
 def _kind(element: dict) -> tuple[str, str]:
-    return element.get("tag", ""), str(element.get("attributes", {}).get("type", ""))
+    tag = element.get("tag", "")
+    type_ = str(element.get("attributes", {}).get("type", "")).strip().lower()
+    if tag == "input" and not type_:
+        type_ = "text"  # the HTML default
+    if (tag, type_) in _SUBMIT_CONTROLS:
+        return "submit-control", "submit"
+    return tag, type_
 
 
 def _selector_for(element: dict, line: int) -> str:
@@ -62,15 +95,56 @@ def _selector_for(element: dict, line: int) -> str:
     return f"<{element.get('tag', '')}> at line {line}"
 
 
+def _strict_mode_matches(raw_log: str) -> list[str]:
+    """The elements Playwright says the failing locator resolved to, or ``[]``.
+
+    Each is named by Playwright's own suggested locator (``aka``), unwrapped to a bare
+    selector when it is a plain ``locator('...')``, so it can go straight into
+    ``--selector-hint``; an element without one is named by its HTML.
+    """
+    violation = _STRICT_MODE.search(raw_log)
+    if violation is None or int(violation.group("count")) < _MIN_LOOK_ALIKES:
+        return []
+    candidates: list[str] = []
+    for line in raw_log[violation.end() :].splitlines()[1:]:
+        match = _MATCH_LINE.match(line)
+        if match is None:
+            break
+        aka = (match.group("aka") or "").strip()
+        call = _LOCATOR_CALL.match(aka)
+        candidate = call.group("selector") if call else aka or match.group("element")
+        if candidate not in candidates:
+            candidates.append(candidate)
+    if not candidates:
+        # The matches weren't listed (a trimmed log): the count alone still settles it.
+        candidates = [violation.group("locator")]
+    logger.info(
+        "ambiguous_target_detected",
+        source="strict_mode_violation",
+        locator=violation.group("locator"),
+        matches=int(violation.group("count")),
+        candidates=candidates,
+    )
+    return candidates
+
+
 def ambiguous_replacements(raw_log: str, dom_diff_context: list[dict]) -> list[str]:
-    """Selectors of the look-alikes that replaced the failing element, or ``[]``.
+    """Selectors of the elements the failing locator could now mean, or ``[]``.
 
     A non-empty result means the test cannot say which of them it meant, so a repair would be
     a guess. ``[]`` covers every case the check cannot decide.
     """
     if any(entry.get("type") == "selector_hint" for entry in dom_diff_context):
         return []
-    terms = locator_terms(failing_locator(raw_log))
+    strict = _strict_mode_matches(raw_log)
+    if strict:
+        return strict
+    locator = failing_locator(raw_log)
+    # Whole quoted values too: an accessible name such as "you@example.com" is one value, but
+    # locator_terms keeps only its words.
+    terms = locator_terms(locator) | {
+        (single or double).strip() for single, double in _QUOTED.findall(locator)
+    } - {""}
     if not terms:
         return []
     for removed in dom_diff_context:
@@ -92,6 +166,7 @@ def ambiguous_replacements(raw_log: str, dom_diff_context: list[dict]) -> list[s
         if len(candidates) >= _MIN_LOOK_ALIKES:
             logger.info(
                 "ambiguous_target_detected",
+                source="diff",
                 removed=sorted(matched),
                 candidates=candidates,
                 file=removed.get("file"),

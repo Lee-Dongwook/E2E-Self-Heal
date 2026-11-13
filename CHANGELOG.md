@@ -7,6 +7,27 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **More ambiguous targets are refused before any model call** (#458). The check caught only a
+  removed element replaced by two of the same tag and `type`, named by `id`, class, `data-testid`
+  or `name`, so role and text locators were never covered. It now also refuses as
+  `ambiguous_target` when:
+  - **Playwright reports a strict-mode violation**: the failing locator, of any kind, resolved to
+    several elements. Playwright's suggested locator for each match (`aka`) is listed as a
+    `--selector-hint` candidate. Before, the model could "fix" this with `.first()` and the test
+    passed on a guess.
+  - **the removed element was named by an accessible-name attribute** (`aria-label`,
+    `placeholder`, `title`, `alt`), which `getByRole(…, { name })`, `getByLabel`,
+    `getByPlaceholder`, `getByTitle` and `getByAltText` use.
+  - **the look-alikes differ only in submit-control tag**: `<button type="submit">`,
+    `<input type="submit">` and `<input type="image">` are one kind, and an `<input>` without a
+    `type` is a text input. A `<button>` without a `type` stays its own kind, because React code
+    often omits it on plain buttons.
+
+  A new `ambiguous` scenario, `submit-another-added`, covers the strict-mode case end to end:
+  "Submit and add another" is added beside "Submit", so `getByRole("button", { name: "Submit" })`
+  matches both. The corpus is now 45 runnable scenarios. #458 also asked for the check to be
+  tunable; it isn't, because no setting may lower a refusal check, and `--selector-hint` stays
+  the only way past it.
 - **Rate limits on free tiers: the provider's retry time, a shared pause, and an optional pace**
   (#456). A `429` got the same fixed 4-10 s backoff as any failure, so every `--jobs` worker hit
   the limit on its own, and a spent daily quota was retried as if it would clear in seconds.

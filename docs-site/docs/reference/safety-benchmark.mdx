@@ -238,16 +238,21 @@ a **Release gates** table:
 
 ### The corpus
 
-The checked-in corpus is 45 scenarios: 44 runnable and one static fixture (`jsx-context`, listed as
+The checked-in corpus is 46 scenarios: 45 runnable and one static fixture (`jsx-context`, listed as
 `skipped` and in no rate). Every rate gate is therefore enforceable on a full run, and the corpus
 cannot shrink without a gate going back to `insufficient_sample`:
 
 | Population | Scenarios scored | Used by |
 | --- | --- | --- |
 | `product_regression` | 20 | `false_green_rate` gate |
-| labeled `refuse` | 22 | `correct_refusal_rate` (reported, not a gate) |
+| labeled `refuse` | 23 | `correct_refusal_rate` (reported, not a gate) |
 | labeled `repair` | 22 (23 minus `jsx-context`) | `incorrect_refusal_rate` gate |
-| judged (expected refuse, or actually refused) | 22 or more | `refusal_accuracy` gate |
+| judged (expected refuse, or actually refused) | 23 or more | `refusal_accuracy` gate |
+
+Two `ambiguous` scenarios cover the two ways the engine recognizes an ambiguous target before any
+model call: in `split-submit` the diff replaces the button with two submit buttons, and in
+`submit-another-added` a second submit button makes the role locator a Playwright strict-mode
+violation while the old button stays. Both are refused without a model call.
 
 Sixteen of the regressions come in **pairs** on four demo-app pages: `<page>-<behaviour>-drift`
 renames a selector and should be repaired, and `<page>-<behaviour>-regression` makes the same
