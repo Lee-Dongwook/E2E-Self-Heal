@@ -132,3 +132,148 @@ def test_no_locator_in_the_log_reports_nothing() -> None:
     context = [_removed(SUBMIT), _added(_button("save-draft"), 4), _added(_button("publish"), 7)]
 
     assert ambiguous_replacements(navigation, context) == []
+
+
+# --- #458: strict-mode violations, accessible names, submit-like kinds ---------------------
+
+# Captured from a real Playwright run on the demo app with a second "Submit" button added.
+STRICT_MODE = """    Error: locator.click: Error: strict mode violation: getByRole('button', { name: 'Submit' }) resolved to 2 elements:
+        1) <button class="btn" type="submit" id="submit-btn">Submit</button> aka locator('#submit-btn')
+        2) <button class="btn" type="submit" id="submit-footer">Submit</button> aka locator('#submit-footer')
+    Call log:
+      - waiting for getByRole('button', { name: 'Submit' })
+"""
+
+
+def test_a_strict_mode_violation_is_ambiguous_for_a_role_locator_with_no_diff() -> None:
+    # Playwright's own evidence; the text-only locator never matches the diff check.
+    assert ambiguous_replacements(STRICT_MODE, []) == ["#submit-btn", "#submit-footer"]
+
+
+def test_strict_mode_candidates_keep_playwrights_locator_when_it_is_not_a_plain_selector() -> None:
+    log = (
+        "Error: strict mode violation: getByText('Save') resolved to 3 elements:\n"
+        "    1) <button>Save</button> aka getByRole('button', { name: 'Save', exact: true })\n"
+        "    2) <a href=\"/save\">Save</a> aka getByRole('link', { name: 'Save' })\n"
+        "    3) <span>Save</span>\n"
+        "Call log:\n"
+    )
+
+    assert ambiguous_replacements(log, []) == [
+        "getByRole('button', { name: 'Save', exact: true })",
+        "getByRole('link', { name: 'Save' })",
+        "<span>Save</span>",
+    ]
+
+
+def test_a_strict_mode_violation_without_listed_matches_still_refuses() -> None:
+    log = "Error: strict mode violation: locator('.btn') resolved to 4 elements:\nCall log:\n"
+
+    assert ambiguous_replacements(log, []) == ["locator('.btn')"]
+
+
+def test_a_selector_hint_settles_a_strict_mode_violation_too() -> None:
+    hint = {"type": "selector_hint", "selector": "#submit-btn"}
+
+    assert ambiguous_replacements(STRICT_MODE, [hint]) == []
+
+
+def test_a_timeout_is_not_a_strict_mode_violation() -> None:
+    assert ambiguous_replacements(CLICK_TIMEOUT, []) == []
+
+
+@pytest.mark.parametrize(
+    ("log", "attribute", "value"),
+    [
+        ("getByRole('button', { name: 'Submit order' })", "aria-label", "Submit order"),
+        ("getByLabel('Email')", "aria-label", "Email"),
+        ("getByPlaceholder('you@example.com')", "placeholder", "you@example.com"),
+        ("getByTitle('Close dialog')", "title", "Close dialog"),
+        ("getByAltText('Company logo')", "alt", "Company logo"),
+    ],
+)
+def test_an_accessible_name_attribute_identifies_the_removed_element(
+    log: str, attribute: str, value: str
+) -> None:
+    tag = "img" if attribute == "alt" else "button"
+    old = {"tag": tag, "attributes": {attribute: value}}
+    context = [
+        _removed(old),
+        _added({"tag": tag, "attributes": {attribute: "First"}}, 4),
+        _added({"tag": tag, "attributes": {attribute: "Second"}}, 7),
+    ]
+
+    assert ambiguous_replacements(f"      - waiting for {log}\n", context) == [
+        "<" + tag + "> at line 4",
+        "<" + tag + "> at line 7",
+    ]
+
+
+def test_an_accessible_name_kept_by_one_element_is_a_rename_not_an_ambiguity() -> None:
+    by_label = "      - waiting for getByLabel('Email')\n"
+    old = {"tag": "input", "attributes": {"aria-label": "Email", "id": "email"}}
+    context = [
+        _removed(old),
+        _added({"tag": "input", "attributes": {"aria-label": "Email", "id": "work-email"}}, 4),
+        _added({"tag": "input", "attributes": {"aria-label": "Phone", "id": "phone"}}, 7),
+    ]
+
+    assert ambiguous_replacements(by_label, context) == []
+
+
+def test_a_submit_button_and_a_submit_input_are_look_alikes() -> None:
+    draft = {"tag": "input", "attributes": {"id": "save-draft", "type": "submit"}}
+    context = [_removed(SUBMIT), _added(draft, 4), _added(_button("publish"), 7)]
+
+    assert ambiguous_replacements(CLICK_TIMEOUT, context) == ["#save-draft", "#publish"]
+
+
+def test_an_input_without_a_type_is_a_text_input() -> None:
+    email = "      - waiting for locator('#email')\n"
+    old = {"tag": "input", "attributes": {"id": "email", "type": "text"}}
+    context = [
+        _removed(old),
+        _added({"tag": "input", "attributes": {"id": "work-email"}}, 4),
+        _added({"tag": "input", "attributes": {"id": "home-email", "type": "text"}}, 7),
+    ]
+
+    assert ambiguous_replacements(email, context) == ["#work-email", "#home-email"]
+
+
+def test_a_rename_beside_a_button_without_a_type_is_still_a_rename() -> None:
+    # A <button> with no type is left as its own kind: React code often omits it on plain
+    # buttons, so counting it as a submit control would refuse ordinary renames.
+    close = {"tag": "button", "attributes": {"id": "close"}}
+    context = [_removed(SUBMIT), _added(_button("submit"), 4), _added(close, 7)]
+
+    assert ambiguous_replacements(CLICK_TIMEOUT, context) == []
+
+
+# Two tests failing in one spec file, as `npx playwright test --reporter=list` prints them.
+_TIMEOUT_BLOCK = """  1) scenarios/form/spec.ts:3:1 › submits the form ──────────────────────────────
+
+    TimeoutError: page.click: Timeout 3000ms exceeded.
+    Error: page.click: Timeout 3000ms exceeded.
+    Call log:
+      - waiting for locator('#submit-btn')
+"""
+_STRICT_BLOCK = (
+    """  2) scenarios/form/spec.ts:9:1 › saves a draft ──────────────────────────────────
+
+"""
+    + STRICT_MODE
+)
+
+
+def test_a_later_tests_strict_mode_violation_does_not_refuse_the_first_failure() -> None:
+    # parse_error_log and failing_locator repair the first failure, a plain timeout; the
+    # violation belongs to another test in the same log.
+    log = _TIMEOUT_BLOCK + "\n" + _STRICT_BLOCK
+
+    assert ambiguous_replacements(log, []) == []
+
+
+def test_a_strict_mode_violation_in_the_first_failure_refuses_whatever_follows() -> None:
+    log = _STRICT_BLOCK + "\n" + _TIMEOUT_BLOCK
+
+    assert ambiguous_replacements(log, []) == ["#submit-btn", "#submit-footer"]
