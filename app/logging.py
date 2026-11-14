@@ -1,12 +1,17 @@
 """structlog configuration for the whole application."""
 
 import logging
+import re
 import sys
 from typing import Any, MutableMapping, TextIO, cast
 
 import structlog
 
 from app.shadow.redaction import redact_text, redact_value
+
+# Event names are static lowercase_underscore identifiers by convention; anything else might be
+# free text, so the fail-closed fallback withholds it.
+_EVENT_NAME = re.compile(r"[a-z0-9_]{1,80}")
 
 
 class _CurrentStderr:
@@ -51,7 +56,16 @@ def redact_event(
     log or a provider error cannot leak a configured secret just because that one caller forgot.
     Runs after ``format_exc_info`` so a traceback's text is covered too.
     """
-    return cast(MutableMapping[str, Any], redact_value(_loggable(dict(event_dict))))
+    try:
+        return cast(MutableMapping[str, Any], redact_value(_loggable(dict(event_dict))))
+    except Exception as exc:  # noqa: BLE001 - a log line must never print unredacted
+        # Fail closed: keep only an identifier-shaped event name and the level.
+        event = str(event_dict.get("event", ""))
+        return {
+            "event": event if _EVENT_NAME.fullmatch(event) else "[event withheld]",
+            "level": str(event_dict.get("level", "")),
+            "redaction_failed": type(exc).__name__,
+        }
 
 
 class _RedactingFormatter(logging.Formatter):
@@ -62,7 +76,28 @@ class _RedactingFormatter(logging.Formatter):
     """
 
     def format(self, record: logging.LogRecord) -> str:
-        return redact_text(super().format(record))
+        try:
+            return redact_text(super().format(record))
+        except Exception as exc:  # noqa: BLE001 - a log line must never print unredacted
+            # Fail closed: the logger's name and the level carry no data from the record.
+            return (
+                f"{record.levelname} {record.name}: [log record withheld, redaction failed: "
+                f"{type(exc).__name__}]"
+            )
+
+
+class _RedactingStreamHandler(logging.StreamHandler):
+    """A handler whose error report withholds the record.
+
+    ``logging.Handler.handleError`` prints the record's message and arguments to stderr, so any
+    failure while emitting (a broken stream, a formatter bug) would print them unredacted.
+    """
+
+    def handleError(self, record: logging.LogRecord) -> None:  # noqa: N802 - stdlib's name
+        if logging.raiseExceptions:
+            sys.stderr.write(
+                f"--- logging error in {record.name} (record withheld: it may hold secrets) ---\n"
+            )
 
 
 def configure_logging(level: str = "INFO") -> None:
@@ -72,7 +107,7 @@ def configure_logging(level: str = "INFO") -> None:
     and CI redirects it to a file (``e2e-healer ... --json > repair-summary.json``), so any
     log line there would make that file invalid JSON.
     """
-    handler = logging.StreamHandler(cast(TextIO, _CurrentStderr()))
+    handler = _RedactingStreamHandler(cast(TextIO, _CurrentStderr()))
     handler.setFormatter(_RedactingFormatter("%(message)s"))
     # Like basicConfig always did, this is a no-op when the root logger already has handlers.
     logging.basicConfig(level=level, handlers=[handler])

@@ -188,8 +188,15 @@ def redact_value(value: object, *, record: RedactionRecord | None = None) -> obj
 
 
 def redact_url(url: str) -> str:
-    """Return a URL safe to persist or log, preserving non-sensitive query values."""
-    parts = urlsplit(url)
+    """Return a URL safe to persist or log, preserving non-sensitive query values.
+
+    A URL that cannot be parsed (``http://[``, an invalid port) is replaced whole: its parts
+    can't be told apart, and raising would take down the log call or prompt it is part of.
+    """
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return REDACTED
     query = [
         (key, REDACTED if key.casefold() in SENSITIVE_KEYS else value)
         for key, value in parse_qsl(parts.query, keep_blank_values=True)

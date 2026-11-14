@@ -11,15 +11,17 @@ only a built-in pattern can catch. Channels already covered elsewhere (each node
 import json
 import logging
 import random
+import re
 import string
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO, cast
 
 import pytest
 import structlog
 from pydantic import BaseModel, SecretStr
 
+import app.logging as app_logging
 from app import notifications
 from app.config import settings
 from app.healing_history import append_record, find_match, history_path, make_record
@@ -63,7 +65,7 @@ def cli_logging(configured: None) -> Iterator[None]:
 def _stderr(capsys: pytest.CaptureFixture[str]) -> str:
     captured = capsys.readouterr()
     assert SECRET not in captured.out and UNCONFIGURED not in captured.out
-    return captured.err
+    return re.sub(r"\x1b\[[0-9;]*m", "", captured.err)
 
 
 class _Model(BaseModel):
@@ -321,3 +323,89 @@ def test_a_configured_secret_never_survives_the_log_pipeline(
         log.warning("property_probe", value=rng.choice(wrappers)(text))
         rendered = capsys.readouterr().err
         assert secret not in rendered, (secret, text)
+
+
+# --- Fail closed: redaction that cannot complete prints nothing unredacted -------------------
+
+_MALFORMED_URL = "http://[ "  # urlsplit raises ValueError("Invalid IPv6 URL")
+
+
+def test_a_url_that_cannot_be_parsed_is_replaced_whole(configured: None) -> None:
+    safe = redact_text(f"proxy at {_MALFORMED_URL}{SECRET} refused")
+
+    assert SECRET not in safe
+    assert safe.startswith("proxy at ")
+
+
+def test_a_library_record_with_a_malformed_url_prints_no_secret(
+    cli_logging: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Before, the formatter raised, and logging's error report printed the message and its
+    # arguments to stderr as they were.
+    logging.getLogger("httpx").warning("bad URL %s%s", _MALFORMED_URL, SECRET)
+
+    rendered = _stderr(capsys)
+    assert SECRET not in rendered
+    assert "Arguments:" not in rendered
+    assert "bad URL" in rendered
+
+
+def test_a_log_value_with_a_malformed_url_neither_raises_nor_leaks(
+    cli_logging: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    structlog.get_logger("coverage").warning("url_probe", url=f"{_MALFORMED_URL}{SECRET}")
+
+    rendered = _stderr(capsys)
+    assert "url_probe" in rendered
+    assert SECRET not in rendered
+
+
+def _broken_redaction(*_args: object, **_kwargs: object) -> object:
+    raise RuntimeError("redaction bug")
+
+
+def test_if_redaction_fails_a_library_record_is_withheld(
+    cli_logging: None, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(app_logging, "redact_text", _broken_redaction)
+
+    logging.getLogger("httpx").warning("request with key %s", SECRET)
+
+    rendered = _stderr(capsys)
+    assert SECRET not in rendered
+    assert "httpx: [log record withheld, redaction failed: RuntimeError]" in rendered
+
+
+def test_if_redaction_fails_a_structured_event_keeps_only_its_name(
+    cli_logging: None, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(app_logging, "redact_value", _broken_redaction)
+
+    structlog.get_logger("coverage").warning("provider_failed", error=f"key {SECRET}")
+    structlog.get_logger("coverage").warning(f"free text {SECRET}")
+
+    rendered = _stderr(capsys)
+    assert SECRET not in rendered
+    assert "provider_failed" in rendered and "[event withheld]" in rendered
+    assert "redaction_failed=RuntimeError" in rendered
+
+
+def test_a_handler_error_report_withholds_the_record(capsys: pytest.CaptureFixture[str]) -> None:
+    # Any failure while emitting (here a broken stream) goes to handleError, whose default
+    # prints the record's message and arguments.
+    class BrokenStream:
+        def write(self, _text: str) -> int:
+            raise OSError("stream closed")
+
+        def flush(self) -> None:
+            pass
+
+    handler = app_logging._RedactingStreamHandler(cast(TextIO, BrokenStream()))
+    handler.setFormatter(app_logging._RedactingFormatter("%(message)s"))
+    record = logging.LogRecord("httpx", logging.WARNING, __file__, 1, "key %s", (SECRET,), None)
+
+    handler.handle(record)
+
+    rendered = capsys.readouterr().err
+    assert SECRET not in rendered
+    assert "logging error in httpx (record withheld" in rendered
