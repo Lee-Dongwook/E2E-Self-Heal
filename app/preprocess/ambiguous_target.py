@@ -1,31 +1,16 @@
-"""Ambiguous Target Check: did the element the test used become several look-alikes?
+"""Ambiguous Target Check: refuse, before any model call, a test whose target became several.
 
-When a diff removes the element a failing locator named and adds two or more elements of the
-same kind in its place (one ``Submit`` button becomes ``Save draft`` and ``Publish``), any of
-them can make the test pass, and picking one is a guess about what the test author meant. A
-model asked to repair it picks one anyway, and the repair reads as a success. This check
-recognizes the situation from the abstracted DOM diff alone, so the graph can refuse it as
-``ambiguous_target`` before any model call.
+Fires (never when a ``--selector-hint`` was given) when either:
 
-It is deliberately narrow. It fires in two situations, and never when a ``--selector-hint`` was
-given, because a hint is a person's answer to the question:
+* Playwright reports a strict-mode violation on the failure under repair; its ``aka`` lines
+  name each match.
+* The diff removes the element the failing locator named (``id``, class, ``data-testid``,
+  ``name``, ``aria-label``, ``placeholder``, ``title`` or ``alt``) and the same file gains two
+  or more elements of the same kind without the old name. Explicit submit controls are one
+  kind; an ``<input>`` without a ``type`` is a text input. Text-only locators never match,
+  since the abstracted diff keeps attributes, not text.
 
-* **Playwright reports a strict-mode violation**: the failing locator resolved to several
-  elements. That is Playwright's own evidence, so it covers every kind of locator, role and
-  text ones included, and its ``aka`` lines name each match (#458).
-* **The diff shows a look-alike split.** The failing locator names an identifying attribute
-  of an element the diff removes (``id``, a class, ``data-testid``, ``name``, or an
-  accessible-name attribute: ``aria-label``, ``placeholder``, ``title``, ``alt``), and the same
-  file gains at least two elements of the same kind that do not carry the old name. Explicit
-  submit controls (``<button type="submit">``, ``<input type="submit">``, ``<input
-  type="image">``) are one kind, and an ``<input>`` without a ``type`` is a text input.
-
-A locator that names an element only by its text never matches the diff check, because the
-abstracted diff keeps tags and attributes, not text: such tests are left to the repair loop
-unless Playwright reports the strict-mode violation itself.
-
-There is no setting to tune or turn this off: a configuration value may never lower a refusal
-check (see the guardrails in ``.claude/CLAUDE.md``). The only way past it is ``--selector-hint``.
+No setting tunes or disables this: configuration may never lower a refusal check.
 """
 
 import re
@@ -36,11 +21,11 @@ from app.preprocess.selector_diff_check import failing_locator, locator_terms
 
 logger = structlog.get_logger(__name__)
 
-# Attributes whose values a locator names an element by. ``type`` is left out on purpose:
-# ``type="submit"`` is shared by every submit button, so it identifies none of them.
+# ``type`` is left out on purpose: ``type="submit"`` is shared by every submit button, so it
+# identifies none of them.
 _IDENTIFYING = ("id", "className", "class", "data-testid", "name")
-# Accessible-name attributes, matched whole: getByRole's ``name``, getByLabel, getByPlaceholder,
-# getByTitle and getByAltText name an element by these.
+# Matched whole: getByRole's ``name``, getByLabel, getByPlaceholder, getByTitle and
+# getByAltText name an element by these.
 _ACCESSIBLE_NAMES = ("aria-label", "placeholder", "title", "alt")
 _MIN_LOOK_ALIKES = 2
 _SUBMIT_CONTROLS = {("button", "submit"), ("input", "submit"), ("input", "image")}
@@ -100,9 +85,8 @@ def _selector_for(element: dict, line: int) -> str:
 def _strict_mode_matches(raw_log: str) -> list[str]:
     """The elements Playwright says the failing locator resolved to, or ``[]``.
 
-    Only the failure being repaired counts: the violation must be on the log's first
-    ``Error:`` line, the one ``parse_error_log`` hands the model. A later test's violation in
-    the same log says nothing about this one. Each match is named by Playwright's own
+    Only the failure being repaired counts: the violation must be on the log's first ``Error:``
+    line, the one ``parse_error_log`` hands the model. Each match is named by Playwright's own
     suggested locator (``aka``), unwrapped to a bare selector when it is a plain
     ``locator('...')``, so it can go straight into ``--selector-hint``; an element without one
     is named by its HTML.

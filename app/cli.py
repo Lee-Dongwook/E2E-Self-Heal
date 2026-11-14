@@ -130,10 +130,9 @@ def main(
 def _chdir_root(root: Path | None) -> None:
     """Anchor relative path resolution and subprocess cwd to ``root`` when provided.
 
-    Programmatic integrators (e.g. a Playwright Reporter) may invoke the CLI from an
-    arbitrary working directory; ``--root`` is the explicit equivalent of the shell
-    wrapper's ``cd $working-directory`` (Issue #301). When omitted, the current directory
-    is used, preserving existing behavior.
+    Programmatic callers (e.g. a Playwright Reporter) may run from an arbitrary working
+    directory; ``--root`` is the explicit equivalent of a shell ``cd``. When omitted, the
+    current directory is used.
     """
     if root is None:
         return
@@ -141,8 +140,8 @@ def _chdir_root(root: Path | None) -> None:
         console.print(f"[red]--root is not a directory:[/red] {escape(str(root))}")
         raise typer.Exit(code=2)
     # Resolve the sandbox boundary against the ORIGINAL cwd before chdir, so a relative
-    # workspace_root (the default ".") is not silently redefined to --root (Issue #301
-    # review): the boundary must stay where the process started, not follow --root.
+    # workspace_root (the default ".") is not silently redefined to --root: the boundary
+    # must stay where the process started.
     settings.workspace_root = str(Path(settings.workspace_root).expanduser().resolve())
     os.chdir(root)
 
@@ -324,7 +323,7 @@ def _heal_suite(
         path = Path(rel)
         # Targets parsed from reporter output are untrusted: require them to resolve inside
         # the workspace (all modes except off) rather than authorizing an external path by
-        # its basename (Issue #211).
+        # its basename.
         try:
             resolved = assert_auto_discovered_target(path)
         except SandboxViolation as exc:
@@ -344,7 +343,7 @@ def _heal_suite(
         # workspace-relative value only for logging/display.
         if not resolved.exists():
             logger.warning("failing_test_not_found", path=rel)
-            # Keep missing targets unresolved so suite totals remain accurate (#212).
+            # Keep missing targets unresolved so suite totals remain accurate.
             result = RefusalReport(
                 test_script_path=rel,
                 reason=RefusalReason.INSUFFICIENT_EVIDENCE,
@@ -371,7 +370,7 @@ def _heal_suite(
         results.append(result)
         result_by_rel[rel] = result
 
-    # Require a full-suite pass; dry runs are unverified previews (#212).
+    # Require a full-suite pass; dry runs are unverified previews.
     final_passed = not dry_run
     if final_passed and results:
         final_passed, final_log = run_playwright(suite_target)
@@ -396,7 +395,7 @@ def _heal_suite(
                         results.append(result)
                         result_by_rel[rel] = result
             else:
-                # An unparseable final failure invalidates all repairs (#212).
+                # An unparseable final failure invalidates all repairs.
                 for result in results:
                     if isinstance(result, RepairSummary):
                         mark_final_suite_failure(result, parse_error_log(final_log))
@@ -524,12 +523,10 @@ def heal(
 ) -> None:
     """Repair a failing test (or the whole suite). Exit 0 if everything is fixed, else non-zero.
 
-    Target authorization differs by how the target was obtained. An explicit ``test_path`` a
-    developer typed is trusted input and is authorized only by the sandbox read/write globs
-    (so, in relaxed mode, an explicit path may live outside ``workspace_root``). Targets the
-    suite healer auto-discovers from Playwright reporter output are untrusted and are held to
-    the stricter ``assert_auto_discovered_target`` rule — they must resolve inside
-    ``workspace_root`` in every mode except ``off`` (Issue #211).
+    An explicit ``test_path`` is trusted input, authorized only by the sandbox read/write
+    globs (so, in relaxed mode, it may live outside ``workspace_root``). Targets the suite
+    healer auto-discovers from Playwright reporter output are untrusted: they must resolve
+    inside ``workspace_root`` in every mode except ``off``.
     """
     configure_logging(settings.log_level)
     _chdir_root(root)
@@ -542,7 +539,7 @@ def heal(
                 console.print(f"[red]path not found:[/red] {escape(str(test_path))}")
                 raise typer.Exit(code=2)
 
-        # Parse and validate selector hint FIRST (Issue #119)
+        # Validate the hint before it is injected into the diff context.
         parsed_hint = None
         if selector_hint is not None:
             try:
@@ -560,7 +557,6 @@ def heal(
         diff_text = _read_diff(diff_file, diff_base)
         dom_diff_context = [d.model_dump() for d in analyze_diff(diff_text)]
 
-        # Now inject the already-validated hint into context
         if parsed_hint is not None:
             dom_diff_context.append(
                 {
@@ -590,7 +586,6 @@ def heal(
             if json_output:
                 typer.echo(summary.model_dump_json())
 
-            # Notify Slack (Issue #124)
             notify_heal_outcome(summary)
 
             is_success = isinstance(summary, RepairSummary) and summary.is_success
@@ -617,7 +612,7 @@ def heal(
             console.print("[yellow]suite failed but no test files could be parsed/found[/yellow]")
             raise typer.Exit(code=1)
 
-        # Notify Slack for each result in suite (Issue #124)
+        # Notify Slack for each result in suite.
         for res in suite.results:
             notify_heal_outcome(res)
 
@@ -750,11 +745,11 @@ def safety_benchmark(
     """Run the opt-in repair/refusal safety benchmark and print a stable JSON report.
 
     Informational by default: it exits 0 whenever the run completes, whatever the scores. With
-    ``--enforce-gates`` it exits 1 when a release gate fails (#292); a gate whose sample is
-    still too small is reported but never fails.
+    ``--enforce-gates`` it exits 1 when a release gate fails; a gate whose sample is still too
+    small is reported but never fails.
     """
     # Without this, structlog's defaults apply in this process: tracebacks with every frame's
-    # locals, no redaction, and logs on stdout (#413). Parallel workers configure their own.
+    # locals, no redaction, and logs on stdout. Parallel workers configure their own.
     configure_logging(settings.log_level)
     if not scenario_root.is_dir():
         console.print(f"[red]scenario root does not exist:[/red] {escape(str(scenario_root))}")
@@ -787,7 +782,7 @@ def safety_benchmark(
     executor = execute_prepared_scenario if apply_patches else execute_safety_scenario
     runs = sum(1 for scenario in scenarios if scenario.runnable) * repeat
     try:
-        # One run per checkout (#452): a second would patch, or copy, the same demo app.
+        # One run per checkout: a second would patch, or copy, the same demo app.
         with checkout_lock(scenario_root), _benchmark_progress(runs, jobs) as on_result:
             if jobs > 1:
                 log_dir = Path(tempfile.mkdtemp(prefix="e2e-healer-safety-logs-"))
@@ -1045,7 +1040,7 @@ jobs:
           if-no-files-found: ignore
 """
                 # Pin the Action to the release this CLI came from: a hardcoded tag goes stale
-                # and sends new users to an old engine (#421).
+                # and sends new users to an old engine.
                 action_ref = f"v{package_version('ai-driven-e2e')}"
                 WORKFLOW_TARGET_PATH.write_text(yaml_template.replace("__ACTION_REF__", action_ref))
                 console.print(

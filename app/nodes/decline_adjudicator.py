@@ -15,14 +15,11 @@ logger = structlog.get_logger(__name__)
 def decline_adjudicator(state: AgentState) -> dict:
     """Ask for a structured verdict about a diagnosis that ended in no proposed change.
 
-    A declined candidate leaves ``current_code`` byte-identical, so the next cycle's Diagnoser
-    and Patch Generator prompts are unchanged too: the verdict is asked at most once per run and
-    reused, which keeps a repeated decline from paying for the same judgment again.
-
-    Only ``BEHAVIOUR_CHANGE`` spends a loop, standing in for the test run the graph would
-    otherwise spend on an unchanged file, so ``max_loops`` still bounds the work. A provider
-    failure or a degraded diagnosis records nothing, which leaves the run on the path it takes
-    today instead of turning an outage into a product-regression claim.
+    A declined candidate leaves ``current_code`` byte-identical, so the verdict is asked at
+    most once per run and reused. Only ``BEHAVIOUR_CHANGE`` spends a loop, standing in for the
+    test run the graph would otherwise spend on an unchanged file, so ``max_loops`` still
+    bounds the work. A provider failure or degraded diagnosis records nothing, leaving the run
+    on its existing path instead of turning an outage into a product-regression claim.
     """
     cached = state.get("diagnosis_verdict")
     if cached is not None:

@@ -1,8 +1,8 @@
 """Filesystem workspace for the Shadow Runtime.
 
 Owns the on-disk directory layout (cache, snapshots, tmp) and its lifecycle
-(creation and policy-aware cleanup). All directory names are derived from the
-shared :class:`ShadowConfig` so they live in exactly one place.
+(creation and policy-aware cleanup). All directory names derive from the shared
+:class:`ShadowConfig`.
 """
 
 import json
@@ -20,12 +20,9 @@ _OWNERSHIP_VERSION = 1
 
 
 class ShadowWorkspace(IShadowWorkspace):
-    """
-    Manages temporary runtime resources, cached artifacts, and snapshots for the
-    Shadow Runtime, conforming to the IShadowWorkspace interface.
+    """Manages temporary runtime resources, cached artifacts, and snapshots.
 
-    Every path is resolved from the shared :class:`ShadowConfig`, so the workspace
-    layout is defined in a single place rather than hardcoded here.
+    Every path is resolved from the shared :class:`ShadowConfig`.
     """
 
     def __init__(self, config: ShadowConfig | None = None):
@@ -80,11 +77,9 @@ class ShadowWorkspace(IShadowWorkspace):
     def cleanup(self, is_success: bool = False) -> None:
         """Remove disposable directories according to the configured cleanup policy.
 
-        - ``NEVER``: always keep artifacts.
-        - ``ON_SUCCESS``: remove cache and tmp only after a successful run.
-        - ``ALWAYS``: remove cache and tmp regardless of outcome.
-
-        The owned workspace root and persistent snapshots are never removed.
+        ``NEVER`` always keeps artifacts; ``ON_SUCCESS`` removes cache and tmp only
+        after a successful run; ``ALWAYS`` removes them regardless of outcome. The
+        owned workspace root and persistent snapshots are never removed.
         """
 
         policy = self.config.cleanup_policy

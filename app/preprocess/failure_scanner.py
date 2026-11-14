@@ -10,7 +10,7 @@ We extract the failing test-file paths (deduplicated, in first-seen order) so th
 healer can repair each one.
 
 Security note: these paths come from reporter text the app under test can influence, so
-they are UNTRUSTED. Callers must authorize each one with
+they are UNTRUSTED. Callers must authorize each one with ``assert_auto_discovered_target``.
 """
 
 import re

@@ -56,9 +56,8 @@ def _assert_regular_non_symlink_target(path: Path) -> None:
 def atomic_write(path: Path, content: str, reason: str = "atomic_write") -> None:
     """Write ``content`` to ``path`` atomically and durably.
 
-    Writes to a temp file in the same directory, syncs its contents, replaces the target,
-    then syncs the parent directory so a crash mid-write cannot leave a half-patched file
-    or lose the durable rename on supported platforms.
+    A temp file in the same directory is synced, replaces the target, then the parent
+    directory is synced, so a crash mid-write cannot leave a half-patched file.
     """
     _assert_regular_non_symlink_target(path)
     assert_write_allowed(path, reason=reason)

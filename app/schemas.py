@@ -5,13 +5,8 @@ from typing import Annotated, Literal, TypedDict, cast
 
 from pydantic import BaseModel, Field, computed_field
 
-# Version of the machine-readable CI contract emitted as `--json`. Version 2 adds the
-# ``refusal`` discriminator and closed refusal reasons, which the published compatibility
-# policy classifies as a breaking change. Version 2.1 adds the optional
-# ``CandidateEvidence.ast_lock`` detail object, a compatible minor addition. Version 2.2 adds
-# the optional ``EvidenceBundle.provenance`` object, another compatible minor addition. Version
-# 2.3 adds the executed graph ``path``, the ``loop_budget``, ``CandidateEvidence.next_step`` and
-# the ``termination`` of a repair or refusal: optional additions, so a minor bump as well.
+# Version of the machine-readable CI contract emitted as `--json`. Breaking changes bump the
+# major, optional additions the minor.
 SCHEMA_VERSION: Literal["2.3"] = "2.3"
 
 # How a repair run ended. ``refused`` covers every refusal reason except the loop cap, which
@@ -83,7 +78,7 @@ class PatchOutput(BaseModel):
 class DiagnosisVerdict(str, Enum):
     """What broke the test, as a closed set the decline adjudicator must choose from.
 
-    Only ``BEHAVIOUR_CHANGE`` changes the outcome: it is what turns a refusal into
+    Only ``BEHAVIOUR_CHANGE`` changes the outcome, turning a refusal into
     ``RefusalReason.LIKELY_PRODUCT_REGRESSION``. The other two keep the ordinary repair loop,
     so a wrong verdict of that kind costs a model call, never a wrong label.
     """
@@ -96,9 +91,9 @@ class DiagnosisVerdict(str, Enum):
 class DiagnosisVerdictOutput(BaseModel):
     """Structured Output schema for the adjudication of a declined patch.
 
-    Internal to the repair loop: it is never emitted in the ``--json`` contract, so adding or
-    changing it is not a schema version change. ``rationale`` is required so the model has to
-    commit to a reason before naming a verdict; it is not otherwise consumed.
+    Internal to the repair loop: never emitted in the ``--json`` contract, so changing it is
+    not a schema version change. ``rationale`` is required so the model commits to a reason
+    before naming a verdict; it is not otherwise consumed.
     """
 
     verdict: DiagnosisVerdict
@@ -131,9 +126,9 @@ class SnapshotReference(BaseModel):
 class AstLockRejection(BaseModel):
     """What the structural AST lock rejected in a refused candidate.
 
-    ``reason`` is an open string, not a closed enum: the lock may report new reasons without
-    a schema major bump, so consumers must tolerate values they do not recognize. Current
-    values are ``disallowed_ast_change``, ``original_parse_error`` and ``patched_parse_error``.
+    ``reason`` is an open string, not a closed enum: the lock may report new reasons without a
+    schema major bump, so consumers must tolerate unknown values. Current values are
+    ``disallowed_ast_change``, ``original_parse_error`` and ``patched_parse_error``.
     """
 
     reason: str = Field(description="why the lock rejected the candidate")
@@ -224,9 +219,8 @@ class ProviderProvenance(BaseModel):
     """Where the repair evidence was sent, and whether it was redacted first.
 
     Deliberately non-sensitive: no prompt text, no response text, no credential. ``provider``
-    is an open string rather than a closed enum so adding a backend is not a contract change;
-    consumers must tolerate values they do not recognize. ``endpoint`` is the endpoint the
-    client actually used, with URL credentials and sensitive query values removed.
+    is an open string so adding a backend is not a contract change. ``endpoint`` is the
+    endpoint the client actually used, with URL credentials and sensitive query values removed.
     """
 
     provider: str = Field(description="configured provider backend (an open, growing set)")

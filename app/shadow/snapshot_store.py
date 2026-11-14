@@ -46,7 +46,6 @@ class SnapshotStore(ISnapshotStore):
 
     def __init__(self, workspace: ShadowWorkspace) -> None:
         self.workspace = workspace
-        # Ensure snapshots directory exists
         self.workspace.snapshots_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_snapshot_path(self, snapshot_id: str) -> Path:
@@ -67,7 +66,7 @@ class SnapshotStore(ISnapshotStore):
 
         The temp file is fully written, flushed, and fsync'd before being
         ``os.replace``'d onto the target, so a reader never observes a partial
-        file. The temp file is removed if anything fails before the replace.
+        file, and it is removed if anything fails before the replace.
         """
         fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
         try:
@@ -88,7 +87,6 @@ class SnapshotStore(ISnapshotStore):
         """Persists a ShadowSnapshot object (or dict) to a JSON file on disk."""
         path = self._get_snapshot_path(snapshot_id)
 
-        # If it's a ShadowSnapshot object, convert to dict/JSON
         if isinstance(data, ShadowSnapshot):
             if data.snapshot_id != snapshot_id:
                 raise SnapshotStoreError(
@@ -97,8 +95,6 @@ class SnapshotStore(ISnapshotStore):
                 )
             snapshot_dict = redact_snapshot(data).model_dump()
         elif isinstance(data, dict):
-            # A dict without an embedded id adopts the save key; a supplied id
-            # must match the key exactly.
             payload = dict(data)
             payload.setdefault("snapshot_id", snapshot_id)
             try:
@@ -115,7 +111,6 @@ class SnapshotStore(ISnapshotStore):
             raise SnapshotStoreError("Unsupported data type; expected ShadowSnapshot or dict")
 
         try:
-            # Deterministic serialization: sort keys, indent for readability
             serialized = json.dumps(snapshot_dict, sort_keys=True, indent=2)
             self._atomic_write_text(path, serialized)
             logger.info("snapshot_saved", snapshot_id=snapshot_id, path=str(path))
@@ -160,7 +155,6 @@ class SnapshotStore(ISnapshotStore):
                 f"Snapshot data does not conform to ShadowSnapshot schema: {e}"
             ) from e
 
-        # Reject files whose embedded id disagrees with the lookup key.
         if snapshot.snapshot_id != snapshot_id:
             logger.error(
                 "snapshot_id_mismatch",

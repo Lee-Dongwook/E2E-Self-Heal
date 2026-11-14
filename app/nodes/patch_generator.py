@@ -78,12 +78,10 @@ _REGEX_DIVISION_AFTER = frozenset(
 def _regex_can_start(prev: str) -> bool:
     """Heuristic: is ``/`` at the current point a regex literal rather than division?
 
-    Mirrors the usual JS-lexer rule: a slash starts a regex at the start of an
-    expression or after an operator/bracket/punctuation, while it is division after a
-    value (identifier, number, string, closing paren/bracket, another slash). This is
-    intentionally not a full tokenizer — the few ambiguous keyword cases (e.g.
-    ``return /re/``) may mask slightly less precisely, which errs on the guardrail's
-    conservative side.
+    A slash starts a regex at the start of an expression or after an operator/bracket, and
+    is division after a value. Intentionally not a full tokenizer: the few ambiguous keyword
+    cases (e.g. ``return /re/``) may mask slightly less precisely, which errs on the
+    guardrail's conservative side.
     """
     return prev not in _REGEX_DIVISION_AFTER
 
@@ -153,28 +151,22 @@ def _argument_spans(text: str, opening: int, closing: int) -> list[tuple[int, in
 def _mask_js_non_code(text: str) -> str:
     """Blank JS comments and string/template literals, preserving length and offsets.
 
-    ``_ACTION_CALL``/``_SELECTOR_CALL`` must only see real code — an action-like token
-    inside a comment or string must not be treated as an actual call. Line (``//``) and
-    block (``/* … */``) comments, single/double-quoted strings, and backtick templates
-    (including delimiters and ``\\`` escapes) are replaced with spaces, so matches keep
-    the same offsets while the original ``text`` is still used for paren/argument parsing.
+    ``_ACTION_CALL``/``_SELECTOR_CALL`` must only see real code, so an action-like token
+    inside a comment or string is not treated as a call. Line and block comments,
+    single/double-quoted strings, and backtick templates are replaced with spaces; matches
+    keep their offsets while the original ``text`` still drives paren/argument parsing.
 
-    A small state machine drives the masking. Template ``${…}`` expressions are tracked
-    (not treated as plain template text) so a nested backtick or ``}`` inside
-    interpolation cannot end the template early; the expression is blanked together with
-    the literal segments, keeping the guardrail conservative. Regex literals are masked
-    too (escapes and character classes included), so a ``}`` or ``/`` inside one cannot
-    leak into the surrounding expression or end it early.
+    A state machine tracks template ``${…}`` expressions, so a nested backtick or ``}``
+    cannot end the template early, and masks regex literals, so their contents cannot leak
+    into the surrounding expression. Both keep the guardrail conservative.
     """
     chars = list(text)
     n = len(chars)
     i = 0
-    # Lexical context stack: comments, strings, templates, and template expressions
-    # return to the context they started from (code or an enclosing expression), so e.g.
-    # ``${`b`}`` cannot terminate the surrounding template. ``TEMPLATE_EXPR`` entries
-    # carry the ``${`` brace depth; depth 1 closes the expression.
+    # Lexical context stack: masked regions return to the context they started from, so e.g.
+    # ``${`b`}`` cannot terminate the surrounding template. ``TEMPLATE_EXPR`` entries carry
+    # the ``${`` brace depth; depth 1 closes the expression.
     stack: list[tuple[_MaskState, int]] = [(_MaskState.CODE, 0)]
-    # Last significant code character, used to tell a regex literal from a division.
     prev = ""
     while i < n:
         state, depth = stack[-1]
@@ -293,8 +285,8 @@ def _mask_js_non_code(text: str) -> str:
                 chars[i] = " "
                 i += 1
 
-        else:  # TEMPLATE_EXPR — ``${…}``: blanked like the template, but tracked so
-            # strings, comments, and nested backticks cannot close the expression early.
+        else:  # TEMPLATE_EXPR — ``${…}``: tracked so nested strings, comments, and
+            # backticks cannot close the expression early.
             if char == "{":
                 chars[i] = " "
                 i += 1
@@ -384,8 +376,8 @@ def _validate_action_calls(
     """Allow selector edits while preserving every other argument (data and options).
 
     A complete source view is required for action calls whose arguments continue onto
-    another line.  The line-only fallback remains useful for callers that validate an
-    instruction before they have the file contents.
+    another line; the line-only fallback serves callers that validate an instruction before
+    they have the file contents.
     """
     original_text = original_source if original_source is not None else instruction.original
     replacement_text = (
@@ -436,11 +428,10 @@ def _validate_patch_scope(
     """Reject edits outside the single-line locator/wait guardrail.
 
     ``masked_original`` is the code-only view of the target line computed against the
-    *complete* source (see ``_apply``), so a line that continues a block comment or
-    template literal opened on an earlier line is treated as non-code. When omitted,
-    the line is masked in isolation (tests / callers without file context). Action
-    validation additionally receives complete source views from ``_apply`` so a
-    multi-line action's arguments can be compared safely.
+    *complete* source (see ``_apply``), so a line continuing a block comment or template
+    literal opened earlier is treated as non-code. When omitted, the line is masked in
+    isolation (tests / callers without file context). Action validation likewise receives
+    complete source views so a multi-line action's arguments can be compared safely.
     """
     if "\n" in instruction.replacement or "\r" in instruction.replacement:
         raise PatchApplicationError(
@@ -472,11 +463,11 @@ def _enforce_ast_lock(original: str, patched: str) -> None:
     """Reject a patch whose AST differs outside locator strings, timeouts, and wait methods.
 
     Fail-closed: a parse failure or any structural change is a guardrail violation. It is
-    raised as :class:`PatchGuardrailViolation`, a :class:`PatchApplicationError`, so each
+    raised as :class:`PatchGuardrailViolation` (a :class:`PatchApplicationError`), so each
     caller handles it through its existing rejection path. The Patch Generator feeds it back
-    and spends a loop, so a generated candidate that keeps violating the lock can never retry
-    past ``settings.max_loops``. The memory lookup treats it as a cache miss (no loop spent);
-    that is bounded because the lookup runs once, before the generator loop starts.
+    and spends a loop, so it can never retry past ``settings.max_loops``; the memory lookup
+    treats it as a cache miss (no loop spent), bounded because the lookup runs once before
+    the generator loop starts.
     """
     if patched == original:
         return  # Nothing changed, so there is nothing to verify.
@@ -499,8 +490,8 @@ def _enforce_ast_lock(original: str, patched: str) -> None:
 def _apply(code: str, instructions: list[PatchInstruction]) -> str:
     """Validate and atomically apply line-targeted replacements to ``code``.
 
-    Shared by the Patch Generator and the memory lookup, so every candidate, however it
-    was produced, passes the regex scope gates and then the structural AST lock.
+    Shared by the Patch Generator and the memory lookup, so every candidate passes the regex
+    scope gates and then the structural AST lock.
     """
     lines = code.splitlines(keepends=True)
     # Mask the complete source once so a targeted line that continues a block comment or
@@ -539,8 +530,8 @@ def _apply(code: str, instructions: list[PatchInstruction]) -> str:
                 raise PatchApplicationError(
                     f"line {instruction.line} no longer matches the expected original text{hint}"
                 )
-            # The model re-typed the line (quotes, indentation, spacing) instead of copying it
-            # (#404). Write its replacement in the file's formatting, and judge that line: the
+            # The model re-typed the line (quotes, indentation, spacing) rather than copying
+            # it. Write its replacement in the file's formatting, and judge that line: the
             # scope gates and the AST lock below see exactly what reaches the disk.
             instruction = instruction.model_copy(
                 update={

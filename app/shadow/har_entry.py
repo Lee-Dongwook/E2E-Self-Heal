@@ -15,20 +15,19 @@ _SET_COOKIE = "set-cookie"
 def headers_to_dict(headers: object) -> dict[str, str]:
     """Convert HAR header lists into the normalized dictionary representation.
 
-    A HAR keeps headers as an ordered list in which a name can repeat (two ``Set-Cookie``
-    headers, several ``Link`` headers). The normalized form is a ``dict[str, str]``, so repeats
-    are folded into one entry with the same rule Playwright applies to ``Response.headers`` and
-    expects back in ``route.fulfill(headers=...)``:
+    A HAR keeps headers as an ordered list where a name can repeat (two
+    ``Set-Cookie`` headers, several ``Link`` headers). Repeats are folded into one
+    entry with the rule Playwright applies to ``Response.headers`` and expects back
+    in ``route.fulfill(headers=...)``:
 
-    * ``Set-Cookie`` values are joined with ``"\\n"``. A header value cannot contain a newline,
-      so this loses nothing, and Playwright turns each line back into its own header on replay.
-    * Every other repeated header is joined with ``", "``, which RFC 9110 section 5.3 defines as
-      equivalent to sending the header several times.
+    * ``Set-Cookie`` values are joined with ``"\\n"``; Playwright splits each line
+      back into its own header on replay.
+    * Every other repeated header is joined with ``", "``, which RFC 9110 section
+      5.3 defines as equivalent to sending the header several times.
 
-    Names are grouped case-insensitively and the first spelling seen is kept, so a header that
-    appears once comes out exactly as it went in. Values keep their original order, and
-    identical repeated values are all kept. Empty values are ignored when combining, so they
-    cannot leave a dangling separator; a header whose values are all empty maps to ``""``.
+    Names are grouped case-insensitively keeping the first spelling; values keep
+    their original order and all identical repeats. Empty values are ignored when
+    combining, so a header whose values are all empty maps to ``""``.
     """
     if not isinstance(headers, list):
         return {}

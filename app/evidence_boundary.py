@@ -4,11 +4,11 @@ Every prompt this package sends to a provider is assembled from a :class:`Prepar
 so the failure log, the DOM diff, the ARIA snapshot and the Diagnoser's own report are redacted
 exactly once, in one place, before any of them leaves the machine.
 
-What is deliberately **not** redacted is the test source code sent as context. The Patch
-Generator returns instructions whose ``original`` text must match the file byte for byte
-(``_apply`` in ``app/nodes/patch_generator.py``), so rewriting the code the model reads would
-make it emit instructions that can never apply. Credentials do not belong in test sources, and
-the boundary covers the runtime evidence that does carry them.
+Test source code sent as context is deliberately **not** redacted: the Patch Generator returns
+instructions whose ``original`` text must match the file byte for byte (``_apply`` in
+``app/nodes/patch_generator.py``), so rewriting it would make instructions that can never
+apply. Credentials do not belong in test sources, and the boundary covers the runtime evidence
+that does carry them.
 """
 
 from dataclasses import dataclass
@@ -38,8 +38,8 @@ class PreparedEvidence:
 def prepare_evidence(state: AgentState) -> PreparedEvidence:
     """Redact and bound the state fields that may be sent to a model provider.
 
-    Every field is read with a default so a node that runs on a partial state (the Reviewer never
-    needs the raw log, for example) still gets an answer instead of a ``KeyError``.
+    Every field is read with a default so a node running on a partial state (the Reviewer never
+    needs the raw log) still gets an answer instead of a ``KeyError``.
     """
     record = RedactionRecord()
     raw_log = state.get("error_log") or ""
@@ -56,8 +56,8 @@ def prepare_evidence(state: AgentState) -> PreparedEvidence:
         dom_diff_context=dom_diff_context,
         untouched_selector=untouched_selector,
         aria_snapshot=aria_snapshot,
-        # The Diagnoser's report can quote the log, so it crosses the same boundary before the
-        # Decline Adjudicator and the Patch Generator re-send it.
+        # The Diagnoser's report can quote the log, so it crosses the same boundary before
+        # being re-sent to the Decline Adjudicator and the Patch Generator.
         analysis_report=analysis_report,
         error_line=extract_error_line(raw_log),
         redaction_count=record.count,

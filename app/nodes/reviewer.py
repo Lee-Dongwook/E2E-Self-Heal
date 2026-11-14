@@ -15,8 +15,8 @@ logger = structlog.get_logger(__name__)
 def reviewer(state: AgentState) -> dict:
     """Turn the diagnosis + DOM changes into source-level suggestions (never edits the test).
 
-    On any LLM/parse failure, log and return an incomplete report. The CLI can then fail
-    the review instead of mistaking a provider outage for a completed review with no findings.
+    On provider failure, log and return an incomplete report so the CLI can fail the review
+    rather than mistake an outage for a completed review with no findings.
     """
     logger.info("reviewer_started")
     # Diagnostics and DOM changes cross the evidence boundary; the test source does not, because

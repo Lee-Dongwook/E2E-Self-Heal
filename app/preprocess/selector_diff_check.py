@@ -1,15 +1,14 @@
 """Selector Diff Check: does the diff remove or rename what the failing selector matches?
 
 The DOM-diff abstraction keeps tags and attributes, so an element that is merely rendered
-later (``{ready && <Button className="cta" />}``) looks like any other changed element: the
-model sees a failing ``.cta`` locator, a missing element in the failure snapshot, and nothing
-that says the class still exists. It then invents a new selector. This check answers the
-question deterministically from the raw diff, so the prompts can state it as a fact.
+later (``{ready && <Button className="cta" />}``) looks like any other changed element, and the
+model invents a new selector. This check answers the question deterministically from the raw
+diff, so the prompts can state it as a fact.
 
-The check is deliberately conservative. It extracts every word the failing locator names
-(ids, classes, attribute values, quoted names and texts, tags) and reports the selector as
-untouched only when **no** line removed by the diff contains **any** of them. A rename always
-removes a line holding the old name, so a rename is never reported as untouched.
+It extracts every word the failing locator names (ids, classes, attribute values, quoted names
+and texts, tags) and reports the selector as untouched only when **no** line removed by the diff
+contains **any** of them. A rename always removes a line holding the old name, so a rename is
+never reported as untouched.
 """
 
 import re

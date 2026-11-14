@@ -24,8 +24,8 @@ def is_local_endpoint(endpoint: str) -> bool:
     """Whether ``endpoint`` addresses this machine.
 
     Derived from the address only: a loopback or a private/link-local literal is local, anything
-    else is treated as remote. No DNS lookup is performed, so a hostname that happens to resolve
-    to a private address is reported as remote — the conservative answer for a data boundary.
+    else is remote. No DNS lookup is performed, so a hostname that resolves to a private address
+    is reported as remote, the conservative answer for a data boundary.
     """
     host = urlsplit(endpoint).hostname or ""
     if host.casefold() in _LOCAL_HOSTNAMES:

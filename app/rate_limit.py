@@ -1,15 +1,10 @@
-"""Provider rate limits: read a 429's retry hint, and pace calls across processes (#456).
+"""Provider rate limits: read a 429's retry hint, and pace calls across processes.
 
-Free tiers allow a few requests per minute. A 429 used to get the same short, fixed backoff
-as any other failure, so every ``--jobs`` worker kept hitting the limit on its own, and a
-spent daily quota was retried as if it would clear in seconds. Two pieces fix that:
-
-* :func:`rate_limit_of` reads how long the provider asked to wait (``Retry-After``, OpenAI's
-  ``retry-after-ms``, Gemini's ``RetryInfo.retryDelay``, or "retry in 34s" in the message)
-  and whether a per-day quota ran out.
-* :class:`Pacer` keeps one cooldown, and optionally a requests-per-minute pace, in a file
-  shared by every process calling the same endpoint with the same key. A 429 in one worker
-  pauses all of them until the provider's retry time, so the pool backs off together.
+:func:`rate_limit_of` reads how long the provider asked to wait (``Retry-After``, OpenAI's
+``retry-after-ms``, Gemini's ``RetryInfo.retryDelay``, or "retry in 34s" in the message) and
+whether a per-day quota ran out. :class:`Pacer` keeps one cooldown, and optionally a
+requests-per-minute pace, in a file shared by every process calling the same endpoint with the
+same key: a 429 in one ``--jobs`` worker pauses all of them until the provider's retry time.
 """
 
 from __future__ import annotations
@@ -117,8 +112,7 @@ def rate_limit_of(exc: BaseException, body: str | None) -> RateLimit | None:
 def pacing_path(provider: str, endpoint: str, api_key: str) -> Path:
     """The state file shared by every process calling ``endpoint`` with ``api_key``.
 
-    Quotas belong to a key (Gemini: its project) on an endpoint, so that is what is shared.
-    Only a hash of the key is used, and only in the file name.
+    Quotas belong to a key (Gemini: its project) on an endpoint, which is all the name hashes.
     """
     digest = hashlib.sha256(f"{provider}\n{endpoint}\n{api_key}".encode()).hexdigest()[:16]
     return Path(tempfile.gettempdir()) / f"e2e-healer-pacing-{digest}.json"

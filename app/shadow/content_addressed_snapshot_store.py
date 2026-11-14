@@ -1,10 +1,9 @@
 """Content-addressed implementation of ISnapshotStore.
 
-Stores each snapshot payload under a hash of its content, so two snapshots with
-identical payloads collapse to a single stored object (deduplication). A small
-per-id reference maps each ``snapshot_id`` to the content hash it points at,
-keeping the public ``ISnapshotStore`` contract intact while the physical layout
-becomes diffable across snapshot sets.
+Stores each snapshot payload under a hash of its content, so identical payloads
+collapse to a single object; a per-id reference maps each ``snapshot_id`` to the
+hash it points at. The ``snapshot_id`` is excluded from the hashed content, so
+identical captures saved under different ids share one object.
 
 On-disk layout under the workspace ``snapshots`` directory::
 
@@ -14,16 +13,9 @@ On-disk layout under the workspace ``snapshots`` directory::
         refs/
             <snapshot_id>.ref # single line: the content hash it resolves to
 
-The ``snapshot_id`` is deliberately excluded from the hashed content: identical
-captured responses saved under different ids share one object, which is what
-makes the store dedupe "identical responses" rather than identical keys.
-
-Integrity rules:
-    * On save with an existing object (dedupe path), the existing object is
-      re-hashed and compared to its filename before a new ref points at it.
-      A corrupted existing object therefore raises before being re-referenced.
-    * On read, the loaded content is re-hashed and compared to the object
-      filename. Altered JSON under the old hash is rejected.
+Integrity: a save that hits an existing object re-hashes it before a new ref
+points at it, and a read re-hashes the loaded content, so altered JSON under the
+old hash is rejected.
 """
 
 import hashlib
@@ -53,10 +45,8 @@ _SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 class ContentAddressedSnapshotStore(ISnapshotStore):
     """Hash-keyed snapshot store that deduplicates identical payloads.
 
-    Sits behind :class:`ISnapshotStore` and honors the same schema contract as
-    :class:`~app.shadow.snapshot_store.SnapshotStore`: it accepts a
-    :class:`ShadowSnapshot` or a schema-valid dict and returns a validated
-    :class:`ShadowSnapshot`. A dict without ``snapshot_id`` adopts the save key.
+    Honors the same schema contract as
+    :class:`~app.shadow.snapshot_store.SnapshotStore`.
     """
 
     def __init__(self, workspace: ShadowWorkspace) -> None:
@@ -67,12 +57,7 @@ class ContentAddressedSnapshotStore(ISnapshotStore):
         self.refs_dir.mkdir(parents=True, exist_ok=True)
 
     def _ref_path(self, snapshot_id: str) -> Path:
-        """Return the reference file path for a snapshot id (traversal-safe).
-
-        The filename is a sha256 of the full ``snapshot_id`` so distinct ids map
-        to distinct refs (no collisions from stripping path components) while the
-        hex digest keeps the path traversal-safe.
-        """
+        """Return the hashed, traversal-safe reference path for ``snapshot_id``."""
         if not snapshot_id:
             raise SnapshotStoreError("snapshot_id must be a non-empty string")
         safe_id = hashlib.sha256(snapshot_id.encode("utf-8")).hexdigest()
@@ -84,12 +69,7 @@ class ContentAddressedSnapshotStore(ISnapshotStore):
 
     @staticmethod
     def _atomic_write_text(path: Path, text: str) -> None:
-        """Write ``text`` to ``path`` atomically via a sibling temp file.
-
-        The temp file is fully written, flushed, and fsync'd before being
-        ``os.replace``'d onto the target, so a reader never observes a partial
-        file. The temp file is removed if anything fails before the replace.
-        """
+        """Write ``text`` to ``path`` atomically via a sibling temp file."""
         fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -106,11 +86,7 @@ class ContentAddressedSnapshotStore(ISnapshotStore):
 
     @staticmethod
     def _to_content(data: Any, snapshot_id: str) -> dict[str, Any]:
-        """Validate input and reduce it to hashable content (without the id).
-
-        A dict without an embedded ``snapshot_id`` adopts the save key; a
-        supplied id must match the key exactly.
-        """
+        """Validate input and reduce it to hashable content without the ``snapshot_id``."""
         if isinstance(data, ShadowSnapshot):
             if data.snapshot_id != snapshot_id:
                 raise SnapshotStoreError(
@@ -167,13 +143,10 @@ class ContentAddressedSnapshotStore(ISnapshotStore):
     ) -> dict[str, Any]:
         """Read an object and confirm its content hashes to ``expected_hash``.
 
-        Raises ``SnapshotCorruptionError`` on a hash mismatch so neither a save
-        (dedupe-skip) nor a read can silently re-use an altered object.
-
-        Note: the object blob deliberately excludes ``snapshot_id`` (that is what
-        enables deduplication across ids), so we only verify the hash here. Full
-        ShadowSnapshot schema validation happens in ``get_snapshot`` after the
-        id is re-attached.
+        Raises ``SnapshotCorruptionError`` on a hash mismatch so neither a
+        dedupe-save nor a read can silently re-use an altered object. The blob
+        excludes ``snapshot_id`` (that is what enables deduplication), so schema
+        validation of the re-attached id happens in ``get_snapshot``.
         """
         content = self._read_object(object_path)
 
@@ -199,8 +172,8 @@ class ContentAddressedSnapshotStore(ISnapshotStore):
         object_path = self._object_path(content_hash)
 
         if object_path.exists():
-            # Before dedupe-skipping, verify the existing object is still intact.
-            # Otherwise a corrupted object gets a new ref pointing at it.
+            # Verify the object before dedupe-skipping, so a corrupted one cannot
+            # get a new ref pointing at it.
             self._verify_object_hash(object_path, content_hash, snapshot_id=snapshot_id)
             deduped = True
         else:
@@ -256,7 +229,6 @@ class ContentAddressedSnapshotStore(ISnapshotStore):
                 f"Snapshot '{snapshot_id}' references missing object '{content_hash}'."
             )
 
-        # Re-hash the content and compare to the filename so edited files are rejected.
         content = self._verify_object_hash(object_path, content_hash, snapshot_id=snapshot_id)
 
         try:

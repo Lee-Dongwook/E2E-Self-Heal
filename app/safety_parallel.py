@@ -1,16 +1,14 @@
 """Run the safety benchmark on several isolated copies of the demo project at once.
 
 Every scenario breaks the shared demo app with its ``change.patch``, runs the repair graph,
-and restores the app, so on one checkout scenarios must run one after another. The wall
-clock is then dominated by Playwright rebuilding the app and by model latency, neither of
-which uses the machine fully.
+and restores the app, so on one checkout scenarios must run one after another and the wall
+clock is dominated by Playwright rebuilding the app and by model latency, not by the machine.
 
-Each worker here gets its own copy of the Playwright project (the current directory, for
-example ``examples/``) inside a throwaway git repository, its own preview port, and its own
-process. Siblings of the project that it only reads (such as the Playwright reporter under
-``integrations/``) are symlinked, never copied, so no patch may target them: a corpus whose
-patches reach outside the project is rejected before anything starts. A worker runs exactly
-the same executor as a sequential run, so results are comparable run for run.
+Each worker gets its own copy of the Playwright project (the current directory, for example
+``examples/``) in a throwaway git repository, its own preview port, and its own process.
+Siblings the project only reads (such as the reporter under ``integrations/``) are symlinked,
+never copied, so a patch reaching outside the project is rejected before anything starts.
+Workers run the same executor as a sequential run, so results stay comparable run for run.
 """
 
 import multiprocessing

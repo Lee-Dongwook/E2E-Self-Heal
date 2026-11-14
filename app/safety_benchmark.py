@@ -31,7 +31,7 @@ except ImportError:  # pragma: no cover - Windows has no fcntl module.
 
 BENCHMARK_LOCK_NAME = "e2e-healer-safety-benchmark.lock"
 
-# Release-gate policy (#292). Gates block a release, never a merge: PR and main CI runs stay
+# Release-gate policy. Gates block a release, never a merge: PR and main CI runs stay
 # informational. A rate is only enforced once its population reaches ``GATE_MIN_SAMPLE``, so
 # one scenario cannot swing a release; below that it is reported as an insufficient sample.
 # A false green is the exception: a single one is proof of a failure, whatever the sample.
@@ -87,8 +87,7 @@ class SafetyScenarioResult(BaseModel):
     expected_outcome: ExpectedOutcome
     actual_outcome: ActualOutcome
     # Which repeat of the scenario this result is (1-based). Model output varies between runs,
-    # so ``--repeat`` runs every scenario several times and keeps each run. Reports written
-    # before repeats existed have no value here and read as run 1.
+    # so ``--repeat`` runs every scenario several times and keeps each run.
     run: int = Field(default=1, ge=1)
     latency_seconds: float = Field(ge=0)
     # Candidates that proposed at least one change: a provider-independent proxy for model
@@ -128,7 +127,7 @@ class SafetyMetrics(BaseModel):
     incorrect_refusal_rate: float | None
     # correct refusals / (correct refusals + false heals + false refusals): penalizes both
     # patching what should be refused and refusing what should be repaired, so "we refused a
-    # lot" cannot score well. Defaults to ``None`` so reports written before it still load.
+    # lot" cannot score well.
     refusal_accuracy: float | None = None
     error_count: int = Field(ge=0)
     sample_sizes: MetricSampleSizes = Field(default_factory=MetricSampleSizes)
@@ -190,7 +189,6 @@ class GateResult(BaseModel):
     status: GateStatus
     # How many more distinct scenarios this rate needs before it can be enforced. 0 when the
     # sample is already large enough, and for ``error_count``, which has no sample minimum.
-    # Defaulted so a report written before this field existed still loads as a baseline.
     scenarios_needed: int = Field(default=0, ge=0)
 
 
@@ -321,7 +319,7 @@ def execute_safety_scenario(scenario: SafetyScenario) -> SafetyScenarioResult:
             )
         # Read the failure-time page snapshot exactly as `e2e-healer heal` does, so the model
         # sees the same evidence it would in real use. Without it a label change is invisible:
-        # the diff analyzer records attribute changes, not text (#328).
+        # the diff analyzer records attribute changes, not text.
         dom_snapshot, snapshot_source = read_failure_snapshot_with_source(
             Path(settings.test_results_dir), scenario.test_path
         )
@@ -431,7 +429,7 @@ def _lock_holder(descriptor: int) -> str:
 
 @contextmanager
 def checkout_lock(scenario_root: Path) -> Iterator[Path]:
-    """Hold an exclusive lock on the checkout for the whole benchmark run (#452).
+    """Hold an exclusive lock on the checkout for the whole benchmark run.
 
     A sequential run patches the demo app in the checkout and a parallel one copies it, so a
     second run in the same checkout would benchmark, or copy, an app the first one has broken.
@@ -669,8 +667,7 @@ def evaluate_gates(metrics: SafetyMetrics) -> list[GateResult]:
             value=value,
             sample_size=size,
             status=status,
-            # The corpus never shrinks the gap for free: this is how much more work the
-            # issue tracker entry needs before the gate stops being decorative.
+            # How much more corpus work the gate needs before it stops being decorative.
             scenarios_needed=max(0, GATE_MIN_SAMPLE - size),
         )
 

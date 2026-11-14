@@ -170,20 +170,12 @@ def _matches_any(value: str, patterns: list[str]) -> bool:
 
 
 def _is_allowed_temp_helper(path: Path) -> bool:
-    """Check if path is an allowed temp helper file.
-
-    Accepts:
-    - The legacy exact filename: .e2e-healer-verify.mjs (for backward compatibility)
-    - New unique filenames matching pattern: .e2e-healer-verify-*.mjs
-    This allows unique filenames per run while still being sandbox-safe.
-    """
+    """Allow the legacy exact filename or a unique ``.e2e-healer-verify-*.mjs`` helper."""
     if not settings.allow_temp_helper:
         return False
     name = path.name
-    # Accept legacy exact filename
-    if name == ".e2e-healer-verify.mjs":
+    if name == ".e2e-healer-verify.mjs":  # legacy exact filename
         return True
-    # Accept new unique filenames
     return name.startswith(_TEMP_HELPER_PREFIX) and name.endswith(_TEMP_HELPER_SUFFIX)
 
 

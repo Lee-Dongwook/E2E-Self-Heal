@@ -1,6 +1,6 @@
 """Shadow Runtime execution context.
-Creating a context has no side effects; the runtime is responsible for
-activating and deactivating it.
+
+Creating a context has no side effects; the runtime activates and deactivates it.
 """
 
 from dataclasses import dataclass

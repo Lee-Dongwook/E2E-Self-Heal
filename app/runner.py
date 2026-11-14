@@ -77,9 +77,7 @@ def run_playwright(test_path: str = "") -> tuple[bool, str]:
     assert_command_allowed(cmd, reason="playwright")
     timeout = settings.test_timeout_seconds
     logger.info("playwright_run_started", cmd=cmd, timeout=timeout)
-    # Launch in its own process group (POSIX) / group (Windows) so a timeout can reap the
-    # entire tree — Playwright spawns browser and helper descendants that ``subprocess.run``
-    # would otherwise leave orphaned.
+    # Own process group/session so a timeout can reap the whole tree Playwright spawns.
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -90,10 +88,8 @@ def run_playwright(test_path: str = "") -> tuple[bool, str]:
     try:
         stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired as exc:
-        # A hung run (dead dev server, deadlocked waitForSelector, orphaned browser) must not
-        # block the repair loop. Kill the whole process tree and surface it as an ordinary
-        # test failure so the caller refreshes error_log and increments loop_count — never
-        # crash the graph.
+        # A hung run must not block the repair loop: kill the tree and surface it as an
+        # ordinary test failure (error_log refresh, loop_count increment), never a crash.
         _terminate_process_tree(process)
         try:
             drained_out, drained_err = process.communicate(timeout=5)
