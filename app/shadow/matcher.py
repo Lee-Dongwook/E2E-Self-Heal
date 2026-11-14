@@ -46,9 +46,8 @@ class SnapshotMatcher:
     def add_snapshot(self, snapshot: NetworkSnapshot) -> None:
         """Add a snapshot so a later request can reserve it for replay.
 
-        This is primarily used by record-and-augment mode.  Callers must add
-        snapshots through this method rather than mutating ``snapshots`` directly,
-        so the per-request replay queues stay in sync.
+        Used by record-and-augment mode. Add through this method rather than
+        mutating ``snapshots`` directly, so the replay queues stay in sync.
         """
         with self._lock:
             self.snapshots.append(snapshot)
@@ -74,10 +73,9 @@ class SnapshotMatcher:
     def _request_signature(self, request: CapturedRequest) -> str:
         """Return a stable key for requests equivalent after normalisation.
 
-        The matcher deliberately excludes volatile fields through its configured
-        normalizer.  This lets repeated polling requests with changing tokens use
-        one captured-response queue while keeping independently shaped requests
-        separate.
+        Volatile fields are excluded through the configured normalizer, so repeated
+        polling requests with changing tokens share one response queue while
+        independently shaped requests stay separate.
         """
         parsed = urllib.parse.urlparse(request.url)
         path, query = self.scorer.normalizer.normalize_url(request.url)
@@ -125,8 +123,8 @@ class SnapshotMatcher:
                 p2 = urllib.parse.urlparse(snapshot.request.url).path
                 exact_path = p1 == p2
 
-                # Sort is ascending by default. To put highest scores first, we negate score.
-                # To put exact matches (True) first, we negate the boolean value (-1 for True, 0 for False).
+                # Sort ascending: negate the score and boolean flags to put the
+                # highest score and exact matches first.
                 return (-score, -int(exact_url), -int(exact_path), idx)
 
             candidates.sort(key=sort_key)
@@ -142,12 +140,10 @@ class SnapshotMatcher:
             return snapshot, score
 
     def match(self, request: CapturedRequest) -> CapturedResponse:
-        """Resolves the given captured request to the best-matching captured response.
+        """Resolve ``request`` to its captured response.
 
-        Scans all snapshots, scores them using the MatchScorer, and reserves the next response
-        from the winning request's queue. Repeated equivalent requests are returned in captured
-        sequence order; once exhausted, the matcher raises ``NoMatchError`` rather than replaying
-        a stale response.
+        Repeated equivalent requests are returned in captured sequence order; once
+        exhausted, raises ``NoMatchError`` rather than replaying a stale response.
         """
         snapshot, _ = self._best(request)
         return snapshot.response

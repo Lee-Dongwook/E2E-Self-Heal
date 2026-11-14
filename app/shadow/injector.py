@@ -18,17 +18,9 @@ logger = structlog.get_logger(__name__)
 
 
 class MockInjector(IMockInjector):
-    """Playwright-specific mock injector.
+    """Playwright-specific mock injector that fulfils intercepted requests from snapshots.
 
-    Intercepts outgoing network requests and fulfills them using a matching snapshot response.
-
-    When a request has no matching snapshot, behavior is governed by ``miss_policy``:
-
-    - ``MissPolicy.STRICT`` (default): abort the request so the miss surfaces as a failure.
-    - ``MissPolicy.LENIENT``: fall back to the live network and let the request through.
-    - ``MissPolicy.RECORD_AND_AUGMENT``: fetch the live response, capture it into the
-      snapshot set (``recorded_snapshots`` and the active matcher), and fulfil the request
-      with the freshly recorded response.
+    Miss behaviour is governed by ``miss_policy``; see :class:`MissPolicy`.
     """
 
     def __init__(
@@ -46,20 +38,16 @@ class MockInjector(IMockInjector):
         self.matcher: SnapshotMatcher | None = None
 
     def inject_mock(self, target: Any, mock_data: Any) -> Any:
-        """Injects network mocks for the target pattern or page/context.
+        """Register interception for ``target`` and resolve mocks from ``mock_data``.
 
-        - If target is a string (e.g. a glob or regex pattern), registers request
-          interception for that pattern on the attached Playwright page/context.
-        - If target is a Playwright Page/BrowserContext object, attaches it as
-          the active target page/context and intercepts all requests ("**/*").
-
-        - mock_data can be a SnapshotMatcher or a list of NetworkSnapshot objects.
+        A string target is a glob or regex pattern on the attached Playwright
+        page/context; a Page/BrowserContext target becomes the attached context and
+        intercepts all requests (``**/*``). ``mock_data`` may be a ``SnapshotMatcher``,
+        a list of ``NetworkSnapshot`` values, or a single snapshot.
         """
-        # 1. Resolve mock_data into a SnapshotMatcher
         if isinstance(mock_data, SnapshotMatcher):
             self.matcher = mock_data
         elif isinstance(mock_data, list):
-            # Parse list elements to NetworkSnapshot if needed, or assume correct type
             snapshots = []
             for item in mock_data:
                 if isinstance(item, dict):
@@ -70,7 +58,6 @@ class MockInjector(IMockInjector):
         else:
             self.matcher = SnapshotMatcher([mock_data], options=self.match_options)
 
-        # 2. Resolve target and pattern
         pattern = "**/*"
         if isinstance(target, str):
             pattern = target
@@ -80,7 +67,6 @@ class MockInjector(IMockInjector):
         if not self.page_or_context:
             raise ValueError("No Playwright page or context attached to MockInjector")
 
-        # 3. Define the routing handlers
         def handle_request_sync(route: Any, request: Any) -> None:
             captured_req = self._capture_request(request)
             try:
@@ -101,7 +87,7 @@ class MockInjector(IMockInjector):
             except NoMatchError:
                 await self._handle_miss_async(route, captured_req)
 
-        # 4. Bind the route to the Playwright target (supports both sync and async APIs)
+        # Bind the route to the Playwright target (supports both sync and async APIs)
         if inspect.iscoroutinefunction(self.page_or_context.route):
             try:
                 loop = asyncio.get_running_loop()
@@ -190,7 +176,6 @@ class MockInjector(IMockInjector):
             route.fulfill(response=api_response)
             return
 
-        # Default: strict — fail on miss.
         logger.warning(
             "network_mock_no_match",
             url=redact_url(captured_req.url),
@@ -228,7 +213,6 @@ class MockInjector(IMockInjector):
             await route.fulfill(response=api_response)
             return
 
-        # Default: strict — fail on miss.
         logger.warning(
             "network_mock_no_match",
             url=redact_url(captured_req.url),

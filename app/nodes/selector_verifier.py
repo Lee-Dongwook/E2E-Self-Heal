@@ -1,9 +1,8 @@
 """Selector Verifier node: ground LLM-produced selectors against the live DOM.
 
-Sits between the Patch Generator and the Test Runner. Before spending a full Playwright
-run, it checks that each patched selector resolves to exactly one element on the real page.
-A hallucinated (0 matches) or ambiguous (>1 matches) selector is rejected: the just-applied
-patch is reverted and the loop re-patches with feedback, saving a wasted test run.
+Before spending a full Playwright run, check that each patched selector resolves to exactly
+one element. A hallucinated (0 matches) or ambiguous (>1 matches) selector is rejected: the
+just-applied patch is reverted and the loop re-patches with feedback.
 
 Graceful by design — if verification is disabled, no app URL is set, there are no selector
 edits, or the Node helper can't run, it passes through and lets the Test Runner arbitrate.

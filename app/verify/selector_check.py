@@ -53,7 +53,6 @@ _HELPER_FILENAME_PREFIX = ".e2e-healer-verify-"
 
 def _get_helper_path() -> Path:
     """Generate a unique helper path in cwd to prevent concurrent run collisions."""
-    # Include PID and random suffix to ensure uniqueness across concurrent runs
     unique_id = f"{os.getpid()}-{uuid.uuid4().hex[:8]}"
     return Path.cwd() / f"{_HELPER_FILENAME_PREFIX}{unique_id}.mjs"
 
@@ -63,11 +62,10 @@ def _run_helper(url: str, selectors: list[str]) -> dict[str, int]:
     """Run the Node helper once and parse its JSON output. Retries on transient failure."""
     script_path = _get_helper_path()
 
-    # Verify the path is allowed by sandbox
     assert_write_allowed(script_path, reason="selector_verifier_helper")
 
     try:
-        # Write the helper script (use write_text for simplicity - atomic not critical here)
+        # Disposable temp file: no atomic write needed.
         script_path.write_text(_HELPER_SCRIPT)
 
         cmd = [settings.node_cmd, str(script_path), url, json.dumps(selectors)]
@@ -80,14 +78,11 @@ def _run_helper(url: str, selectors: list[str]) -> dict[str, int]:
             timeout=90,
         )
     finally:
-        # Clean up only our specific helper file
-        # Use missing_ok=True to handle race conditions
+        # Only our own helper; missing_ok covers a concurrent unlink.
         try:
             script_path.unlink(missing_ok=True)
         except (PermissionError, OSError) as e:
-            # On Windows, unlinking an in-use file raises PermissionError.
-            # Log but don't fail - the file will be cleaned up by the OS or
-            # left behind (which is acceptable for a temp file).
+            # Windows raises PermissionError for an in-use file; leaving it behind is fine.
             logger.warning(
                 "selector_helper_cleanup_failed",
                 path=str(script_path),

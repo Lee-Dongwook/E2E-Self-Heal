@@ -2,8 +2,8 @@
 
 On failure, recent Playwright writes ``test-results/<name>/error-context.md`` containing a
 ``# Page snapshot`` section — a YAML accessibility tree of the page **at the moment of
-failure** (after navigation/interaction). This is a hallucination-resistant, deep-state
-view of the page, captured with no test modification and no trace parsing.
+failure** (after navigation/interaction). It is a deep-state view of the page with no test
+modification and no trace parsing.
 """
 
 import re
@@ -64,10 +64,7 @@ def _find_matching_contexts(
 ) -> tuple[list[Path], str | None]:
     """Find error-context.md files matching the test identity.
 
-    Returns (matching_paths, diagnostic_message).
-    When test_path is None, returns all contexts (legacy behavior).
-    When test_path is provided, uses Playwright's recorded test location when
-    available, falling back to the result-directory name for older artifacts.
+    Returns (matching_paths, diagnostic_message). With no ``test_path``, returns all contexts.
     """
     contexts: list[Path] = []
     for path in results_dir.rglob("*error-context*.md"):
@@ -79,7 +76,6 @@ def _find_matching_contexts(
         contexts.append(path)
 
     if test_path is None:
-        # Legacy: return all contexts, sorted by mtime
         return sorted(contexts, key=lambda p: p.stat().st_mtime, reverse=True), None
 
     # Playwright records the untruncated test path in the context body. Prefer
@@ -108,7 +104,6 @@ def _find_matching_contexts(
         matching = [p for p in contexts if test_stem in p.parent.name or test_name in str(p.parent)]
 
     if not matching:
-        # No match found — could be a new test, wrong results dir, or concurrent run
         logger.warning(
             "failure_snapshot_no_match",
             test_path=str(test_path),
@@ -118,8 +113,7 @@ def _find_matching_contexts(
         return [], f"No error-context.md found for test '{test_path}'"
 
     if len(matching) > 1:
-        # Multiple matches — ambiguous (concurrent runs or stale artifacts)
-        # Pick the newest but log the ambiguity
+        # Concurrent runs or stale artifacts can match several; newest wins.
         matching = sorted(matching, key=lambda p: p.stat().st_mtime, reverse=True)
         logger.warning(
             "failure_snapshot_ambiguous_match",
@@ -134,13 +128,8 @@ def _find_matching_contexts(
 def read_failure_snapshot(results_dir: Path, test_path: Path | None = None) -> str:
     """Return the ARIA page snapshot for the specified test, or '' if unavailable.
 
-    When ``test_path`` is provided, filters error-context.md files by Playwright's
-    recorded test location, falling back to the result-directory name for older
-    artifacts. When None, falls back to legacy behavior (newest file by mtime
-    across all results).
-
-    Returns '' when no results dir, no matching snapshot, or file read fails (TOCTOU-safe),
-    so callers degrade gracefully.
+    Returns '' when there is no results dir, no matching snapshot, or the file read fails, so
+    callers degrade gracefully.
     """
     return read_failure_snapshot_with_source(results_dir, test_path)[0]
 

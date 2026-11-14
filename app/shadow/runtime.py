@@ -1,8 +1,6 @@
 """Shadow Runtime entry point.
 
-Instantiating the runtime has no side effects, and all collaborating components
-are optional so a minimal runtime can be created and driven without wiring any
-real components yet.
+Instantiating the runtime has no side effects; all collaborators are optional.
 """
 
 import os
@@ -35,9 +33,7 @@ SHADOW_PLACEHOLDER_MESSAGE = (
 class ShadowRuntime(IShadowRuntime):
     """Minimal Shadow Runtime that manages a lifecycle and a :class:`ShadowContext`.
 
-    Collaborators are injected optionally so the runtime can be instantiated on
-    its own. :meth:`initialize` creates and activates a context; :meth:`shutdown`
-    deactivates and releases it. Both methods are idempotent.
+    Both lifecycle methods are idempotent.
     """
 
     def __init__(
@@ -62,11 +58,7 @@ class ShadowRuntime(IShadowRuntime):
         return self._context is not None and self._context.is_active
 
     def initialize(self) -> None:
-        """Create and activate the shadow context.
-
-        Idempotent: calling it again while already active leaves the existing
-        context in place. Access the context via :attr:`context`.
-        """
+        """Create and activate the shadow context; idempotent while already active."""
         if self.is_active:
             logger.info("shadow_runtime_already_initialized")
             return
@@ -80,11 +72,7 @@ class ShadowRuntime(IShadowRuntime):
         logger.info("shadow_runtime_initialized")
 
     def shutdown(self) -> None:
-        """Deactivate and release the shadow context.
-
-        Idempotent: a no-op if the runtime was never initialized or is already
-        shut down.
-        """
+        """Deactivate and release the shadow context; a no-op if already shut down."""
         if self._context is None:
             logger.info("shadow_runtime_already_shutdown")
             return
@@ -119,12 +107,10 @@ def run_shadow(
 ) -> ShadowRunResult | str:
     """Dedicated entry point for ``e2e-healer --shadow``.
 
-    When called without arguments (placeholder mode), exercises the minimal
-    runtime lifecycle (initialize → shutdown) and returns a human-readable
-    status message for the CLI to surface.
+    Without arguments (placeholder mode) it runs the minimal lifecycle
+    (initialize → shutdown) and returns a human-readable status message for the CLI.
 
-    When called with a *test_path* and *snapshot_id*, orchestrates a full
-    Shadow Replay run:
+    With a *test_path* and *snapshot_id* it orchestrates a full Shadow Replay run:
 
     1. Load the saved :class:`ShadowSnapshot` from the :class:`SnapshotStore`.
     2. Create a temporary test copy that imports a Shadow-aware Playwright fixture.

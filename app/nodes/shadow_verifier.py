@@ -1,8 +1,7 @@
 """Shadow Verifier node: run the patched test in the Shadow Runtime.
 
-Serves as a fast, offline gate before invoking the live, slow, and potentially
-flaky selector verifier and test runner. If the shadow replay fails, the loop
-re-patches with feedback, saving a wasted test run.
+A fast offline gate before the slow, flaky live verifier and test runner; a failed replay
+re-patches with feedback instead of wasting a real test run.
 """
 
 from pathlib import Path
@@ -35,18 +34,15 @@ def _shadow_feedback(result: ShadowRunResult) -> str:
 def shadow_verifier(state: AgentState) -> dict:
     """Verify the patched test script using the Shadow Runtime replay.
 
-    Temporarily writes the patched code to disk, executes the shadow replay,
-    and reverts the changes on disk/state if the replay fails. The rollback baseline
-    is kept in graph state, never inferred from the mutable file on disk.
-
-    If no snapshot exists for the test, skips shadow verification gracefully.
+    Writes the patched code to disk, executes the replay, and rolls disk and state back on
+    failure. The rollback baseline is kept in graph state, never inferred from the mutable
+    file on disk. Skips gracefully when no snapshot exists for the test.
     """
     test_path = Path(state["test_script_path"])
     snapshot_id = test_path.stem
 
     logger.info("shadow_verify_started", test_script_path=str(test_path), snapshot_id=snapshot_id)
 
-    # Check if the snapshot exists before running to skip gracefully if absent
     cfg = ShadowConfig()
     workspace = ShadowWorkspace(cfg)
     store = SnapshotStore(workspace)
@@ -65,7 +61,6 @@ def shadow_verifier(state: AgentState) -> dict:
     rollback_code = state.get("rollback_code", state["original_code"])
     candidate_code = state["current_code"]
 
-    # Write the current candidate code to disk so run_shadow can execute it
     atomic_write(test_path, candidate_code)
 
     try:
@@ -91,7 +86,7 @@ def shadow_verifier(state: AgentState) -> dict:
                 ),
             }
 
-        # Replay failed: rollback both disk and state to the shared baseline.
+        # Replay failed: roll back both disk and state to the shared baseline.
         logger.info("shadow_verify_failed", score=result.score)
         atomic_write(test_path, rollback_code)
 
@@ -115,7 +110,6 @@ def shadow_verifier(state: AgentState) -> dict:
 
     except Exception as e:
         logger.exception("shadow_verify_exception")
-        # In case of any exception, revert changes to disk
         atomic_write(test_path, rollback_code)
 
         memory_candidate = state.get("memory_report", {}).get("active", False)

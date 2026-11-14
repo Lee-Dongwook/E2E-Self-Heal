@@ -428,9 +428,7 @@ def _analyze_diff_tree_sitter(git_diff: str) -> list[DomDiff]:
 def analyze_diff(git_diff: str) -> list[DomDiff]:
     """Parse the JSX/TSX regions of a git diff into lightweight DOM diffs.
 
-    Uses tree-sitter when available and falls back to regex on import or
-    parsing failure.
-
+    Uses tree-sitter when available and falls back to regex on import or parsing failure.
     """
     if _HAS_TREE_SITTER:
         try:

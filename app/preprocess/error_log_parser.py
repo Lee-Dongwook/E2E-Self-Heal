@@ -47,21 +47,17 @@ def parse_error_log(raw_log: str | None) -> str:
     if error_match:
         parts.append(error_match.group(1).strip())
 
-    # `expect()` assertion signals: the targeted locator and the expected/received
-    # mismatch. These are the strongest healing hints for assertion-style failures.
+    # `expect()` assertion signals are the strongest healing hints for assertion-style failures.
     for pattern in (_LOCATOR_RE, _EXPECTED_RE, _RECEIVED_RE):
         match = pattern.search(raw_log)
         if match:
             parts.append(match.group(1).strip()[:_MAX_LINE_CHARS])
 
-    # Strict-mode multiplicity is a too-broad-selector signal. Add it only when the
-    # `Error:` reason didn't already carry it, to avoid duplicating the same phrase.
+    # Only added when the `Error:` reason doesn't already carry the phrase.
     resolved_match = _RESOLVED_RE.search(raw_log)
     if resolved_match and not any(resolved_match.group(0) in part for part in parts):
         parts.append(f"strict mode: {resolved_match.group(0)}")
 
-    # Prefer the stack-trace `at ...` line (the actual failing line) over the earlier
-    # test-header location, so the Diagnoser points the patch at the right line.
     loc_match = _AT_LOCATION_RE.search(raw_log) or _LOCATION_RE.search(raw_log)
     if loc_match:
         parts.append(f"at {loc_match.group(1)}:{loc_match.group(2)}")

@@ -1,8 +1,8 @@
 """Render and compare safety benchmark reports.
 
 The JSON report is the machine-readable artifact (and the committed baseline). This module
-turns it into a Markdown summary for humans and computes the change against a baseline run,
-so a regression shows up as a trend, not only as a snapshot.
+turns it into a Markdown summary and computes the change against a baseline run, so a
+regression shows up as a trend, not only as a snapshot.
 """
 
 from __future__ import annotations

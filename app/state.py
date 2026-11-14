@@ -106,22 +106,22 @@ class AgentState(TypedDict):
     test_script_path: str  # path to the test file under repair
     original_code: str  # the original test script
     current_code: str  # test script as modified in the current loop
-    # Last candidate accepted by verification. Nodes use this single value for rollback
-    # instead of deriving a baseline from the mutable file on disk.
+    # Last candidate accepted by verification; nodes use it for rollback instead of deriving a
+    # baseline from the mutable file on disk.
     rollback_code: NotRequired[str]
     error_log: str  # latest Playwright error log (abstracted)
     dom_diff_context: list[dict]  # DOM changes from AST parsing
-    # The failing locator when the diff removes no line naming it (selector_diff_check), else
-    # absent or "". A fact for the prompts: the selector was not renamed, so it is not the fix.
+    # The failing locator when the diff removes no line naming it (selector_diff_check). A fact
+    # for the prompts: the selector was not renamed, so it is not the fix.
     untouched_selector: NotRequired[str]
-    # Selectors of the look-alikes that replaced the failing element (ambiguous_target), else
-    # absent or []. Non-empty means the test cannot say which one it meant: refused up front.
+    # Selectors of the look-alikes that replaced the failing element (ambiguous_target). Non-empty
+    # means the test cannot say which one it meant: refused up front.
     ambiguous_candidates: NotRequired[list[str]]
     dom_snapshot: str  # ARIA snapshot of the failing page (from error-context.md)
     dom_snapshot_source: NotRequired[str]  # source error-context.md path for evidence references
     analysis_report: str  # Diagnoser's failure-cause report
     # Decline Adjudicator's verdict about a candidate that proposed no change. Absent until the
-    # model declines, and absent for the rest of the run when the verdict could not be obtained.
+    # model declines, and stays absent when no verdict could be obtained.
     diagnosis_verdict: NotRequired[DiagnosisVerdict]
     memory_enabled: NotRequired[bool]  # opt in/out of local healing-history lookup and storage
     detected_framework: NotRequired[str]  # optional framework hint for prompt strategy selection
@@ -138,7 +138,7 @@ class AgentState(TypedDict):
     evidence_history: NotRequired[list[EvidenceLoopRecord]]
     graph_path: NotRequired[list[GraphStepRecord]]  # every executed node, in order
     # Number of values the evidence boundary replaced while preparing model prompts, and whether
-    # anything was replaced at all. Reported in the result as provider provenance.
+    # anything was replaced. Reported in the result as provider provenance.
     redaction_count: NotRequired[int]
     redaction_applied: NotRequired[bool]
     loop_count: int  # infinite-loop guard (max: settings.max_loops)

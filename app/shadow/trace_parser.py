@@ -2,10 +2,8 @@
 
 The archive holds JSONL trace streams (``*.trace`` / ``*.network``) plus a
 ``resources/`` folder of SHA-1 addressed response bodies. Network activity lives
-in ``resource-snapshot`` events, each a HAR entry already pairing a request with
-its response. We map those entries onto the existing schema models
-(:class:`CapturedRequest`, :class:`CapturedResponse`, :class:`NetworkSnapshot`);
-snapshot assembly, persistence and replay are later stages.
+in ``resource-snapshot`` events, each a HAR entry pairing a request with its
+response; those entries map onto the existing schema models.
 """
 
 import base64
@@ -110,7 +108,7 @@ class PlaywrightTraceParser(ITraceParser):
                     logger.warning("trace_line_skipped", stream=name, line=line_no)
                     continue
                 if not isinstance(event, dict) or event.get("type") != _RESOURCE_SNAPSHOT:
-                    continue  # ignore non-network trace events
+                    continue
                 snapshot = event.get("snapshot")
                 if isinstance(snapshot, dict):
                     entries.append(snapshot)
@@ -144,7 +142,7 @@ class PlaywrightTraceParser(ITraceParser):
 
         response = self._to_response(archive, entry.get("response"))
         if response is None:
-            # Pending/failed request; NetworkSnapshot needs both halves, so drop.
+            # Pending or failed request; a snapshot needs both halves, so drop it.
             logger.warning("network_event_skipped", reason="missing_response", url=request.url)
             return None
 

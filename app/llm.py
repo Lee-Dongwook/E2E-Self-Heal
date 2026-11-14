@@ -36,9 +36,8 @@ from app.rate_limit import DEFAULT_COOLDOWN_SECONDS, Pacer, RateLimit, pacing_pa
 from app.schemas import DiagnosisVerdictOutput, PatchOutput, ReviewOutput
 from app.shadow.redaction import redact_text, redact_value
 
-# Anthropic and Ollama are optional dependencies: users who don't use them shouldn't have to
-# install langchain-anthropic / langchain-ollama. The guarded imports stay at module top per
-# the imports-at-top rule; the matching provider branch checks availability at build time.
+# Anthropic and Ollama are optional dependencies: the guarded imports stay at module top per
+# the imports-at-top rule, and the provider branch checks availability at build time.
 try:
     from langchain_anthropic import ChatAnthropic  # pyright: ignore[reportMissingImports]
 except ImportError:  # pragma: no cover - exercised only without the extra installed
@@ -53,30 +52,29 @@ logger = structlog.get_logger(__name__)
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
-# Per-provider endpoints, used both to build the client and to report provenance. Ollama runs
-# models locally with no credential; the native endpoint (no OpenAI /v1 path).
+# Per-provider endpoints, used to build the client and report provenance; Ollama's is the
+# native endpoint (no OpenAI /v1 path).
 _OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434"
 _ANTHROPIC_DEFAULT_BASE_URL = "https://api.anthropic.com"
 _OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 _NVIDIA_DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
 _ORCAROUTER_DEFAULT_BASE_URL = "https://api.orcarouter.ai/v1"
 
-# DeepSeek's Responses API endpoint. It is stateless (no chat-completions /v1 path), and the
-# Responses API currently supports the deepseek-v4-flash model only.
+# DeepSeek's Responses API is stateless (no /v1 path) and currently supports only
+# deepseek-v4-flash.
 _DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com"
 _DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-flash"
 
-# OpenAI's native Structured Outputs: strict json_schema guarantees the response matches
-# PatchOutput/ReviewOutput exactly (the same mechanism the original beta.parse used). Applied
-# to the OpenAI-SDK-driven providers; other backends fall back to their default method.
+# OpenAI's native Structured Outputs: strict json_schema guarantees the response matches the
+# requested schema. Other backends fall back to their default method.
 _STRICT_JSON_SCHEMA: dict[str, Any] = {"method": "json_schema", "strict": True}
 _STRICT_SCHEMA_PROVIDERS: frozenset[str] = frozenset({"openai", "nvidia"})
 
 
 class OutputLimitReached(ValueError):
-    """The provider stopped at the output-token limit before the answer was complete (#453).
+    """The provider stopped at the output-token limit before the answer was complete.
 
-    Reasoning models can spend the whole budget thinking and return nothing usable. The
+    Reasoning models can spend the whole budget thinking and return nothing usable, so the
     tenacity wrappers below retry such a call with a larger budget instead of the same one.
     """
 
@@ -90,10 +88,9 @@ class OutputLimitReached(ValueError):
 
 
 class EmptyResponse(ValueError):
-    """The provider answered with nothing, and didn't say it hit the output limit (#453).
+    """The provider answered with nothing, and didn't say it hit the output limit.
 
-    Most often the budget went to reasoning anyway (DeepSeek's empty completions on long
-    diagnoses are the case #453 reports), so it is retried with a larger budget too.
+    Most often the budget went to reasoning anyway, so it is retried with a larger budget too.
     """
 
     def __init__(self) -> None:
@@ -106,8 +103,8 @@ class EmptyResponse(ValueError):
 class LLMClient(Protocol):
     """Provider-agnostic surface the nodes call: free-text and structured completion.
 
-    Implementations must ``raise`` on an empty/unparsed response (never return ``None``)
-    so the tenacity retry and the Patch Generator feedback loop keep working, and raise
+    Implementations must raise on an empty/unparsed response (never return ``None``) so the
+    tenacity retry and the Patch Generator feedback loop keep working, and raise
     :class:`OutputLimitReached` when the response was cut off by the output-token limit.
     ``max_tokens`` overrides the configured output budget for one call; ``None`` keeps it.
     """
@@ -153,9 +150,8 @@ def _stopped_at_output_limit(message: BaseMessage) -> bool:
 class LangChainClient:
     """Adapts a LangChain ``BaseChatModel`` to the ``LLMClient`` interface.
 
-    ``with_structured_output`` normalizes each provider's Structured Outputs mechanism
-    (OpenAI json-schema/tool-calling, Anthropic tool use) into one call that returns a
-    validated Pydantic model, so the schema enforcement (PatchOutput/ReviewOutput) holds
+    ``with_structured_output`` normalizes each provider's Structured Outputs mechanism into a
+    call returning a validated Pydantic model, so PatchOutput/ReviewOutput enforcement holds
     regardless of backend.
     """
 
@@ -166,8 +162,7 @@ class LangChainClient:
         budget_field: str = "max_tokens",
     ) -> None:
         self._model = model
-        # Per-provider Structured Outputs tuning (e.g. OpenAI/NVIDIA use strict json_schema,
-        # which is OpenAI's native Structured Outputs). Empty = the model's default method.
+        # Per-provider Structured Outputs tuning; empty = the model's default method.
         self._structured_kwargs = structured_kwargs or {}
         # The chat model's output-budget field: `max_tokens`, or Ollama's `num_predict`.
         self._budget_field = budget_field
@@ -242,13 +237,9 @@ class LangChainClient:
 class DeepSeekResponsesClient:
     """Calls DeepSeek's Responses API directly through the OpenAI SDK.
 
-    DeepSeek exposes the Responses API shape (``client.responses.create``) at
-    ``https://api.deepseek.com``; unlike the LangChain chat path used by the other
-    providers, the Responses API is stateless so every call carries the full prompt.
-    Structured output is requested with the Responses API ``text.format`` json_schema
-    parameter (documented as supported by DeepSeek) and the returned JSON is then
-    validated against the Pydantic schema, so PatchOutput/ReviewOutput enforcement
-    holds without LangChain.
+    The Responses API is stateless, so every call carries the full prompt. Structured output is
+    requested with the ``text.format`` json_schema parameter and the returned JSON is then
+    validated against the Pydantic schema, so enforcement holds without LangChain.
     """
 
     def __init__(
@@ -259,7 +250,7 @@ class DeepSeekResponsesClient:
         max_output_tokens: int,
         timeout_seconds: float,
     ) -> None:
-        # max_retries=0: tenacity, around every call, is the only retry layer (#471).
+        # max_retries=0: tenacity, wrapped around every call, is the only retry layer.
         self._client = OpenAI(
             api_key=api_key, base_url=base_url, timeout=timeout_seconds, max_retries=0
         )
@@ -333,10 +324,10 @@ class DeepSeekResponsesClient:
 def resolved_endpoint(provider: LLMProvider) -> str:
     """Return the endpoint the client for ``provider`` talks to.
 
-    Single source of truth shared by the client factory and by provider provenance, so the
-    reported endpoint is the one evidence really left for rather than the raw configuration
-    (an empty ``E2E_HEALER_LLM_BASE_URL`` means the provider default). Anthropic currently
-    has no configurable endpoint: ``ChatAnthropic`` is built without a ``base_url``.
+    Shared by the client factory and provider provenance, so the reported endpoint is the one
+    evidence really left for rather than raw configuration (an empty
+    ``E2E_HEALER_LLM_BASE_URL`` means the provider default). Anthropic has no configurable
+    endpoint.
     """
     if provider == "anthropic":
         return _ANTHROPIC_DEFAULT_BASE_URL
@@ -361,11 +352,7 @@ def _require_key() -> str:
 
 
 def _openai_api_key() -> str:
-    """OpenAI key: prefer the generic setting, else the standard ``OPENAI_API_KEY`` env var.
-
-    Lets a user with an existing ``OPENAI_API_KEY`` drop in without duplicating it under the
-    ``E2E_HEALER_`` prefix.
-    """
+    """OpenAI key: prefer the generic setting, else the standard ``OPENAI_API_KEY`` env var."""
     key = settings.llm_api_key or os.environ.get("OPENAI_API_KEY", "")
     if not key:
         raise RuntimeError(
@@ -375,11 +362,7 @@ def _openai_api_key() -> str:
 
 
 def _anthropic_api_key() -> str:
-    """Anthropic key: prefer the generic setting, else the standard ``ANTHROPIC_API_KEY`` env var.
-
-    Lets a user with an existing ``ANTHROPIC_API_KEY`` drop in without duplicating it under
-    the ``E2E_HEALER_`` prefix.
-    """
+    """Anthropic key: prefer the generic setting, else ``ANTHROPIC_API_KEY`` from the env."""
     key = settings.llm_api_key or os.environ.get("ANTHROPIC_API_KEY", "")
     if not key:
         raise RuntimeError(
@@ -401,9 +384,8 @@ def _deepseek_api_key() -> str:
 def _build_deepseek_client() -> DeepSeekResponsesClient:
     """Build the DeepSeek Responses API client from settings.
 
-    The DeepSeek Responses API currently supports only ``deepseek-v4-flash``, so an
-    explicit model override is rejected unless the base URL points at a custom
-    (OpenAI-compatible) endpoint that may serve other models.
+    The default DeepSeek endpoint serves only ``deepseek-v4-flash``, so a model override is
+    rejected unless the base URL points at a custom endpoint that may serve other models.
     """
     base_url = resolved_endpoint("deepseek")
     model = settings.llm_model or _DEEPSEEK_DEFAULT_MODEL
@@ -428,14 +410,11 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
     Model kwargs are splatted from a dict because the chat-model classes expose ``model`` /
     ``max_tokens`` as pydantic aliases the type checker can't see on the constructor.
 
-    Every client gets ``settings.llm_timeout_seconds`` (#471): LangChain's defaults pass
-    ``timeout=None`` to the SDKs, which disables their own limits, so a provider that accepts
-    the connection and never answers would block forever; the tenacity retries can't help with
-    a call that never returns. A timeout raises like any other provider error.
-
-    SDK-level retries are off (``max_retries=0``) so tenacity, wrapped around every call, is
-    the only retry layer: otherwise each tenacity attempt hides up to three SDK attempts, and
-    one logical call could take 3 x 3 x the timeout. Ollama's client has no retries of its own.
+    Every client gets ``settings.llm_timeout_seconds``: LangChain's defaults pass
+    ``timeout=None`` to the SDKs, which disables their limits, so a provider that never answers
+    would block forever. SDK-level retries are off (``max_retries=0``) so tenacity, wrapped
+    around every call, is the only retry layer: otherwise each tenacity attempt hides up to
+    three SDK attempts and one logical call could take 3 x 3 x the timeout.
     """
     if provider == "anthropic":
         if ChatAnthropic is None:
@@ -443,9 +422,8 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
                 "provider=anthropic requires the optional 'anthropic' extra: "
                 'install it with pip install "ai-driven-e2e[anthropic]"'
             )
-        # Anthropic has no OpenAI-style response_format; with_structured_output maps
-        # PatchOutput/ReviewOutput onto Claude tool-use (the default method), so the schema
-        # is still enforced. That's why anthropic is absent from _STRICT_SCHEMA_PROVIDERS.
+        # Anthropic has no OpenAI-style response_format; with_structured_output maps the schema
+        # onto Claude tool-use, so anthropic is absent from _STRICT_SCHEMA_PROVIDERS.
         params: dict[str, Any] = {
             "model": settings.llm_model,
             "api_key": _anthropic_api_key(),
@@ -461,10 +439,9 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
                 'install it with pip install "ai-driven-e2e[ollama]"'
             )
         # Fully local, no API key. Ollama's native structured output (format=<json schema>,
-        # the default with_structured_output method) validates against PatchOutput/ReviewOutput;
-        # a parse/validation failure raises out of structured() so tenacity retries and, on
-        # exhaustion, the Patch Generator feedback loop kicks in (local models are less reliable
-        # at strict JSON). num_predict is Ollama's token-cap name.
+        # the default with_structured_output method) validates against the schema; a parse
+        # failure raises so tenacity retries, then the Patch Generator feedback loop takes over
+        # (local models are less reliable at strict JSON). num_predict is its token-cap name.
         params = {
             "model": settings.llm_model,
             "base_url": resolved_endpoint("ollama"),
@@ -474,8 +451,7 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
         }
         return ChatOllama(**params)
     if provider == "openai":
-        # Native OpenAI, or an Azure / OpenAI-compatible endpoint via
-        # E2E_HEALER_LLM_BASE_URL; the resolved default is api.openai.com.
+        # Native OpenAI, or an Azure / OpenAI-compatible endpoint via E2E_HEALER_LLM_BASE_URL.
         params = {
             "model": settings.llm_model,
             "api_key": _openai_api_key(),
@@ -493,8 +469,8 @@ def _build_chat_model(provider: LLMProvider) -> BaseChatModel:
             max_tokens=settings.llm_max_tokens,
             timeout_seconds=settings.llm_timeout_seconds,
         ).build_chat_model()
-    # nvidia: OpenAI-compatible NIM endpoint driven by the OpenAI SDK; needs an explicit
-    # base_url (folded in from the legacy nvidia_* settings by the config layer).
+    # nvidia: OpenAI-compatible NIM endpoint driven by the OpenAI SDK; the config layer folds
+    # in the legacy nvidia_* settings.
     params = {
         "model": settings.llm_model,
         "api_key": _require_key(),
@@ -511,32 +487,31 @@ def _get_client() -> LLMClient:
     """Build the provider client lazily so importing never needs credentials.
 
     Instantiating at import time would require an API key just to collect tests or run
-    ``--help``; deferring it here keeps import side-effect-free and fails only when the
-    LLM is actually called without a key configured.
+    ``--help``; deferring keeps import side-effect-free and fails only when the LLM is called
+    without a key.
     """
     provider = settings.llm_provider
     if provider == "deepseek":
-        # DeepSeek uses the Responses API (stateless), not the LangChain chat path.
         return _build_deepseek_client()
     structured_kwargs = _STRICT_JSON_SCHEMA if provider in _STRICT_SCHEMA_PROVIDERS else {}
     budget_field = "num_predict" if provider == "ollama" else "max_tokens"
     return LangChainClient(_build_chat_model(provider), structured_kwargs, budget_field)
 
 
-# The output budget for the current attempt of an LLM call. `None` means the configured
-# `settings.llm_max_tokens`; it only changes after a response was cut off (#453).
+# The output budget for the current attempt of an LLM call; `None` means the configured
+# `settings.llm_max_tokens`. It only changes after a response was cut off.
 _output_budget: ContextVar[int | None] = ContextVar("llm_output_budget", default=None)
 # A cut-off doubles the budget for the next attempt, up to this multiple of the configured one:
 # 4096 -> 8192 -> 16384 over tenacity's three attempts.
 _OUTPUT_BUDGET_CEILING_FACTOR = 4
-# How much of a provider's error body ``llm_attempt_failed`` keeps (#480).
+# How much of a provider's error body ``llm_attempt_failed`` keeps.
 _BODY_EXCERPT_CHARS = 300
 
 
 def _before_attempt(retry_state: RetryCallState) -> None:
     if retry_state.attempt_number == 1:
         _output_budget.set(None)
-    # Every attempt, first ones included, waits out a cooldown another worker's 429 set (#456).
+    # Every attempt, first ones included, waits out a cooldown another worker's 429 set.
     waited = _pacer().wait_turn()
     if waited >= 1:
         logger.info(
@@ -570,7 +545,7 @@ def _response_body(exc: BaseException) -> str | None:
 
     OpenAI-compatible and Anthropic errors keep the HTTP response; Ollama's ``ResponseError``
     keeps only the error text. The raw body is preferred: LangChain's wrapper of a 400 keeps
-    the provider's message and drops its error ``type`` and ``code``.
+    the provider's message but drops its error ``type`` and ``code``.
     """
     try:
         text = getattr(getattr(exc, "response", None), "text", None)
@@ -589,10 +564,9 @@ def _excerpt(text: str) -> str:
     """The start of a provider's error body, safe to log.
 
     A JSON body is redacted as a structure first: a secret under a sensitive key
-    (``"api_key": "..."``, ``"password": "..."``) matches no free-text pattern, and the log
-    processor only ever sees the finished string. Then the free-text patterns run, and only
-    then is the text cut: a secret split at the cut would no longer match, and its first half
-    would be logged.
+    (``"api_key": "..."``) matches no free-text pattern, and the log processor only ever sees
+    the finished string. Then the free-text patterns run, and only then is the text cut: a
+    secret split at the cut would no longer match, and its first half would be logged.
     """
     try:
         text = json.dumps(redact_value(json.loads(text)), ensure_ascii=False)
@@ -605,7 +579,7 @@ def _excerpt(text: str) -> str:
 
 
 def _log_failed_attempt(retry_state: RetryCallState) -> None:
-    """Log every failed model call, not just the last: retries otherwise hide them (#480)."""
+    """Log every failed model call, not just the last: retries otherwise hide them."""
     outcome = retry_state.outcome
     if outcome is None or not outcome.failed:
         return
@@ -661,7 +635,7 @@ def _rate_limit(exc: BaseException | None) -> RateLimit | None:
 
 
 def _cool_down_after_rate_limit(retry_state: RetryCallState) -> None:
-    """A 429 pauses every process sharing this key until the provider's retry time (#456)."""
+    """A 429 pauses every process sharing this key until the provider's retry time."""
     outcome = retry_state.outcome
     if outcome is None or not outcome.failed:
         return
@@ -693,8 +667,8 @@ _BACKOFF = wait_exponential(multiplier=1, min=4, max=10) + wait_random(0, 2)
 def _wait_before_retry(retry_state: RetryCallState) -> float:
     """Exponential backoff with jitter, so parallel workers don't retry in lockstep.
 
-    After a 429 the shared cooldown already holds the next attempt back for as long as the
-    provider asked (``_before_attempt``), so no backoff is added on top.
+    After a 429 the shared cooldown in ``_before_attempt`` already holds the next attempt back
+    for as long as the provider asked, so no backoff is added on top.
     """
     outcome = retry_state.outcome
     if outcome is not None and _retry_in(_rate_limit(outcome.exception())) is not None:
@@ -743,8 +717,8 @@ def generate_diagnosis(system_prompt: str, user_prompt: str) -> str:
 def generate_patch(system_prompt: str, user_prompt: str) -> PatchOutput:
     """Call the LLM with an enforced PatchOutput schema and return the parsed result.
 
-    Raises on a missing/malformed parse so tenacity retries; the Patch Generator node
-    is responsible for the feedback loop when retries are exhausted.
+    Raises on a missing/malformed parse so tenacity retries; the Patch Generator node owns the
+    feedback loop once retries are exhausted.
     """
     return _get_client().structured(
         system_prompt, user_prompt, PatchOutput, max_tokens=_output_budget.get()
@@ -755,8 +729,8 @@ def generate_patch(system_prompt: str, user_prompt: str) -> PatchOutput:
 def generate_review(system_prompt: str, user_prompt: str) -> ReviewOutput:
     """Call the LLM with an enforced ReviewOutput schema for source-level suggestions.
 
-    Mirrors ``generate_patch``: Structured Outputs keep the Reviewer to advisory findings
-    (never free-form rewrites). Raises on a missing parse so tenacity retries.
+    Structured Outputs keep the Reviewer to advisory findings (never free-form rewrites);
+    raises on a missing parse so tenacity retries.
     """
     return _get_client().structured(
         system_prompt, user_prompt, ReviewOutput, max_tokens=_output_budget.get()
@@ -767,8 +741,8 @@ def generate_review(system_prompt: str, user_prompt: str) -> ReviewOutput:
 def generate_diagnosis_verdict(system_prompt: str, user_prompt: str) -> DiagnosisVerdictOutput:
     """Call the LLM with an enforced DiagnosisVerdictOutput schema (the decline adjudicator).
 
-    Mirrors ``generate_patch``: a structured call, so an unparseable verdict retries and then
-    raises. The adjudicator treats exhausted retries as "no verdict" rather than as evidence.
+    Raises on a missing parse so tenacity retries. The adjudicator treats exhausted retries as
+    "no verdict" rather than as evidence.
     """
     return _get_client().structured(
         system_prompt, user_prompt, DiagnosisVerdictOutput, max_tokens=_output_budget.get()

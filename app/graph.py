@@ -44,7 +44,7 @@ def route_at_start(state: AgentState) -> str:
     """Refuse an ambiguous target before any work; otherwise start with the memory lookup.
 
     The ambiguity is read from the diff, not judged by a model, and no candidate can resolve
-    it, so spending a loop (or a remembered repair) on it would only produce a guess.
+    it, so spending a loop on it would only produce a guess.
     """
     if state.get("ambiguous_candidates"):
         return _REFUSAL_FINALIZER
@@ -87,18 +87,15 @@ def refusal_finalizer(state: AgentState) -> dict:
         # diff context is weaker evidence and must not hide a known provider outage.
         reason = RefusalReason.PROVIDER_ERROR
     elif not verification.get("ok", True) or state.get("ambiguous_candidates"):
-        # A failed live-DOM check proves this candidate is unusable, but does not prove a
-        # product behavior change. Prefer the observed ambiguity over that speculation. The
-        # diff-level check (several look-alikes replaced the failing element) is the same
-        # observation made before any candidate exists.
+        # A failed live-DOM check proves the candidate unusable, not a product change. The
+        # diff-level check is the same observation made before any candidate exists.
         reason = RefusalReason.AMBIGUOUS_TARGET
     elif not state["dom_diff_context"]:
         reason = RefusalReason.INSUFFICIENT_EVIDENCE
     elif state.get("diagnosis_verdict") is DiagnosisVerdict.BEHAVIOUR_CHANGE:
-        # The model declined to patch and, asked directly, judged that no locator or wait fix
-        # preserves the test's intent. Ranked below the checks above because they are
-        # observations while this is a model judgment, and below a missing diff because a run
-        # with no DOM change cannot support a claim about product behaviour.
+        # The model declined to patch and judged that no locator or wait fix preserves the
+        # test's intent. Ranked below the checks above because they are observations, and
+        # below a missing diff because no DOM change cannot support a product claim.
         reason = RefusalReason.LIKELY_PRODUCT_REGRESSION
     else:
         reason = RefusalReason.LOOP_CAP_REACHED
@@ -116,7 +113,7 @@ def declined_candidate(state: AgentState) -> bool:
     """Did the model answer, and answer with no change at all?
 
     Only a successful provider call counts: a failed one leaves ``patch_instructions`` empty
-    too, and that is an outage to report as ``provider_error``, not a decline to interpret.
+    too, and that is an outage to report as ``provider_error``, not a decline.
     """
     if not state.get("patch_provider_report", {}).get("ok", True):
         return False
@@ -134,7 +131,7 @@ def route_after_patch(state: AgentState) -> str:
     boundary_ok = state.get("boundary_report", {}).get("ok", True)
     application_ok = state.get("patch_application_report", {}).get("ok", True)
     # A boundary violation is permanent — the target path can't change mid-run, so retrying
-    # the Patch Generator can never succeed. End immediately instead of burning loop budget.
+    # the Patch Generator can never succeed. End instead of burning loop budget.
     if not boundary_ok:
         return _REFUSAL_FINALIZER
     if not application_ok:
@@ -289,8 +286,8 @@ def build_graph() -> CompiledStateGraph:
 def build_review_graph() -> CompiledStateGraph:
     """Build the review-mode graph: Diagnoser → Reviewer → END.
 
-    Reuses the Diagnoser to infer the root cause, then advises a source-level fix. No patch,
-    verify, test-run, or loop — review mode is strictly read-only and advisory.
+    Reuses the Diagnoser, then advises a source-level fix. No patch, verify, test-run, or
+    loop — review mode is strictly read-only and advisory.
     """
     graph = StateGraph(AgentState)
     graph.add_node("diagnoser", diagnoser)

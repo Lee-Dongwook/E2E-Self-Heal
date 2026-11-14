@@ -25,8 +25,7 @@ DIAGNOSIS_UNAVAILABLE = (
 def build_diagnosis_prompt(prepared: PreparedEvidence, current_code: str) -> str:
     """Assemble the bounded context the Diagnoser asks the model about.
 
-    Shared with the decline adjudicator so both see exactly the same evidence: the error log,
-    the DOM changes, the ARIA snapshot, and the JSX chunk around the failing line. The evidence
+    Shared with the decline adjudicator so both see exactly the same evidence. The evidence
     is already redacted by ``prepare_evidence``; only the test source is passed through as-is,
     because the Patch Generator's instructions must match it byte for byte.
     """
@@ -47,9 +46,8 @@ def build_diagnosis_prompt(prepared: PreparedEvidence, current_code: str) -> str
 def diagnoser(state: AgentState) -> dict:
     """Map the failing selector to the DOM change and produce an ``analysis_report``.
 
-    On any LLM/provider failure, log and return a degraded but valid ``analysis_report``
-    rather than crashing the graph (Rule 10) — the Router can then still advance or
-    terminate gracefully.
+    On LLM/provider failure, log and return a degraded but valid report rather than crashing
+    the graph, so the Router can still advance or terminate gracefully.
     """
     logger.info("diagnoser_started", loop_count=state["loop_count"])
     prepared = prepare_evidence(state)

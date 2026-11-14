@@ -2,15 +2,14 @@
 
 The Patch Generator tells the engine which line to replace by quoting it. Models often re-type
 that line rather than copy it: single quotes for double, the indentation dropped, spaces inside
-parentheses. These helpers let ``_apply`` recognise such a quote as the line it names (#404),
-and write the replacement in the file's own formatting rather than the model's.
+parentheses. These helpers let ``_apply`` recognise such a quote as the line it names, and write
+the replacement in the file's own formatting rather than the model's.
 
 Only formatting is forgiven. Two lines match when they have the same code *tokens* outside
-string literals (spacing between tokens is ignored, but ``await page`` never equals
-``awaitpage``, nor ``++`` equal ``+ +``) and the same string literal *values*, whatever quote
-delimits them. A line with a template literal, a comment, a regex or a division (any ``/`` or
-backtick outside a quoted string) is never matched loosely; the caller falls back to exact
-comparison, so anything this scanner cannot read with certainty stays strict.
+string literals (so ``await page`` never equals ``awaitpage``, nor ``++`` equal ``+ +``) and the
+same string literal *values*, whatever quote delimits them. A line with a template literal, a
+comment, a regex or a division (any ``/`` or backtick outside a quoted string) is never matched
+loosely: anything this scanner cannot read with certainty stays strict.
 """
 
 import re
@@ -160,10 +159,9 @@ def restyle_like(line: str, original: str, replacement: str) -> str:
     """Write ``replacement`` in the formatting of ``line``, which ``original`` re-types.
 
     When the replacement only changes literal values, ``line`` itself is rebuilt with the new
-    values, so its spacing and quotes survive exactly. Otherwise the replacement is written
-    with ``line``'s indentation and trailing whitespace, its literals converted to ``line``'s
-    quote when every literal there uses the same one and the value does not contain it. The
-    result means what ``replacement`` means; callers still validate the line written.
+    values. Otherwise the replacement keeps ``line``'s indentation and trailing whitespace, and
+    its literals use ``line``'s quote when every literal there uses the same one and the value
+    does not contain it. Callers still validate the line written.
     """
     # Spaces and tabs only: a newline in the replacement must survive to the scope gate that
     # rejects multi-line replacements.

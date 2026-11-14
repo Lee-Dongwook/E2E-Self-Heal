@@ -42,7 +42,6 @@ class MatchScorer:
 
         Returns -1.0 if the requests are incompatible (different method or non-matching paths).
         """
-        # 1. HTTP Method must match exactly (case-insensitive)
         if req1.method.upper() != req2.method.upper():
             return -1.0
 
@@ -53,23 +52,19 @@ class MatchScorer:
         if not self.options.allow_cross_origin and origin1 != origin2:
             return -1.0
 
-        # Normalize path and query
         path1, query1 = self.normalizer.normalize_url(req1.url)
         path2, query2 = self.normalizer.normalize_url(req2.url)
 
-        # 2. Path Match check
         if path1 != path2:
             return -1.0
 
         score = 0.0
 
-        # High bonus for exact URL match (including all query parameters)
         if req1.url == req2.url:
             score += self.weights.exact_url_bonus
         else:
             score += self.weights.base_url_match
 
-        # 3. Query Parameters Match (up to query_max points)
         if not query1 and not query2:
             score += self.weights.query_max
         elif query1 and query2:
@@ -82,7 +77,6 @@ class MatchScorer:
             if all_keys:
                 score += (match_count / len(all_keys)) * self.weights.query_max
 
-        # 4. Headers Match (up to headers_max points)
         headers1 = self.normalizer.normalize_headers(req1.headers)
         headers2 = self.normalizer.normalize_headers(req2.headers)
 
@@ -104,11 +98,9 @@ class MatchScorer:
             if all_keys:
                 score += (match_count / len(all_keys)) * self.weights.headers_max
 
-        # 5. Request Body Match (up to body_max points)
         body1_norm = self.normalizer.normalize_body(req1.body)
         body2_norm = self.normalizer.normalize_body(req2.body)
 
-        # Hard constraint: bodies must match exactly (post-normalization).
         if self.options.require_body_match and body1_norm != body2_norm:
             return -1.0
 
