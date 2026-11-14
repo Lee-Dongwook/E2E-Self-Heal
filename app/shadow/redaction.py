@@ -81,7 +81,9 @@ _QUOTED_PAIR_RE = re.compile(
     + "|".join(
         re.escape(key) for key in sorted(SENSITIVE_KEYS | SENSITIVE_HEADERS, key=len, reverse=True)
     )
-    + r")(?P=kq)\s*:\s*)(?P<vq>[\"'])(?P<value>(?:\\.|(?!(?P=vq)).)*)(?P=vq)"
+    # Escapes and ordinary characters must not overlap: if both could take a backslash, an
+    # unterminated value full of backslashes backtracks exponentially.
+    + r")(?P=kq)\s*:\s*)(?P<vq>[\"'])(?P<value>(?:\\.|(?!(?P=vq))[^\\\n])*)(?P=vq)"
 )
 
 

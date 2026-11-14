@@ -13,6 +13,8 @@ import logging
 import random
 import re
 import string
+import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, TextIO, cast
@@ -409,3 +411,30 @@ def test_a_handler_error_report_withholds_the_record(capsys: pytest.CaptureFixtu
     rendered = capsys.readouterr().err
     assert SECRET not in rendered
     assert "logging error in httpx (record withheld" in rendered
+
+
+def test_an_unterminated_value_full_of_backslashes_is_redacted_in_linear_time() -> None:
+    # The value pattern once let an escape and an ordinary character both take a backslash:
+    # 40 backslashes after an unterminated `"api_key": "` took 16 s, and each one doubled it.
+    # A subprocess with a timeout fails the test instead of hanging the suite.
+    probe = (
+        "from app.shadow.redaction import redact_text\n"
+        "for n in (40, 60, 5000):\n"
+        "    text = '{\"api_key\": \"' + '\\\\' * n\n"
+        "    assert redact_text(text) == text\n"
+    )
+    subprocess.run([sys.executable, "-c", probe], check=True, timeout=20, capture_output=True)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ('{"api_key": "a\\\\"}', f'{{"api_key": "{REDACTED}"}}'),
+        ('{"api_key": "a\\\\\\"b"}', f'{{"api_key": "{REDACTED}"}}'),
+    ],
+    ids=["escaped-backslash-then-close", "escaped-backslash-then-escaped-quote"],
+)
+def test_escapes_next_to_the_closing_quote_still_end_the_value_correctly(
+    text: str, expected: str
+) -> None:
+    assert redact_text(text) == expected
