@@ -29,7 +29,10 @@ redaction can never shift where the fix is applied.
 
 ## What is redacted
 
-Two layers, applied to every prompt, every `--json` evidence field, and every structured log line:
+Two layers, applied to every prompt, every `--json` evidence field, every log line (the engine's
+structured logs, whatever type a logged value has, and the records that libraries such as httpx
+and the OpenAI SDK log), the Slack notification, and the error signature saved in local healing
+history:
 
 **Built-in credential patterns**, always on:
 
@@ -39,7 +42,10 @@ Two layers, applied to every prompt, every `--json` evidence field, and every st
 - URL query values whose key is sensitive (`token`, `access_token`, `api_key`, `password`,
   `secret`, `session`, `cookie`, `credential`, …). Non-sensitive query values such as `page=2` are
   preserved, so a URL still says what it was.
-- Sensitive JSON keys in structured evidence (`password`, `token`, `session`, …).
+- Sensitive JSON keys in structured evidence (`password`, `token`, `session`, …), and the same
+  keys quoted with a quoted value in text, as serialized JSON or a Python dict prints them
+  (`"api_key": "…"`, `'Authorization': 'Bearer …'`). An unquoted `password: …` is left alone,
+  because UI text in an ARIA snapshot reads like that.
 
 The same primitives redact the Shadow runtime's persisted snapshots, so a redacted URL reads the
 same way in a prompt, a log line, and a saved snapshot.

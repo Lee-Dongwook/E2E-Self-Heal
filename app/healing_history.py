@@ -16,6 +16,7 @@ from app.config import settings
 from app.registry import SelectorKind, classify_selector_kind
 from app.schemas import PatchInstruction
 from app.sandbox import assert_read_allowed, assert_write_allowed, workspace_root
+from app.shadow.redaction import redact_text
 from app.utils.files import atomic_write
 
 logger = structlog.get_logger(__name__)
@@ -85,7 +86,13 @@ def extract_failing_selector(error_log: str) -> str:
 
 
 def normalize_error_signature(error_log: str) -> str:
-    """Normalize incidental selector values, whitespace, and counters in an error."""
+    """Normalize incidental selector values, whitespace, and counters in an error.
+
+    The signature is written to the history file, so the error is redacted first (#460):
+    lowercasing comes next, and a configured secret could no longer be matched after it.
+    Lookups normalize the current error the same way, so matching is unaffected.
+    """
+    error_log = redact_text(error_log)
     selector = extract_failing_selector(error_log)
     normalized = error_log.lower()
     if selector:

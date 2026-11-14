@@ -71,6 +71,18 @@ _CREDENTIAL_PAIR_RE = re.compile(
     r"(?i)\b(token|access_token|refresh_token|api_key|apikey|password|secret|credential)"
     r"\s*=\s*([^\s&,;]+)"
 )
+# A sensitive key quoted with its quoted value, as JSON or a Python dict repr writes it:
+# `"api_key": "..."`, `'Authorization': 'Bearer ...'`. Free text such as an error body, a
+# rendered exception or a log value often embeds a structure that was serialized before it
+# could be redacted by key (#460). An unquoted `password: ...` is left alone: UI text in an
+# ARIA snapshot reads like that ("Password: at least 8 characters").
+_QUOTED_PAIR_RE = re.compile(
+    r"(?i)(?P<prefix>(?P<kq>[\"'])(?:"
+    + "|".join(
+        re.escape(key) for key in sorted(SENSITIVE_KEYS | SENSITIVE_HEADERS, key=len, reverse=True)
+    )
+    + r")(?P=kq)\s*:\s*)(?P<vq>[\"'])(?P<value>(?:\\.|(?!(?P=vq)).)*)(?P=vq)"
+)
 
 
 def configured_secrets() -> list[str]:
@@ -145,7 +157,16 @@ def redact_text(text: str, *, record: RedactionRecord | None = None) -> str:
     safe = _sub_counting(
         _AUTHORIZATION_RE, lambda match: f"{match.group(1)}{REDACTED}", safe, record
     )
-    return _sub_counting(_CREDENTIAL_PAIR_RE, _redact_credential_pair, safe, record)
+    safe = _sub_counting(_CREDENTIAL_PAIR_RE, _redact_credential_pair, safe, record)
+    return _sub_counting(_QUOTED_PAIR_RE, _redact_quoted_pair, safe, record)
+
+
+def _redact_quoted_pair(match: Match[str]) -> str:
+    """Replace a quoted sensitive value, keeping the key and quotes so JSON stays valid."""
+    if match.group("value") in ("", REDACTED):
+        return match.group(0)
+    quote = match.group("vq")
+    return f"{match.group('prefix')}{quote}{REDACTED}{quote}"
 
 
 def redact_value(value: object, *, record: RedactionRecord | None = None) -> object:
