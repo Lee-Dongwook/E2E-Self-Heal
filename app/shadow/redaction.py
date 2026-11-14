@@ -71,6 +71,20 @@ _CREDENTIAL_PAIR_RE = re.compile(
     r"(?i)\b(token|access_token|refresh_token|api_key|apikey|password|secret|credential)"
     r"\s*=\s*([^\s&,;]+)"
 )
+# A sensitive key quoted with its quoted value, as JSON or a Python dict repr writes it:
+# `"api_key": "..."`, `'Authorization': 'Bearer ...'`. Free text such as an error body, a
+# rendered exception or a log value often embeds a structure that was serialized before it
+# could be redacted by key (#460). An unquoted `password: ...` is left alone: UI text in an
+# ARIA snapshot reads like that ("Password: at least 8 characters").
+_QUOTED_PAIR_RE = re.compile(
+    r"(?i)(?P<prefix>(?P<kq>[\"'])(?:"
+    + "|".join(
+        re.escape(key) for key in sorted(SENSITIVE_KEYS | SENSITIVE_HEADERS, key=len, reverse=True)
+    )
+    # Escapes and ordinary characters must not overlap: if both could take a backslash, an
+    # unterminated value full of backslashes backtracks exponentially.
+    + r")(?P=kq)\s*:\s*)(?P<vq>[\"'])(?P<value>(?:\\.|(?!(?P=vq))[^\\\n])*)(?P=vq)"
+)
 
 
 def configured_secrets() -> list[str]:
@@ -145,7 +159,16 @@ def redact_text(text: str, *, record: RedactionRecord | None = None) -> str:
     safe = _sub_counting(
         _AUTHORIZATION_RE, lambda match: f"{match.group(1)}{REDACTED}", safe, record
     )
-    return _sub_counting(_CREDENTIAL_PAIR_RE, _redact_credential_pair, safe, record)
+    safe = _sub_counting(_CREDENTIAL_PAIR_RE, _redact_credential_pair, safe, record)
+    return _sub_counting(_QUOTED_PAIR_RE, _redact_quoted_pair, safe, record)
+
+
+def _redact_quoted_pair(match: Match[str]) -> str:
+    """Replace a quoted sensitive value, keeping the key and quotes so JSON stays valid."""
+    if match.group("value") in ("", REDACTED):
+        return match.group(0)
+    quote = match.group("vq")
+    return f"{match.group('prefix')}{quote}{REDACTED}{quote}"
 
 
 def redact_value(value: object, *, record: RedactionRecord | None = None) -> object:
@@ -167,8 +190,15 @@ def redact_value(value: object, *, record: RedactionRecord | None = None) -> obj
 
 
 def redact_url(url: str) -> str:
-    """Return a URL safe to persist or log, preserving non-sensitive query values."""
-    parts = urlsplit(url)
+    """Return a URL safe to persist or log, preserving non-sensitive query values.
+
+    A URL that cannot be parsed (``http://[``, an invalid port) is replaced whole: its parts
+    can't be told apart, and raising would take down the log call or prompt it is part of.
+    """
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return REDACTED
     query = [
         (key, REDACTED if key.casefold() in SENSITIVE_KEYS else value)
         for key, value in parse_qsl(parts.query, keep_blank_values=True)

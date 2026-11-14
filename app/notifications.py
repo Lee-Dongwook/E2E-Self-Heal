@@ -3,13 +3,14 @@
 import json
 import urllib.error
 import urllib.request
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 import structlog
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from app.config import settings
 from app.schemas import HealResult, RepairSummary
+from app.shadow.redaction import redact_value
 
 logger = structlog.get_logger(__name__)
 
@@ -136,7 +137,9 @@ def notify_heal_outcome(summary: HealResult) -> None:
     if not settings.slack_webhook_url:
         return
 
-    payload = _build_payload(summary)
+    # The patched lines come from the test source, which may hard-code a credential; a Slack
+    # channel is outside the machine, so configured secrets and credential patterns go (#460).
+    payload = cast(SlackPayload, redact_value(_build_payload(summary)))
 
     try:
         _post_to_slack(payload)

@@ -119,6 +119,30 @@ All notable changes to this project are documented here. The format is based on
   `examples/` or benchmark-workflow update starts a safety-benchmark run on `main`; the safety
   benchmark reference says to spread those merges across quota days.
 
+### Security
+- **Redaction covers every exit an audit found open** (#460). Five ways a secret got past the
+  redaction boundary:
+  - **Structured log values of other types.** Only dicts, lists and strings were redacted; a
+    tuple, set, exception, pydantic model, `Path` or `bytes` passed as a log value was printed
+    by its `repr`, configured secrets included. Every value is now turned into plain data
+    before redaction.
+  - **Library logs.** httpx (request URLs, at INFO) and the OpenAI SDK (request options, at
+    DEBUG) log through stdlib `logging`, which never passed through redaction. The CLI's
+    handler now redacts every record, tracebacks included.
+  - **Serialized structures in text.** `"api_key": "…"` or `'Authorization': 'Bearer …'` in a
+    string (an error body, a printed dict) matched no pattern. Text redaction now replaces the
+    value of a sensitive key quoted with a quoted value, so JSON stays valid. An unquoted
+    `password: …` is still left alone, since UI text in an ARIA snapshot reads like that.
+  - **Slack notifications** were built from the summary with no redaction; a patched line
+    from the test source could carry a credential to the channel.
+  - **Local healing history** stored the error's signature, lowercased, unredacted, in
+    `.e2e-healer/healing-history.json`. It's now redacted before it's normalized; lookups
+    normalize the same way, so matching is unchanged.
+
+  `tests/test_redaction_coverage.py` sends a configured and an unconfigured secret through each
+  of these, plus seeded randomized secrets through `redact_text` and the log pipeline. With any
+  one fix reverted, its tests fail.
+
 ## [0.6.2] - 2026-10-31
 
 A patch release for `e2e-healer init`, whose scaffolded workflow still pinned the v0.4.0 Action

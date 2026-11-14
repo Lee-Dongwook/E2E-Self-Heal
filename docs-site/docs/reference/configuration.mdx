@@ -168,7 +168,9 @@ Rules, enforced at load:
 - Commas separate entries, so a secret containing a comma cannot be configured this way.
 - The placeholder `[REDACTED]` is never treated as a value to replace.
 
-Configured values are replaced in every prompt, in the `--json` evidence, and in structured logs.
+Configured values are replaced in every prompt, in the `--json` evidence, in every log line
+(including what libraries such as httpx log), in the Slack notification, and in the error
+signature saved to local healing history.
 Secrets are never written to the JSON result, and `evidence.provenance.redaction_applied` /
 `redaction_count` record whether the boundary replaced anything. See
 [the data boundary](../safety/data-boundary) for the threat model and its limits.
