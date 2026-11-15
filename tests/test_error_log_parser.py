@@ -118,54 +118,49 @@ def test_long_received_line_is_bounded() -> None:
 TWO_FAILURES = (Path(__file__).parent / "fixtures" / "playwright-two-failures.log").read_text()
 _FIRST, _SECOND = TWO_FAILURES.split("  2) scenarios")
 _SECOND = "  2) scenarios" + _SECOND
+_TIMEOUT = (
+    "TimeoutError: page.click: Timeout 2000ms exceeded.\ncall log: locator('#no-such-button')"
+)
+_NO_STACK = (
+    "  1) tests/a.spec.ts:3:1 › first test ───\n"
+    "    Error: first\n"
+    "  2) tests/a.spec.ts:9:1 › second test ───\n"
+    "    Error: second\n"
+)
 
 
-def test_a_timed_out_action_keeps_its_reason_line() -> None:
-    # Playwright prints `TimeoutError:`, not `Error:`, for a timed-out action; the parser used to
-    # drop it and pass on only the call log.
-    parsed = parse_error_log(_FIRST)
-
-    assert parsed.splitlines()[0] == "TimeoutError: page.click: Timeout 2000ms exceeded."
-    assert "call log: locator('#no-such-button')" in parsed
-
-
-def test_only_the_first_failure_of_a_multi_test_log_is_parsed() -> None:
-    parsed = parse_error_log(TWO_FAILURES)
-
-    assert parsed == (
-        "TimeoutError: page.click: Timeout 2000ms exceeded.\ncall log: locator('#no-such-button')"
-    )
-
-
-def test_the_order_of_failures_decides_which_one_is_parsed() -> None:
-    parsed = parse_error_log(_SECOND + _FIRST)
-
-    assert parsed.startswith("Error: locator.click: Error: strict mode violation:")
-    assert "#no-such-button" not in parsed
+@pytest.mark.parametrize(
+    ("log", "expected"),
+    [
+        # Playwright prints `TimeoutError:`, not `Error:`, for a timed-out action.
+        (_FIRST, _TIMEOUT),
+        (TWO_FAILURES, _TIMEOUT),
+        (
+            _SECOND + _FIRST,
+            "Error: locator.click: Error: strict mode violation: getByRole('button') resolved "
+            "to 2 elements:\ncall log: getByRole('button')",
+        ),
+        # No `at …` line: the location falls back to this failure's header, not the next one's.
+        (_NO_STACK, "Error: first\nat tests/a.spec.ts:3"),
+    ],
+    ids=["timeout-alone", "timeout-then-strict", "strict-then-timeout", "no-stack-line"],
+)
+def test_only_the_first_failure_is_parsed(log: str, expected: str) -> None:
+    assert parse_error_log(log) == expected
 
 
-def test_first_failure_returns_a_log_without_a_reason_line_whole() -> None:
-    log = "      - waiting for locator('#email')\n"
-
-    assert first_failure(log) == log
+_STRICT_DUMP = _SECOND.split("Call log:")[0]
 
 
-def test_a_failure_without_a_stack_line_is_located_by_its_own_header() -> None:
-    # No `at …` line: the location falls back to the reporter header, which must be this
-    # failure's, not the next one's.
-    log = (
-        "  1) tests/a.spec.ts:3:1 › first test ───\n"
-        "    Error: first\n"
-        "  2) tests/a.spec.ts:9:1 › second test ───\n"
-        "    Error: second\n"
-    )
-
-    assert first_failure(log) == "  1) tests/a.spec.ts:3:1 › first test ───\n    Error: first\n"
-    assert parse_error_log(log) == "Error: first\nat tests/a.spec.ts:3"
-
-
-def test_a_strict_mode_dump_is_not_mistaken_for_the_next_failures_header() -> None:
-    # `    1) <button …> aka …` lines look like numbered headers but belong to this failure.
-    second = _SECOND.split("Call log:")[0]
-
-    assert "aka getByRole('button', { name: 'Get started' })" in first_failure(second)
+@pytest.mark.parametrize(
+    ("log", "expected"),
+    [
+        ("      - waiting for locator('#email')\n", "      - waiting for locator('#email')\n"),
+        (_NO_STACK, "  1) tests/a.spec.ts:3:1 › first test ───\n    Error: first\n"),
+        # `    1) <button …> aka …` lines look like numbered headers but belong to this failure.
+        (_STRICT_DUMP, _STRICT_DUMP),
+    ],
+    ids=["no-reason-line-is-whole", "own-header-not-next", "strict-mode-dump-kept"],
+)
+def test_first_failure_block(log: str, expected: str) -> None:
+    assert first_failure(log) == expected

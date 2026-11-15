@@ -267,28 +267,33 @@ _STRICT_BLOCK = (
 )
 
 
-def test_a_later_tests_strict_mode_violation_does_not_refuse_the_first_failure() -> None:
-    # parse_error_log and failing_locator repair the first failure, a plain timeout; the
-    # violation belongs to another test in the same log.
-    log = _TIMEOUT_BLOCK + "\n" + _STRICT_BLOCK
-
-    assert ambiguous_replacements(log, []) == []
+# The real fixture: a timed-out click first, then another test's strict-mode violation.
+_REAL = (Path(__file__).parent / "fixtures" / "playwright-two-failures.log").read_text()
+_REAL_TIMEOUT, _REAL_STRICT = _REAL.split("  2) scenarios")
+_REAL_STRICT = "  2) scenarios" + _REAL_STRICT
 
 
-def test_a_strict_mode_violation_in_the_first_failure_refuses_whatever_follows() -> None:
-    log = _STRICT_BLOCK + "\n" + _TIMEOUT_BLOCK
-
-    assert ambiguous_replacements(log, []) == ["#submit-btn", "#submit-footer"]
-
-
-def test_a_real_multi_test_log_is_judged_by_its_first_failure() -> None:
-    # The real fixture: a timed-out click first, then another test's strict-mode violation.
-    log = (Path(__file__).parent / "fixtures" / "playwright-two-failures.log").read_text()
-    first, second = log.split("  2) scenarios")
-    second = "  2) scenarios" + second
-
-    assert ambiguous_replacements(log, []) == []
-    assert ambiguous_replacements(second + first, []) == [
-        "getByRole('button', { name: 'Submit' })",
-        "getByRole('button', { name: 'Get started' })",
-    ]
+@pytest.mark.parametrize(
+    ("log", "expected"),
+    [
+        (_TIMEOUT_BLOCK + "\n" + _STRICT_BLOCK, []),
+        (_STRICT_BLOCK + "\n" + _TIMEOUT_BLOCK, ["#submit-btn", "#submit-footer"]),
+        (_REAL, []),
+        (
+            _REAL_STRICT + _REAL_TIMEOUT,
+            [
+                "getByRole('button', { name: 'Submit' })",
+                "getByRole('button', { name: 'Get started' })",
+            ],
+        ),
+    ],
+    ids=[
+        "timeout-then-strict",
+        "strict-then-timeout",
+        "real-timeout-then-strict",
+        "real-strict-then-timeout",
+    ],
+)
+def test_a_multi_test_log_is_judged_by_its_first_failure(log: str, expected: list[str]) -> None:
+    # Only the failure under repair counts; another test's violation in the same log does not.
+    assert ambiguous_replacements(log, []) == expected
