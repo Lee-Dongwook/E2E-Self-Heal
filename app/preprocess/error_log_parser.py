@@ -28,9 +28,14 @@ _RECEIVED_RE = re.compile(r"^\s*(Received(?:\s+\w+)?:\s*\S.*)$", re.MULTILINE)
 _RESOLVED_RE = re.compile(r"resolved to \d+ elements?")
 # Cap for each captured single-line signal so element dumps can't blow the context budget.
 _MAX_LINE_CHARS = 200
-# A list/line reporter failure header, e.g. `  1) tests/a.spec.ts:3:1 › title ───`. Element
-# lines in a strict-mode dump (`    1) <button …> aka …`) start with `<`, so they never match.
-_HEADER_RE = re.compile(r"^[ \t]*\d+\) [^\s<]+:\d+:\d+\b.*$", re.MULTILINE)
+# A list/line reporter failure header: `  1) tests/a.spec.ts:3:1 › title ───`, optionally with a
+# project prefix (`1) [chromium] › tests/a.spec.ts:3:1 › …`); the path may contain spaces. Its
+# groups are the path and line. Element lines in a strict-mode dump (`    1) <button …> aka …`)
+# start with `<`, so they never match.
+_HEADER_RE = re.compile(
+    r"^[ \t]*\d+\)[ \t]+(?!<)(?:[^\n]*?›[ \t]+)?([^›\n<]+?):(\d+):\d+\b.*$", re.MULTILINE
+)
+_TEST_FILE_RE = re.compile(r"\.(?:spec|test)\.[jt]sx?$")
 
 
 def first_failure(raw_log: str) -> str:
@@ -96,7 +101,12 @@ def parse_error_log(raw_log: str | None) -> str:
     if resolved_match and not any(resolved_match.group(0) in part for part in parts):
         parts.append(f"strict mode: {resolved_match.group(0)}")
 
-    loc_match = _AT_LOCATION_RE.search(raw_log) or _LOCATION_RE.search(raw_log)
+    # A stack line first; without one, this failure's own header (it handles spaces and a
+    # project prefix) when it names a test file, as the generic fallback below requires.
+    header = _HEADER_RE.match(raw_log)
+    if header is not None and not _TEST_FILE_RE.search(header.group(1)):
+        header = None
+    loc_match = _AT_LOCATION_RE.search(raw_log) or header or _LOCATION_RE.search(raw_log)
     if loc_match:
         parts.append(f"at {loc_match.group(1)}:{loc_match.group(2)}")
 

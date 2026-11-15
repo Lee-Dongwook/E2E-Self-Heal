@@ -121,12 +121,23 @@ _SECOND = "  2) scenarios" + _SECOND
 _TIMEOUT = (
     "TimeoutError: page.click: Timeout 2000ms exceeded.\ncall log: locator('#no-such-button')"
 )
-_NO_STACK = (
-    "  1) tests/a.spec.ts:3:1 › first test ───\n"
-    "    Error: first\n"
-    "  2) tests/a.spec.ts:9:1 › second test ───\n"
-    "    Error: second\n"
-)
+# Reporter header forms the failure scanner also reads: plain, with a project prefix, and a
+# path containing a space.
+_HEADER_FORMS = {
+    "plain": "tests/a.spec.ts",
+    "project-prefix": "[chromium] › tests/a.spec.ts",
+    "space-in-path": "tests/my suite/a.spec.ts",
+}
+
+
+def _no_stack(header: str) -> str:
+    """Two failures with no `at …` stack line, so only the headers say where each one is."""
+    return (
+        f"  1) {header}:3:1 › first test ───\n"
+        "    Error: first\n"
+        f"  2) {header}:9:1 › second test ───\n"
+        "    Error: second\n"
+    )
 
 
 @pytest.mark.parametrize(
@@ -140,10 +151,18 @@ _NO_STACK = (
             "Error: locator.click: Error: strict mode violation: getByRole('button') resolved "
             "to 2 elements:\ncall log: getByRole('button')",
         ),
-        # No `at …` line: the location falls back to this failure's header, not the next one's.
-        (_NO_STACK, "Error: first\nat tests/a.spec.ts:3"),
+        # No `at …` line: the location comes from this failure's header, not the next one's.
+        *[
+            (_no_stack(header), f"Error: first\nat {header.split('› ')[-1]}:3")
+            for header in _HEADER_FORMS.values()
+        ],
     ],
-    ids=["timeout-alone", "timeout-then-strict", "strict-then-timeout", "no-stack-line"],
+    ids=[
+        "timeout-alone",
+        "timeout-then-strict",
+        "strict-then-timeout",
+        *(f"no-stack-{form}" for form in _HEADER_FORMS),
+    ],
 )
 def test_only_the_first_failure_is_parsed(log: str, expected: str) -> None:
     assert parse_error_log(log) == expected
@@ -156,11 +175,18 @@ _STRICT_DUMP = _SECOND.split("Call log:")[0]
     ("log", "expected"),
     [
         ("      - waiting for locator('#email')\n", "      - waiting for locator('#email')\n"),
-        (_NO_STACK, "  1) tests/a.spec.ts:3:1 › first test ───\n    Error: first\n"),
+        *[
+            (_no_stack(header), f"  1) {header}:3:1 › first test ───\n    Error: first\n")
+            for header in _HEADER_FORMS.values()
+        ],
         # `    1) <button …> aka …` lines look like numbered headers but belong to this failure.
         (_STRICT_DUMP, _STRICT_DUMP),
     ],
-    ids=["no-reason-line-is-whole", "own-header-not-next", "strict-mode-dump-kept"],
+    ids=[
+        "no-reason-line-is-whole",
+        *(f"own-header-not-next-{form}" for form in _HEADER_FORMS),
+        "strict-mode-dump-kept",
+    ],
 )
 def test_first_failure_block(log: str, expected: str) -> None:
     assert first_failure(log) == expected
