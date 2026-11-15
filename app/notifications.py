@@ -1,4 +1,4 @@
-"""Slack notifier for heal outcomes (Issue #124)."""
+"""Slack notifier for heal outcomes."""
 
 import json
 import urllib.error
@@ -63,7 +63,6 @@ def _post_to_slack(payload: SlackPayload) -> None:
                     url, response.status, response.reason, response.headers, None
                 )
     except urllib.error.HTTPError as exc:
-        # Re-raise to trigger retry logic for transient errors
         raise exc
 
     # Log success without exposing the webhook URL
@@ -137,8 +136,7 @@ def notify_heal_outcome(summary: HealResult) -> None:
     if not settings.slack_webhook_url:
         return
 
-    # The patched lines come from the test source, which may hard-code a credential; a Slack
-    # channel is outside the machine, so configured secrets and credential patterns go (#460).
+    # Patched lines come from the test source, which may hard-code a credential.
     payload = cast(SlackPayload, redact_value(_build_payload(summary)))
 
     try:
