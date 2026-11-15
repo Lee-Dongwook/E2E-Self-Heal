@@ -148,3 +148,24 @@ def test_first_failure_returns_a_log_without_a_reason_line_whole() -> None:
     log = "      - waiting for locator('#email')\n"
 
     assert first_failure(log) == log
+
+
+def test_a_failure_without_a_stack_line_is_located_by_its_own_header() -> None:
+    # No `at …` line: the location falls back to the reporter header, which must be this
+    # failure's, not the next one's.
+    log = (
+        "  1) tests/a.spec.ts:3:1 › first test ───\n"
+        "    Error: first\n"
+        "  2) tests/a.spec.ts:9:1 › second test ───\n"
+        "    Error: second\n"
+    )
+
+    assert first_failure(log) == "  1) tests/a.spec.ts:3:1 › first test ───\n    Error: first\n"
+    assert parse_error_log(log) == "Error: first\nat tests/a.spec.ts:3"
+
+
+def test_a_strict_mode_dump_is_not_mistaken_for_the_next_failures_header() -> None:
+    # `    1) <button …> aka …` lines look like numbered headers but belong to this failure.
+    second = _SECOND.split("Call log:")[0]
+
+    assert "aka getByRole('button', { name: 'Get started' })" in first_failure(second)

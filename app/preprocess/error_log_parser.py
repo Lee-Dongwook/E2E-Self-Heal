@@ -28,20 +28,42 @@ _RECEIVED_RE = re.compile(r"^\s*(Received(?:\s+\w+)?:\s*\S.*)$", re.MULTILINE)
 _RESOLVED_RE = re.compile(r"resolved to \d+ elements?")
 # Cap for each captured single-line signal so element dumps can't blow the context budget.
 _MAX_LINE_CHARS = 200
+# A list/line reporter failure header, e.g. `  1) tests/a.spec.ts:3:1 › title ───`. Element
+# lines in a strict-mode dump (`    1) <button …> aka …`) start with `<`, so they never match.
+_HEADER_RE = re.compile(r"^[ \t]*\d+\) [^\s<]+:\d+:\d+\b.*$", re.MULTILINE)
 
 
 def first_failure(raw_log: str) -> str:
-    """The first failure's block of a Playwright log: its reason line up to the next one.
+    """The first failure's block of a Playwright log, header included.
 
     One run can fail several tests, and the engine repairs the first failure, so every signal
-    must come from that block, not from whichever test happens to mention it first. A log with
-    no reason line is returned whole.
+    must come from that block. It starts at the reporter header before the first reason line
+    (or the reason line itself) and ends before the next header or reason line. A log with no
+    reason line is returned whole.
     """
     first = _ERROR_RE.search(raw_log)
     if first is None:
         return raw_log
-    following = _ERROR_RE.search(raw_log, first.end())
-    return raw_log[first.start(1) : following.start() if following else len(raw_log)]
+    headers_before = [m for m in _HEADER_RE.finditer(raw_log, 0, first.start())]
+    start = headers_before[-1].start() if headers_before else first.start(1)
+    ends = [
+        match.start()
+        for match in (
+            _HEADER_RE.search(raw_log, first.end()),
+            _ERROR_RE.search(raw_log, first.end()),
+        )
+        if match is not None
+    ]
+    return raw_log[start : min(ends, default=len(raw_log))]
+
+
+def first_failure_reason(raw_log: str) -> tuple[str, str]:
+    """The first failure's reason line, and the rest of its block after that line."""
+    block = first_failure(raw_log)
+    reason = _ERROR_RE.search(block)
+    if reason is None:
+        return "", block
+    return reason.group(1), block[reason.end() :]
 
 
 def parse_error_log(raw_log: str | None) -> str:

@@ -17,7 +17,7 @@ import re
 
 import structlog
 
-from app.preprocess.error_log_parser import first_failure
+from app.preprocess.error_log_parser import first_failure_reason
 from app.preprocess.selector_diff_check import failing_locator, locator_terms
 
 logger = structlog.get_logger(__name__)
@@ -90,7 +90,8 @@ def _strict_mode_matches(raw_log: str) -> list[str]:
     selector when it is a plain ``locator('...')``, so it can go straight into
     ``--selector-hint``; an element without one is named by its HTML.
     """
-    reason, *rest = first_failure(raw_log).splitlines() or [""]
+    reason, after = first_failure_reason(raw_log)
+    rest = after.splitlines()[1:]  # `after` starts with the end of the reason line
     violation = _STRICT_MODE.search(reason)
     if violation is None or int(violation.group("count")) < _MIN_LOOK_ALIKES:
         return []
