@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 import pytest
 
 import app.healing_history as history_module
@@ -213,3 +216,18 @@ def test_append_rejects_records_over_the_cap(
 
     assert append_record(_record("#first")) is True
     assert append_record(_record("#second")) is False
+
+
+@pytest.mark.parametrize(
+    "probe",
+    [
+        "extract_failing_selector('waiting for locator(' + 'a' * 5000)",
+        "normalize_error_signature('Error: \"' + '\\\\' * 5000)",
+    ],
+    ids=["unterminated-locator-call", "unterminated-quote-of-backslashes"],
+)
+def test_malformed_errors_are_handled_in_linear_time(probe: str) -> None:
+    # Both patterns once had overlapping repetition: 28 characters after an unterminated
+    # `locator(` took 11 s, each doubling it. A subprocess timeout fails instead of hanging.
+    code = f"from app.healing_history import extract_failing_selector, normalize_error_signature\n{probe}\n"
+    subprocess.run([sys.executable, "-c", code], check=True, timeout=20, capture_output=True)

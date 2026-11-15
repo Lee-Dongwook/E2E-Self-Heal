@@ -1,6 +1,8 @@
+from pathlib import Path
+
 import pytest
 
-from app.preprocess.error_log_parser import parse_error_log
+from app.preprocess.error_log_parser import first_failure, parse_error_log
 
 SAMPLE_LOG = """
 Running 1 test using 1 worker
@@ -107,3 +109,42 @@ def test_long_received_line_is_bounded() -> None:
     result = parse_error_log(long_log)
     received_line = next(line for line in result.splitlines() if line.startswith("Received:"))
     assert len(received_line) <= 200
+
+
+# --- The first failure of a real multi-test run ----------------------------------------------
+
+# A real `npx playwright test --reporter=list` run of one spec with two failing tests: "a times
+# out" (a timed-out click) and then "b is ambiguous" (a strict-mode violation).
+TWO_FAILURES = (Path(__file__).parent / "fixtures" / "playwright-two-failures.log").read_text()
+_FIRST, _SECOND = TWO_FAILURES.split("  2) scenarios")
+_SECOND = "  2) scenarios" + _SECOND
+
+
+def test_a_timed_out_action_keeps_its_reason_line() -> None:
+    # Playwright prints `TimeoutError:`, not `Error:`, for a timed-out action; the parser used to
+    # drop it and pass on only the call log.
+    parsed = parse_error_log(_FIRST)
+
+    assert parsed.splitlines()[0] == "TimeoutError: page.click: Timeout 2000ms exceeded."
+    assert "call log: locator('#no-such-button')" in parsed
+
+
+def test_only_the_first_failure_of_a_multi_test_log_is_parsed() -> None:
+    parsed = parse_error_log(TWO_FAILURES)
+
+    assert parsed == (
+        "TimeoutError: page.click: Timeout 2000ms exceeded.\ncall log: locator('#no-such-button')"
+    )
+
+
+def test_the_order_of_failures_decides_which_one_is_parsed() -> None:
+    parsed = parse_error_log(_SECOND + _FIRST)
+
+    assert parsed.startswith("Error: locator.click: Error: strict mode violation:")
+    assert "#no-such-button" not in parsed
+
+
+def test_first_failure_returns_a_log_without_a_reason_line_whole() -> None:
+    log = "      - waiting for locator('#email')\n"
+
+    assert first_failure(log) == log

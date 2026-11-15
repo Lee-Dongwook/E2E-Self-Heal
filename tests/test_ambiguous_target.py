@@ -1,5 +1,7 @@
 """The diff check that refuses a test whose element became several look-alikes (Issue #388)."""
 
+from pathlib import Path
+
 import pytest
 
 from app.preprocess.ambiguous_target import ambiguous_replacements
@@ -249,11 +251,11 @@ def test_a_rename_beside_a_button_without_a_type_is_still_a_rename() -> None:
     assert ambiguous_replacements(CLICK_TIMEOUT, context) == []
 
 
-# Two tests failing in one spec file, as `npx playwright test --reporter=list` prints them.
+# Two tests failing in one spec file, as `npx playwright test --reporter=list` prints them; a
+# timed-out action prints a `TimeoutError:` line and no separate `Error:` line.
 _TIMEOUT_BLOCK = """  1) scenarios/form/spec.ts:3:1 › submits the form ──────────────────────────────
 
     TimeoutError: page.click: Timeout 3000ms exceeded.
-    Error: page.click: Timeout 3000ms exceeded.
     Call log:
       - waiting for locator('#submit-btn')
 """
@@ -277,3 +279,16 @@ def test_a_strict_mode_violation_in_the_first_failure_refuses_whatever_follows()
     log = _STRICT_BLOCK + "\n" + _TIMEOUT_BLOCK
 
     assert ambiguous_replacements(log, []) == ["#submit-btn", "#submit-footer"]
+
+
+def test_a_real_multi_test_log_is_judged_by_its_first_failure() -> None:
+    # The real fixture: a timed-out click first, then another test's strict-mode violation.
+    log = (Path(__file__).parent / "fixtures" / "playwright-two-failures.log").read_text()
+    first, second = log.split("  2) scenarios")
+    second = "  2) scenarios" + second
+
+    assert ambiguous_replacements(log, []) == []
+    assert ambiguous_replacements(second + first, []) == [
+        "getByRole('button', { name: 'Submit' })",
+        "getByRole('button', { name: 'Get started' })",
+    ]

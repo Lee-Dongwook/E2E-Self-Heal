@@ -30,18 +30,20 @@ HISTORY_RELATIVE_PATH = Path(".e2e-healer/healing-history.json")
 MATCH_THRESHOLD = 0.95
 MAX_HISTORY_BYTES = 1_000_000
 MAX_HISTORY_RECORDS = 1_000
+# Each repetition below matches one character, or one escape or nested group, in exactly one
+# way: overlapping branches backtrack exponentially on an unterminated `locator(` or quote.
 _SELECTOR_ERROR = re.compile(
     r"""(?P<selector>
         (?:locator|selector|getByRole|getByText|getByLabel|getByPlaceholder|
         getByAltText|getByTitle|getByTestId)
-        \((?:[^()\n]+|\([^()\n]*\))*\)
+        \((?:[^()\n]|\([^()\n]*\))*\)
     )""",
     re.IGNORECASE | re.VERBOSE,
 )
 _LOCATOR_SELECTOR_ERROR = re.compile(
     r"""(?:locator|selector)\(\s*["'](?P<selector>[^"']+)["']\s*\)""", re.IGNORECASE
 )
-_QUOTED_SELECTOR = re.compile(r"""(["'])(?:\\.|(?!\1).)*\1""")
+_QUOTED_SELECTOR = re.compile(r"""(["'])(?:\\.|(?!\1)[^\\\n])*\1""")
 _NUMBER = re.compile(r"\d+")
 
 
@@ -77,9 +79,8 @@ def history_path() -> Path:
 def extract_failing_selector(error_log: str) -> str:
     """Extract a selector from common Playwright error output, if available.
 
-    Semantic locator expressions (for example ``getByRole(...)``) are retained verbatim.
-    Their equality check is intentionally exact: a quoting or option-shape variant is a safe
-    miss rather than a potentially incorrect repair reuse.
+    Semantic locators (``getByRole(...)``) are kept verbatim and compared exactly: a quoting
+    or option-shape variant is a safe miss, never a wrong reuse.
     """
     match = _LOCATOR_SELECTOR_ERROR.search(error_log) or _SELECTOR_ERROR.search(error_log)
     return match.group("selector") if match else ""
@@ -88,9 +89,8 @@ def extract_failing_selector(error_log: str) -> str:
 def normalize_error_signature(error_log: str) -> str:
     """Normalize incidental selector values, whitespace, and counters in an error.
 
-    The signature is written to the history file, so the error is redacted first (#460):
-    lowercasing comes next, and a configured secret could no longer be matched after it.
-    Lookups normalize the current error the same way, so matching is unaffected.
+    Redacted first, because the signature is stored and lowercasing would stop a configured
+    secret from matching; lookups normalize the same way.
     """
     error_log = redact_text(error_log)
     selector = extract_failing_selector(error_log)

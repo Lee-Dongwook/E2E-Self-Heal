@@ -75,6 +75,16 @@ All notable changes to this project are documented here. The format is based on
   now a deliberate change.
 
 ### Fixed
+- **A timed-out action's reason reaches the model, and only the first failure is parsed**
+  (#458). Playwright prints `TimeoutError: …` for a timed-out action, which the Error Log
+  Parser didn't recognize, so the most common failure reached the model with only its call log.
+  With several failing tests in one run, the parser, the failing locator and the strict-mode
+  check could each read a different test; all now read the first failure only. In particular,
+  #458's strict-mode check could refuse a timed-out test because of a later test's violation.
+  Healing-history signatures of timeouts change, so older records miss once.
+- **Two healing-history regexes no longer backtrack exponentially** on an unterminated
+  `locator(` or quote (28 characters took 11 s). They run on every error log in the memory
+  lookup.
 - **A response cut off by the output-token limit, or empty, is retried with a larger budget**
   (#453). Reasoning models can spend the whole `E2E_HEALER_LLM_MAX_TOKENS` budget thinking and
   return nothing usable (an empty DeepSeek completion, or `LengthFinishReasonError` from an

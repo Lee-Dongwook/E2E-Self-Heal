@@ -15,11 +15,13 @@ import re
 
 import structlog
 
+from app.preprocess.error_log_parser import first_failure
+
 logger = structlog.get_logger(__name__)
 
-# The first Playwright call-log target, e.g. `- waiting for locator('#submit')` or
-# `- waiting for getByRole('button', { name: 'Get started' })`. The first one is the call that
-# failed; later entries repeat it or belong to retries.
+# A Playwright call-log target, e.g. `- waiting for locator('#submit')` or
+# `- waiting for getByRole('button', { name: 'Get started' })`. The first one in the failure's
+# block is the call that failed; later entries repeat it or belong to retries.
 _WAITING_RE = re.compile(r"waiting for (.+)")
 _QUOTED_RE = re.compile(r"'([^']*)'|\"([^\"]*)\"")
 _WORD_RE = re.compile(r"[A-Za-z_][\w-]*")
@@ -40,8 +42,8 @@ def _removed_lines(git_diff: str) -> list[str]:
 
 
 def failing_locator(raw_log: str) -> str:
-    """The locator of the Playwright call that failed (the first ``waiting for``), or ``""``."""
-    match = _WAITING_RE.search(raw_log)
+    """The locator of the call that failed: the first ``waiting for`` in the first failure."""
+    match = _WAITING_RE.search(first_failure(raw_log))
     return match.group(1).strip() if match else ""
 
 

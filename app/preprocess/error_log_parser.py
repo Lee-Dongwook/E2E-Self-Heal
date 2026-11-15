@@ -6,8 +6,9 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-# The `Error:` line carrying the core reason (e.g. `Error: locator.click: Timeout ...`).
-_ERROR_RE = re.compile(r"^\s*(Error:.*)$", re.MULTILINE)
+# A failure's reason line. Playwright prints `Error: locator.click: …` for most failures but
+# `TimeoutError: page.click: Timeout 3000ms exceeded.` for a timed-out action.
+_ERROR_RE = re.compile(r"^[ \t]*((?:[A-Z][A-Za-z]*)?Error:.*)$", re.MULTILINE)
 # A test-file source location, e.g. `tests/example.spec.ts:12:34`.
 _LOCATION_RE = re.compile(r"([\w./-]+\.(?:spec|test)\.[jt]sx?):(\d+):(\d+)")
 # The stack-trace failing line, e.g. `at tests/example.spec.ts:12:9` — the line to patch,
@@ -29,18 +30,33 @@ _RESOLVED_RE = re.compile(r"resolved to \d+ elements?")
 _MAX_LINE_CHARS = 200
 
 
-def parse_error_log(raw_log: str | None) -> str:
-    """Extract only the essentials from a raw Playwright failure log.
+def first_failure(raw_log: str) -> str:
+    """The first failure's block of a Playwright log: its reason line up to the next one.
 
-    Keeps the ``Error:`` reason; the resolved ``Locator:`` and ``Expected:``/``Received:``
-    lines from ``expect()`` assertion failures; any strict-mode ``resolved to N elements``
-    signal; the failing source location; and up to three call-log ``waiting for ...``
-    lines. Falls back to the trimmed tail of the log if nothing matches, so the Diagnoser
-    always gets *something* to work with.
+    One run can fail several tests, and the engine repairs the first failure, so every signal
+    must come from that block, not from whichever test happens to mention it first. A log with
+    no reason line is returned whole.
+    """
+    first = _ERROR_RE.search(raw_log)
+    if first is None:
+        return raw_log
+    following = _ERROR_RE.search(raw_log, first.end())
+    return raw_log[first.start(1) : following.start() if following else len(raw_log)]
+
+
+def parse_error_log(raw_log: str | None) -> str:
+    """Extract only the essentials from the first failure in a raw Playwright log.
+
+    Keeps the reason line (``Error:``, ``TimeoutError:``, …); the resolved ``Locator:`` and
+    ``Expected:``/``Received:`` lines from ``expect()`` assertion failures; any strict-mode
+    ``resolved to N elements`` signal; the failing source location; and up to three call-log
+    ``waiting for ...`` lines. Falls back to the trimmed tail of the log if nothing matches, so
+    the Diagnoser always gets *something* to work with.
     """
     if not raw_log:
         return ""
 
+    raw_log = first_failure(raw_log)
     parts: list[str] = []
 
     error_match = _ERROR_RE.search(raw_log)
