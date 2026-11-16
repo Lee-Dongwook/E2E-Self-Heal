@@ -19,6 +19,7 @@ Markdown summary for the pull request that proposes it, with the changes against
 
 import argparse
 import sys
+from collections import Counter
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -27,19 +28,36 @@ from app.safety_benchmark import (
     ActualOutcome,
     GateStatus,
     SafetyBenchmarkReport,
+    build_report,
     discover_safety_scenarios,
 )
 from app.safety_report import load_baseline, render_markdown
 
 
 def baseline_problems(report: SafetyBenchmarkReport, scenario_root: Path) -> list[str]:
-    """Every reason ``report`` can't be a baseline for the corpus under ``scenario_root``."""
+    """Every reason ``report`` can't be a baseline for the corpus under ``scenario_root``.
+
+    Only the per-scenario results are trusted: the gates and metrics are recomputed from them,
+    and each result must be the only one for its scenario, from run 1. A report whose summary
+    fields were edited, or left empty, can't qualify.
+    """
     problems: list[str] = []
     if report.repeats != 1:
         problems.append(f"repeats is {report.repeats}; a baseline must be a single pass")
-    for gate in report.gates:
+    for name, count in sorted(Counter(r.name for r in report.results).items()):
+        if count > 1:
+            problems.append(f"{name} has {count} results; a baseline has exactly one")
+    for result in report.results:
+        if result.run != 1:
+            problems.append(f"{result.name} is from run {result.run}; a baseline has only run 1")
+    recomputed = build_report(list(report.results))
+    for gate in recomputed.gates:
         if gate.status is not GateStatus.PASS:
             problems.append(f"gate {gate.name} is {gate.status.value}")
+    if report.model_dump(include={"gates", "metrics"}) != recomputed.model_dump(
+        include={"gates", "metrics"}
+    ):
+        problems.append("the report's gates or metrics don't match its results")
     for result in report.results:
         if result.actual_outcome is ActualOutcome.SKIPPED:
             continue

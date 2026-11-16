@@ -83,6 +83,25 @@ def test_a_clean_single_pass_over_the_corpus_qualifies() -> None:
             lambda: build_report(_results()).model_copy(update={"repeats": 3}),
             ["repeats is 3; a baseline must be a single pass"],
         ),
+        # Only the results are trusted: an emptied gate list can't hide a failing run.
+        (
+            lambda: build_report(_with("id-rename", actual_outcome=ActualOutcome.ERROR)).model_copy(
+                update={"gates": []}
+            ),
+            [
+                "gate error_count is fail",
+                "the report's gates or metrics don't match its results",
+                "id-rename ended as error, labeled repair",
+            ],
+        ),
+        (
+            lambda: build_report([*_results(), _results()[0]]),
+            [f"{_results()[0].name} has 2 results; a baseline has exactly one"],
+        ),
+        (
+            lambda: build_report(_with("id-rename", run=2)).model_copy(update={"repeats": 1}),
+            ["id-rename is from run 2; a baseline has only run 1"],
+        ),
     ],
     ids=[
         "an-error",
@@ -92,6 +111,9 @@ def test_a_clean_single_pass_over_the_corpus_qualifies() -> None:
         "a-relabel",
         "a-skipped-scenario-scored",
         "repeated-runs",
+        "gates-removed",
+        "a-duplicate-result",
+        "a-run-2-result-claiming-one-pass",
     ],
 )
 def test_a_report_that_would_mislead_later_comparisons_is_rejected(
