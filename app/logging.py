@@ -29,12 +29,10 @@ class _CurrentStderr:
 
 
 def _loggable(value: object) -> object:
-    """``value`` as plain data the redaction can see into (#460).
+    """``value`` as plain data the redaction can see into.
 
-    ``redact_value`` walks dicts, lists and strings. Anything else used to reach the renderer
-    untouched and be printed by its ``repr``: a tuple or set of strings, an exception passed as
-    a value, a pydantic model, a ``Path`` or ``bytes`` printed a configured secret as is. Those
-    become lists or their text here, so every leaf that gets rendered is redacted.
+    ``redact_value`` walks dicts, lists and strings only; anything else would be printed by its
+    ``repr`` unredacted, so it becomes a list or its text here.
     """
     if value is None or isinstance(value, str | int | float | bool):
         return value
@@ -69,11 +67,7 @@ def redact_event(
 
 
 class _RedactingFormatter(logging.Formatter):
-    """Redact stdlib log records: what third-party libraries log never passes through structlog.
-
-    httpx logs every request URL at INFO and the OpenAI SDK logs request options at DEBUG, so a
-    key in a base URL or a header reached stderr as is (#460).
-    """
+    """Redact stdlib log records, which never pass through structlog (httpx, the OpenAI SDK)."""
 
     def format(self, record: logging.LogRecord) -> str:
         try:

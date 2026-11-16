@@ -17,6 +17,7 @@ import re
 
 import structlog
 
+from app.preprocess.error_log_parser import first_failure_reason
 from app.preprocess.selector_diff_check import failing_locator, locator_terms
 
 logger = structlog.get_logger(__name__)
@@ -32,8 +33,6 @@ _SUBMIT_CONTROLS = {("button", "submit"), ("input", "submit"), ("input", "image"
 _STRICT_MODE = re.compile(
     r"strict mode violation: (?P<locator>.+?) resolved to (?P<count>\d+) elements"
 )
-# The failure under repair: the first `Error:` line, as parse_error_log selects it.
-_FIRST_ERROR = re.compile(r"^\s*Error:.*$", re.MULTILINE)
 # "    1) <button ... id="a">Submit</button> aka locator('#a')"
 _MATCH_LINE = re.compile(r"^\s*\d+\)\s+(?P<element><.*?)(?:\s+aka\s+(?P<aka>.+?))?\s*$")
 _LOCATOR_CALL = re.compile(r"""^locator\((['"])(?P<selector>.+)\1\)$""")
@@ -85,20 +84,19 @@ def _selector_for(element: dict, line: int) -> str:
 def _strict_mode_matches(raw_log: str) -> list[str]:
     """The elements Playwright says the failing locator resolved to, or ``[]``.
 
-    Only the failure being repaired counts: the violation must be on the log's first ``Error:``
-    line, the one ``parse_error_log`` hands the model. Each match is named by Playwright's own
-    suggested locator (``aka``), unwrapped to a bare selector when it is a plain
-    ``locator('...')``, so it can go straight into ``--selector-hint``; an element without one
-    is named by its HTML.
+    Only the failure being repaired counts: the violation must be on the reason line of the
+    log's first failure (``first_failure``), the one ``parse_error_log`` hands the model. Each
+    match is named by Playwright's own suggested locator (``aka``), unwrapped to a bare
+    selector when it is a plain ``locator('...')``, so it can go straight into
+    ``--selector-hint``; an element without one is named by its HTML.
     """
-    error = _FIRST_ERROR.search(raw_log)
-    if error is None:
-        return []
-    violation = _STRICT_MODE.search(error.group(0))
+    reason, after = first_failure_reason(raw_log)
+    rest = after.splitlines()[1:]  # `after` starts with the end of the reason line
+    violation = _STRICT_MODE.search(reason)
     if violation is None or int(violation.group("count")) < _MIN_LOOK_ALIKES:
         return []
     candidates: list[str] = []
-    for line in raw_log[error.end() :].splitlines()[1:]:
+    for line in rest:
         match = _MATCH_LINE.match(line)
         if match is None:
             break

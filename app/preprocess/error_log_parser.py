@@ -6,8 +6,9 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-# The `Error:` line carrying the core reason (e.g. `Error: locator.click: Timeout ...`).
-_ERROR_RE = re.compile(r"^\s*(Error:.*)$", re.MULTILINE)
+# A failure's reason line. Playwright prints `Error: locator.click: …` for most failures but
+# `TimeoutError: page.click: Timeout 3000ms exceeded.` for a timed-out action.
+_ERROR_RE = re.compile(r"^[ \t]*((?:[A-Z][A-Za-z]*)?Error:.*)$", re.MULTILINE)
 # A test-file source location, e.g. `tests/example.spec.ts:12:34`.
 _LOCATION_RE = re.compile(r"([\w./-]+\.(?:spec|test)\.[jt]sx?):(\d+):(\d+)")
 # The stack-trace failing line, e.g. `at tests/example.spec.ts:12:9` — the line to patch,
@@ -27,20 +28,62 @@ _RECEIVED_RE = re.compile(r"^\s*(Received(?:\s+\w+)?:\s*\S.*)$", re.MULTILINE)
 _RESOLVED_RE = re.compile(r"resolved to \d+ elements?")
 # Cap for each captured single-line signal so element dumps can't blow the context budget.
 _MAX_LINE_CHARS = 200
+# A list/line reporter failure header: `  1) tests/a.spec.ts:3:1 › title ───`, optionally with a
+# project prefix (`1) [chromium] › tests/a.spec.ts:3:1 › …`); the path may contain spaces. Its
+# groups are the path and line. Element lines in a strict-mode dump (`    1) <button …> aka …`)
+# start with `<`, so they never match.
+_HEADER_RE = re.compile(
+    r"^[ \t]*\d+\)[ \t]+(?!<)(?:[^\n]*?›[ \t]+)?([^›\n<]+?):(\d+):\d+\b.*$", re.MULTILINE
+)
+_TEST_FILE_RE = re.compile(r"\.(?:spec|test)\.[jt]sx?$")
+
+
+def first_failure(raw_log: str) -> str:
+    """The first failure's block of a Playwright log, header included.
+
+    One run can fail several tests, and the engine repairs the first failure, so every signal
+    must come from that block. It starts at the reporter header before the first reason line
+    (or the reason line itself) and ends before the next header or reason line. A log with no
+    reason line is returned whole.
+    """
+    first = _ERROR_RE.search(raw_log)
+    if first is None:
+        return raw_log
+    headers_before = [m for m in _HEADER_RE.finditer(raw_log, 0, first.start())]
+    start = headers_before[-1].start() if headers_before else first.start(1)
+    ends = [
+        match.start()
+        for match in (
+            _HEADER_RE.search(raw_log, first.end()),
+            _ERROR_RE.search(raw_log, first.end()),
+        )
+        if match is not None
+    ]
+    return raw_log[start : min(ends, default=len(raw_log))]
+
+
+def first_failure_reason(raw_log: str) -> tuple[str, str]:
+    """The first failure's reason line, and the rest of its block after that line."""
+    block = first_failure(raw_log)
+    reason = _ERROR_RE.search(block)
+    if reason is None:
+        return "", block
+    return reason.group(1), block[reason.end() :]
 
 
 def parse_error_log(raw_log: str | None) -> str:
-    """Extract only the essentials from a raw Playwright failure log.
+    """Extract only the essentials from the first failure in a raw Playwright log.
 
-    Keeps the ``Error:`` reason; the resolved ``Locator:`` and ``Expected:``/``Received:``
-    lines from ``expect()`` assertion failures; any strict-mode ``resolved to N elements``
-    signal; the failing source location; and up to three call-log ``waiting for ...``
-    lines. Falls back to the trimmed tail of the log if nothing matches, so the Diagnoser
-    always gets *something* to work with.
+    Keeps the reason line (``Error:``, ``TimeoutError:``, …); the resolved ``Locator:`` and
+    ``Expected:``/``Received:`` lines from ``expect()`` assertion failures; any strict-mode
+    ``resolved to N elements`` signal; the failing source location; and up to three call-log
+    ``waiting for ...`` lines. Falls back to the trimmed tail of the log if nothing matches, so
+    the Diagnoser always gets *something* to work with.
     """
     if not raw_log:
         return ""
 
+    raw_log = first_failure(raw_log)
     parts: list[str] = []
 
     error_match = _ERROR_RE.search(raw_log)
@@ -58,7 +101,12 @@ def parse_error_log(raw_log: str | None) -> str:
     if resolved_match and not any(resolved_match.group(0) in part for part in parts):
         parts.append(f"strict mode: {resolved_match.group(0)}")
 
-    loc_match = _AT_LOCATION_RE.search(raw_log) or _LOCATION_RE.search(raw_log)
+    # A stack line first; without one, this failure's own header (it handles spaces and a
+    # project prefix) when it names a test file, as the generic fallback below requires.
+    header = _HEADER_RE.match(raw_log)
+    if header is not None and not _TEST_FILE_RE.search(header.group(1)):
+        header = None
+    loc_match = _AT_LOCATION_RE.search(raw_log) or header or _LOCATION_RE.search(raw_log)
     if loc_match:
         parts.append(f"at {loc_match.group(1)}:{loc_match.group(2)}")
 

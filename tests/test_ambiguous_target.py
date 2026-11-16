@@ -1,5 +1,7 @@
 """The diff check that refuses a test whose element became several look-alikes (Issue #388)."""
 
+from pathlib import Path
+
 import pytest
 
 from app.preprocess.ambiguous_target import ambiguous_replacements
@@ -249,11 +251,11 @@ def test_a_rename_beside_a_button_without_a_type_is_still_a_rename() -> None:
     assert ambiguous_replacements(CLICK_TIMEOUT, context) == []
 
 
-# Two tests failing in one spec file, as `npx playwright test --reporter=list` prints them.
+# Two tests failing in one spec file, as `npx playwright test --reporter=list` prints them; a
+# timed-out action prints a `TimeoutError:` line and no separate `Error:` line.
 _TIMEOUT_BLOCK = """  1) scenarios/form/spec.ts:3:1 › submits the form ──────────────────────────────
 
     TimeoutError: page.click: Timeout 3000ms exceeded.
-    Error: page.click: Timeout 3000ms exceeded.
     Call log:
       - waiting for locator('#submit-btn')
 """
@@ -265,15 +267,33 @@ _STRICT_BLOCK = (
 )
 
 
-def test_a_later_tests_strict_mode_violation_does_not_refuse_the_first_failure() -> None:
-    # parse_error_log and failing_locator repair the first failure, a plain timeout; the
-    # violation belongs to another test in the same log.
-    log = _TIMEOUT_BLOCK + "\n" + _STRICT_BLOCK
-
-    assert ambiguous_replacements(log, []) == []
+# The real fixture: a timed-out click first, then another test's strict-mode violation.
+_REAL = (Path(__file__).parent / "fixtures" / "playwright-two-failures.log").read_text()
+_REAL_TIMEOUT, _REAL_STRICT = _REAL.split("  2) scenarios")
+_REAL_STRICT = "  2) scenarios" + _REAL_STRICT
 
 
-def test_a_strict_mode_violation_in_the_first_failure_refuses_whatever_follows() -> None:
-    log = _STRICT_BLOCK + "\n" + _TIMEOUT_BLOCK
-
-    assert ambiguous_replacements(log, []) == ["#submit-btn", "#submit-footer"]
+@pytest.mark.parametrize(
+    ("log", "expected"),
+    [
+        (_TIMEOUT_BLOCK + "\n" + _STRICT_BLOCK, []),
+        (_STRICT_BLOCK + "\n" + _TIMEOUT_BLOCK, ["#submit-btn", "#submit-footer"]),
+        (_REAL, []),
+        (
+            _REAL_STRICT + _REAL_TIMEOUT,
+            [
+                "getByRole('button', { name: 'Submit' })",
+                "getByRole('button', { name: 'Get started' })",
+            ],
+        ),
+    ],
+    ids=[
+        "timeout-then-strict",
+        "strict-then-timeout",
+        "real-timeout-then-strict",
+        "real-strict-then-timeout",
+    ],
+)
+def test_a_multi_test_log_is_judged_by_its_first_failure(log: str, expected: list[str]) -> None:
+    # Only the failure under repair counts; another test's violation in the same log does not.
+    assert ambiguous_replacements(log, []) == expected

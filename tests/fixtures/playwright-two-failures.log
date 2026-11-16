@@ -1,0 +1,48 @@
+
+Running 2 tests using 1 worker
+
+  ✘  1 scenarios/zz/spec.ts:3:1 › a times out (2.1s)
+  ✘  2 scenarios/zz/spec.ts:8:1 › b is ambiguous (88ms)
+
+
+  1) scenarios/zz/spec.ts:3:1 › a times out ────────────────────────────────────────────────────────
+
+    TimeoutError: page.click: Timeout 2000ms exceeded.
+    Call log:
+      - waiting for locator('#no-such-button')
+
+
+      3 | test("a times out", async ({ page }) => {
+      4 |   await page.goto("/");
+    > 5 |   await page.click("#no-such-button", { timeout: 2000 });
+        |              ^
+      6 | });
+      7 |
+      8 | test("b is ambiguous", async ({ page }) => {
+        at /repo/examples/scenarios/zz/spec.ts:5:14
+
+    Error Context: test-results/zz-spec.ts-a-times-out/error-context.md
+
+  2) scenarios/zz/spec.ts:8:1 › b is ambiguous ─────────────────────────────────────────────────────
+
+    Error: locator.click: Error: strict mode violation: getByRole('button') resolved to 2 elements:
+        1) <button class="btn" type="submit" id="submit-btn">Submit</button> aka getByRole('button', { name: 'Submit' })
+        2) <button type="button" class="cta-primary">Get started</button> aka getByRole('button', { name: 'Get started' })
+
+    Call log:
+      - waiting for getByRole('button')
+
+
+       8 | test("b is ambiguous", async ({ page }) => {
+       9 |   await page.goto("/");
+    > 10 |   await page.getByRole("button").click();
+         |                                  ^
+      11 | });
+      12 |
+        at /repo/examples/scenarios/zz/spec.ts:10:34
+
+    Error Context: test-results/zz-spec.ts-b-is-ambiguous/error-context.md
+
+  2 failed
+    scenarios/zz/spec.ts:3:1 › a times out ─────────────────────────────────────────────────────────
+    scenarios/zz/spec.ts:8:1 › b is ambiguous ──────────────────────────────────────────────────────

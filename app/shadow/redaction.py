@@ -71,11 +71,9 @@ _CREDENTIAL_PAIR_RE = re.compile(
     r"(?i)\b(token|access_token|refresh_token|api_key|apikey|password|secret|credential)"
     r"\s*=\s*([^\s&,;]+)"
 )
-# A sensitive key quoted with its quoted value, as JSON or a Python dict repr writes it:
-# `"api_key": "..."`, `'Authorization': 'Bearer ...'`. Free text such as an error body, a
-# rendered exception or a log value often embeds a structure that was serialized before it
-# could be redacted by key (#460). An unquoted `password: ...` is left alone: UI text in an
-# ARIA snapshot reads like that ("Password: at least 8 characters").
+# A sensitive key quoted with its quoted value, as serialized JSON or a dict repr writes it
+# (`"api_key": "..."`). An unquoted `password: ...` is left alone: ARIA snapshot UI text reads
+# like that.
 _QUOTED_PAIR_RE = re.compile(
     r"(?i)(?P<prefix>(?P<kq>[\"'])(?:"
     + "|".join(

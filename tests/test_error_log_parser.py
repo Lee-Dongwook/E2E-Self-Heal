@@ -1,6 +1,8 @@
+from pathlib import Path
+
 import pytest
 
-from app.preprocess.error_log_parser import parse_error_log
+from app.preprocess.error_log_parser import first_failure, parse_error_log
 
 SAMPLE_LOG = """
 Running 1 test using 1 worker
@@ -107,3 +109,84 @@ def test_long_received_line_is_bounded() -> None:
     result = parse_error_log(long_log)
     received_line = next(line for line in result.splitlines() if line.startswith("Received:"))
     assert len(received_line) <= 200
+
+
+# --- The first failure of a real multi-test run ----------------------------------------------
+
+# A real `npx playwright test --reporter=list` run of one spec with two failing tests: "a times
+# out" (a timed-out click) and then "b is ambiguous" (a strict-mode violation).
+TWO_FAILURES = (Path(__file__).parent / "fixtures" / "playwright-two-failures.log").read_text()
+_FIRST, _SECOND = TWO_FAILURES.split("  2) scenarios")
+_SECOND = "  2) scenarios" + _SECOND
+_TIMEOUT = (
+    "TimeoutError: page.click: Timeout 2000ms exceeded.\ncall log: locator('#no-such-button')"
+)
+# Reporter header forms the failure scanner also reads: plain, with a project prefix, and a
+# path containing a space.
+_HEADER_FORMS = {
+    "plain": "tests/a.spec.ts",
+    "project-prefix": "[chromium] › tests/a.spec.ts",
+    "space-in-path": "tests/my suite/a.spec.ts",
+}
+
+
+def _no_stack(header: str) -> str:
+    """Two failures with no `at …` stack line, so only the headers say where each one is."""
+    return (
+        f"  1) {header}:3:1 › first test ───\n"
+        "    Error: first\n"
+        f"  2) {header}:9:1 › second test ───\n"
+        "    Error: second\n"
+    )
+
+
+@pytest.mark.parametrize(
+    ("log", "expected"),
+    [
+        # Playwright prints `TimeoutError:`, not `Error:`, for a timed-out action.
+        (_FIRST, _TIMEOUT),
+        (TWO_FAILURES, _TIMEOUT),
+        (
+            _SECOND + _FIRST,
+            "Error: locator.click: Error: strict mode violation: getByRole('button') resolved "
+            "to 2 elements:\ncall log: getByRole('button')",
+        ),
+        # No `at …` line: the location comes from this failure's header, not the next one's.
+        *[
+            (_no_stack(header), f"Error: first\nat {header.split('› ')[-1]}:3")
+            for header in _HEADER_FORMS.values()
+        ],
+    ],
+    ids=[
+        "timeout-alone",
+        "timeout-then-strict",
+        "strict-then-timeout",
+        *(f"no-stack-{form}" for form in _HEADER_FORMS),
+    ],
+)
+def test_only_the_first_failure_is_parsed(log: str, expected: str) -> None:
+    assert parse_error_log(log) == expected
+
+
+_STRICT_DUMP = _SECOND.split("Call log:")[0]
+
+
+@pytest.mark.parametrize(
+    ("log", "expected"),
+    [
+        ("      - waiting for locator('#email')\n", "      - waiting for locator('#email')\n"),
+        *[
+            (_no_stack(header), f"  1) {header}:3:1 › first test ───\n    Error: first\n")
+            for header in _HEADER_FORMS.values()
+        ],
+        # `    1) <button …> aka …` lines look like numbered headers but belong to this failure.
+        (_STRICT_DUMP, _STRICT_DUMP),
+    ],
+    ids=[
+        "no-reason-line-is-whole",
+        *(f"own-header-not-next-{form}" for form in _HEADER_FORMS),
+        "strict-mode-dump-kept",
+    ],
+)
+def test_first_failure_block(log: str, expected: str) -> None:
+    assert first_failure(log) == expected
