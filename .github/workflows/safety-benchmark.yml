@@ -6,10 +6,20 @@ name: safety-benchmark
 # pass --enforce-gates; run that before tagging (docs/RELEASING.md).
 #
 # Cost control: pull requests only run it when something that can change repair behaviour
-# changed. It also runs on pushes to main, weekly, and on demand.
+# changed. It also runs on pushes to main, weekly, and on demand. The baseline in benchmarks/
+# only changes the report's comparison columns, so editing it starts no run.
+#
+# Baseline updates (#461): a manual run on main with `update-baseline` checks the report with
+# scripts/check_safety_baseline.py and, if it qualifies, opens a pull request replacing
+# benchmarks/safety-baseline.json. Only that job can write, and only for that trigger.
 
 on:
   workflow_dispatch:
+    inputs:
+      update-baseline:
+        description: "Propose this run's report as the new baseline (main only)"
+        type: boolean
+        default: false
   schedule:
     # Mondays after the free Gemini quota resets (midnight Pacific: 07:00 UTC in daylight saving,
     # 08:00 UTC otherwise), so the weekly run starts with the full daily quota (#411).
@@ -19,7 +29,6 @@ on:
     paths:
       - "app/**"
       - "examples/**"
-      - "benchmarks/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/safety-benchmark.yml"
@@ -27,7 +36,6 @@ on:
     paths:
       - "app/**"
       - "examples/**"
-      - "benchmarks/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/safety-benchmark.yml"
@@ -36,7 +44,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: safety-benchmark-${{ github.ref }}
+  # A baseline run has its own group, so a push to main can't cancel it halfway.
+  group: safety-benchmark-${{ github.ref }}${{ inputs.update-baseline && '-baseline' || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -181,3 +190,66 @@ jobs:
           name: safety-worker-logs
           path: ${{ runner.temp }}/e2e-healer-safety-logs-*/
           if-no-files-found: warn
+
+  propose-baseline:
+    needs: safety-benchmark
+    # The benchmark job is continue-on-error, so its result says little; the check below decides.
+    if: >-
+      !cancelled() && needs.safety-benchmark.result != 'skipped'
+      && github.event_name == 'workflow_dispatch' && inputs.update-baseline
+      && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install Python dependencies
+        run: uv sync --locked
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: safety-report
+          path: ${{ runner.temp }}/report
+
+      - name: Check the report qualifies as a baseline
+        run: |
+          uv run --frozen python scripts/check_safety_baseline.py \
+            "$RUNNER_TEMP/report/safety-report.json" \
+            --scenario-root examples/scenarios \
+            --previous benchmarks/safety-baseline.json \
+            --body "$RUNNER_TEMP/pr-body.md" 2> "$RUNNER_TEMP/problems.txt" || {
+            { echo "## Baseline not proposed"; echo; cat "$RUNNER_TEMP/problems.txt"; } >> "$GITHUB_STEP_SUMMARY"
+            cat "$RUNNER_TEMP/problems.txt"
+            exit 1
+          }
+
+      # A pull request opened with GITHUB_TOKEN starts no workflows, so proposing a baseline spends
+      # no further model calls. Review and merge it like any other change.
+      - name: Open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          branch="safety-baseline/run-${GITHUB_RUN_ID}"
+          cp "$RUNNER_TEMP/report/safety-report.json" benchmarks/safety-baseline.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -q -am "chore(benchmarks): update the safety baseline from run ${GITHUB_RUN_ID}" \
+            -m "Report of ${RUN_URL} on ${GITHUB_SHA}, checked by scripts/check_safety_baseline.py."
+          git push -q origin "$branch"
+          title="chore(benchmarks): update the safety baseline from run ${GITHUB_RUN_ID}"
+          if ! gh pr create --base main --head "$branch" --title "$title" --body-file "$RUNNER_TEMP/pr-body.md"; then
+            # Repositories can forbid Actions from opening pull requests; the branch is pushed.
+            echo "Pushed \`$branch\`. Open the pull request: ${{ github.server_url }}/${{ github.repository }}/compare/main...$branch" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
