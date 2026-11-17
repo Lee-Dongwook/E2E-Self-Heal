@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Safety baseline updates are proposed by CI** (#461).
+  `gh workflow run safety-benchmark.yml --ref main -f update-baseline=true` runs the benchmark,
+  checks the report with the new `scripts/check_safety_baseline.py` (single pass, every gate
+  passing, every scenario as labeled, exactly the checked-in corpus), and opens a pull request
+  replacing `benchmarks/safety-baseline.json`, with the comparison as its description. Only that
+  job can write, only for that manual trigger on `main`, and it never pushes to `main`. A
+  baseline-only change no longer starts a benchmark run. The current baseline fails the check:
+  it predates the `submit-another-added` scenario.
 - **More ambiguous targets are refused before any model call** (#458). The check caught only a
   removed element replaced by two of the same tag and `type`, named by `id`, class, `data-testid`
   or `name`, so role and text locators were never covered. It now also refuses as

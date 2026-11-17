@@ -163,3 +163,35 @@ def test_the_workflow_sanitizer_removes_a_key_written_straight_to_a_worker_log(
     redacted = log.read_text(encoding="utf-8")
     assert key not in redacted
     assert "Playwright line" in redacted
+
+
+def test_only_a_manual_baseline_run_on_main_can_write(workflow: dict[Any, Any]) -> None:
+    # A token that can push must never exist for a pull request or a push: only the job that
+    # proposes a baseline asks for one, and it runs only when a person asked for it on main.
+    writers = {
+        name: job
+        for name, job in workflow["jobs"].items()
+        if "write" in str(job.get("permissions"))
+    }
+    assert set(writers) == {"propose-baseline"}
+    condition = writers["propose-baseline"]["if"]
+    assert "github.event_name == 'workflow_dispatch'" in condition
+    assert "inputs.update-baseline" in condition
+    assert "github.ref == 'refs/heads/main'" in condition
+    assert _triggers(workflow)["workflow_dispatch"]["inputs"]["update-baseline"]["default"] is False
+
+
+def test_a_baseline_is_proposed_only_after_the_report_qualifies(workflow: dict[Any, Any]) -> None:
+    steps = workflow["jobs"]["propose-baseline"]["steps"]
+    names = [step.get("name", "") for step in steps]
+    check = names.index("Check the report qualifies as a baseline")
+    pr = names.index("Open a pull request")
+
+    assert check < pr
+    assert "scripts/check_safety_baseline.py" in steps[check]["run"]
+    assert "--scenario-root examples/scenarios" in steps[check]["run"]
+    assert "exit 1" in steps[check]["run"]
+    # It opens a pull request for review; it never pushes to main.
+    assert "gh pr create --base main" in steps[pr]["run"]
+    assert 'push -q origin "$branch"' in steps[pr]["run"]
+    assert "origin main" not in steps[pr]["run"]

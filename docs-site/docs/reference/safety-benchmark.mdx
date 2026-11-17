@@ -362,37 +362,38 @@ Either way, when a scenario ends as `error`, its log has the provider's actual r
   bump, so merging them all on the same day can exhaust the quota. Spread them across days, at
   most two a day, leaving room for a pull request's own run.
 - **Runs when it can matter.** On pushes to `main`, weekly (Mondays at 08:17 UTC, after the free
-  quota resets), on demand, and on pull requests that change `app/`, `examples/`, `benchmarks/` or
-  the dependency files, so documentation-only changes spend no model calls.
+  quota resets), on demand, and on pull requests that change `app/`, `examples/` or the dependency
+  files, so documentation-only and baseline-only changes spend no model calls.
 
 ### Setting a baseline
 
-The comparison reads `benchmarks/safety-baseline.json`. Until that file exists the report simply
-has no deltas. A baseline only means something against the same model and the same number of
-runs per scenario (the latency delta compares totals), so take it from an ordinary single-pass
-run of the CI workflow, the same shape as every run it is compared with:
+The comparison reads `benchmarks/safety-baseline.json`. A baseline only means something against
+the same model, the same corpus and one run per scenario, so it comes from an ordinary run of the
+CI workflow on `main`:
 
-1. Start a manual run on `main`:
+```bash
+gh workflow run safety-benchmark.yml --ref main -f update-baseline=true
+```
 
-   ```bash
-   gh workflow run safety-benchmark.yml --ref main
-   ```
+After the benchmark, a `propose-baseline` job runs `scripts/check_safety_baseline.py` on the
+report. It qualifies only if it is a single pass, every release gate passes (none merely
+`insufficient_sample`), every scored scenario ended as labeled, and it covers exactly the
+checked-in corpus with the same labels. The last two matter beyond the gates: one wrong
+outcome in 23 still passes `refusal_accuracy`, and a baseline from an older corpus leaves new
+scenarios without a comparison. If any check fails, the job lists the reasons in the run summary
+and proposes nothing. Otherwise it opens a pull request replacing the baseline, with the
+comparison against the current one as its description. Review and merge it as usual. That pull
+request starts no workflows, so the update costs only the one run.
 
-2. Download that run's report. Filter on the manual trigger, so a newer push or scheduled run is
-   not picked up instead:
+Only this job can write to the repository, only for a manual run on `main` with
+`update-baseline`, and it never pushes to `main` itself. If the repository doesn't let GitHub
+Actions open pull requests, the branch is still pushed and the run summary links to it. The
+history of the baseline is the file's git history: each commit names the run and commit it came
+from (`git log -p benchmarks/safety-baseline.json`).
 
-   ```bash
-   gh run list --workflow safety-benchmark.yml --event workflow_dispatch --branch main --limit 1
-   gh run download <run-id> -n safety-report
-   ```
+Start the run early in the quota day, and regenerate the baseline when the CI model or the corpus
+changes. To check a downloaded report yourself:
 
-3. Review it before committing: `error_count` should be 0 and every scenario should end as
-   labeled. A provider failure in the baseline makes every later comparison noisy.
-4. Commit `safety-report.json` as `benchmarks/safety-baseline.json` in a pull request. That pull
-   request touches `benchmarks/`, so both its own run and the run on `main` after it merges start
-   the benchmark. With the manual run, that is three runs, more than the free tier's daily quota
-   allows: cancel the pull request's run, which a baseline file cannot affect, and let the run on
-   `main` show the first deltas. If the day's quota is already partly spent, merge the next day.
-
-Regenerate the baseline when the CI model changes. Latency is part of the file, so expect it to
-change a little on every refresh.
+```bash
+uv run --frozen python scripts/check_safety_baseline.py safety-report.json --scenario-root examples/scenarios
+```
