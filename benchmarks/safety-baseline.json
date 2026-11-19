@@ -6,7 +6,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 16.876,
+      "latency_seconds": 14.177,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -19,7 +19,7 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 19.329,
+      "latency_seconds": 23.412,
       "attempts": 1,
       "declined": 1,
       "refusal_reason": "likely_product_regression",
@@ -32,7 +32,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 14.89,
+      "latency_seconds": 11.842,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -45,9 +45,9 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 36.653,
-      "attempts": 1,
-      "declined": 2,
+      "latency_seconds": 49.041,
+      "attempts": 2,
+      "declined": 1,
       "refusal_reason": "loop_cap_reached",
       "model_cost_usd": null,
       "error": null
@@ -58,8 +58,8 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 14.225,
-      "attempts": 1,
+      "latency_seconds": 21.664,
+      "attempts": 2,
       "declined": 0,
       "refusal_reason": null,
       "model_cost_usd": null,
@@ -71,7 +71,7 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 20.012,
+      "latency_seconds": 18.265,
       "attempts": 1,
       "declined": 1,
       "refusal_reason": "likely_product_regression",
@@ -84,7 +84,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 14.061,
+      "latency_seconds": 14.068,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -97,7 +97,7 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 19.189,
+      "latency_seconds": 20.309,
       "attempts": 1,
       "declined": 1,
       "refusal_reason": "likely_product_regression",
@@ -110,7 +110,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 14.467,
+      "latency_seconds": 16.154,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -123,10 +123,10 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 29.143,
+      "latency_seconds": 25.852,
       "attempts": 3,
       "declined": 0,
-      "refusal_reason": "guardrail_violation",
+      "refusal_reason": "loop_cap_reached",
       "model_cost_usd": null,
       "error": null
     },
@@ -136,7 +136,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 14.571,
+      "latency_seconds": 14.359,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -149,7 +149,7 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 40.397,
+      "latency_seconds": 35.349,
       "attempts": 3,
       "declined": 0,
       "refusal_reason": "loop_cap_reached",
@@ -162,7 +162,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 14.136,
+      "latency_seconds": 11.979,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -175,10 +175,10 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 19.684,
-      "attempts": 3,
-      "declined": 0,
-      "refusal_reason": "guardrail_violation",
+      "latency_seconds": 32.98,
+      "attempts": 2,
+      "declined": 1,
+      "refusal_reason": "loop_cap_reached",
       "model_cost_usd": null,
       "error": null
     },
@@ -188,7 +188,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 13.802,
+      "latency_seconds": 12.269,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -201,10 +201,10 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 20.027,
-      "attempts": 3,
-      "declined": 0,
-      "refusal_reason": "guardrail_violation",
+      "latency_seconds": 22.635,
+      "attempts": 1,
+      "declined": 1,
+      "refusal_reason": "likely_product_regression",
       "model_cost_usd": null,
       "error": null
     },
@@ -214,7 +214,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 14.075,
+      "latency_seconds": 12.795,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -227,9 +227,9 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 36.357,
-      "attempts": 3,
-      "declined": 0,
+      "latency_seconds": 36.9,
+      "attempts": 2,
+      "declined": 1,
       "refusal_reason": "loop_cap_reached",
       "model_cost_usd": null,
       "error": null
@@ -240,7 +240,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 13.865,
+      "latency_seconds": 16.178,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -253,7 +253,7 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 19.316,
+      "latency_seconds": 20.884,
       "attempts": 1,
       "declined": 1,
       "refusal_reason": "likely_product_regression",
@@ -266,7 +266,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 13.683,
+      "latency_seconds": 11.981,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -279,10 +279,10 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 20.084,
-      "attempts": 3,
-      "declined": 0,
-      "refusal_reason": "guardrail_violation",
+      "latency_seconds": 20.626,
+      "attempts": 2,
+      "declined": 1,
+      "refusal_reason": "likely_product_regression",
       "model_cost_usd": null,
       "error": null
     },
@@ -292,7 +292,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 14.269,
+      "latency_seconds": 14.088,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -305,10 +305,10 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 28.187,
-      "attempts": 3,
-      "declined": 0,
-      "refusal_reason": "guardrail_violation",
+      "latency_seconds": 28.729,
+      "attempts": 2,
+      "declined": 1,
+      "refusal_reason": "likely_product_regression",
       "model_cost_usd": null,
       "error": null
     },
@@ -318,7 +318,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 18.966,
+      "latency_seconds": 13.599,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -331,7 +331,7 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 19.265,
+      "latency_seconds": 21.321,
       "attempts": 1,
       "declined": 1,
       "refusal_reason": "likely_product_regression",
@@ -344,7 +344,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 18.39,
+      "latency_seconds": 16.597,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -357,10 +357,10 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 81.566,
-      "attempts": 3,
-      "declined": 0,
-      "refusal_reason": "loop_cap_reached",
+      "latency_seconds": 28.433,
+      "attempts": 1,
+      "declined": 1,
+      "refusal_reason": "likely_product_regression",
       "model_cost_usd": null,
       "error": null
     },
@@ -370,7 +370,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 13.762,
+      "latency_seconds": 12.532,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -383,8 +383,8 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 18.565,
-      "attempts": 1,
+      "latency_seconds": 33.506,
+      "attempts": 2,
       "declined": 1,
       "refusal_reason": "likely_product_regression",
       "model_cost_usd": null,
@@ -409,8 +409,8 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 15.471,
-      "attempts": 1,
+      "latency_seconds": 29.831,
+      "attempts": 2,
       "declined": 0,
       "refusal_reason": null,
       "model_cost_usd": null,
@@ -422,10 +422,10 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 18.597,
-      "attempts": 3,
-      "declined": 0,
-      "refusal_reason": "loop_cap_reached",
+      "latency_seconds": 9.294,
+      "attempts": 0,
+      "declined": 1,
+      "refusal_reason": "likely_product_regression",
       "model_cost_usd": null,
       "error": null
     },
@@ -435,7 +435,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 13.947,
+      "latency_seconds": 13.043,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -448,7 +448,7 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 19.093,
+      "latency_seconds": 20.923,
       "attempts": 3,
       "declined": 0,
       "refusal_reason": "guardrail_violation",
@@ -461,7 +461,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 14.258,
+      "latency_seconds": 16.166,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -474,9 +474,9 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 47.733,
-      "attempts": 3,
-      "declined": 0,
+      "latency_seconds": 33.43,
+      "attempts": 2,
+      "declined": 1,
       "refusal_reason": "loop_cap_reached",
       "model_cost_usd": null,
       "error": null
@@ -487,7 +487,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 13.558,
+      "latency_seconds": 13.441,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -500,7 +500,7 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 19.37,
+      "latency_seconds": 19.656,
       "attempts": 1,
       "declined": 1,
       "refusal_reason": "likely_product_regression",
@@ -513,7 +513,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 13.951,
+      "latency_seconds": 11.694,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -526,10 +526,10 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 20.72,
-      "attempts": 1,
+      "latency_seconds": 26.672,
+      "attempts": 2,
       "declined": 1,
-      "refusal_reason": "likely_product_regression",
+      "refusal_reason": "loop_cap_reached",
       "model_cost_usd": null,
       "error": null
     },
@@ -539,7 +539,20 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 7.613,
+      "latency_seconds": 6.456,
+      "attempts": 0,
+      "declined": 0,
+      "refusal_reason": "ambiguous_target",
+      "model_cost_usd": null,
+      "error": null
+    },
+    {
+      "name": "submit-another-added",
+      "scenario_class": "ambiguous",
+      "expected_outcome": "refuse",
+      "actual_outcome": "refuse",
+      "run": 1,
+      "latency_seconds": 3.488,
       "attempts": 0,
       "declined": 0,
       "refusal_reason": "ambiguous_target",
@@ -552,7 +565,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 13.762,
+      "latency_seconds": 11.802,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -565,7 +578,7 @@
       "expected_outcome": "repair",
       "actual_outcome": "repair",
       "run": 1,
-      "latency_seconds": 15.182,
+      "latency_seconds": 12.735,
       "attempts": 1,
       "declined": 0,
       "refusal_reason": null,
@@ -578,7 +591,7 @@
       "expected_outcome": "refuse",
       "actual_outcome": "refuse",
       "run": 1,
-      "latency_seconds": 30.143,
+      "latency_seconds": 23.891,
       "attempts": 0,
       "declined": 3,
       "refusal_reason": "insufficient_evidence",
@@ -596,9 +609,9 @@
     "sample_sizes": {
       "false_green_rate": 20,
       "repair_precision": 22,
-      "correct_refusal_rate": 22,
+      "correct_refusal_rate": 23,
       "incorrect_refusal_rate": 22,
-      "refusal_accuracy": 22
+      "refusal_accuracy": 23
     }
   },
   "gates": [
@@ -614,7 +627,7 @@
       "name": "refusal_accuracy",
       "threshold": ">= 95%",
       "value": 1.0,
-      "sample_size": 22,
+      "sample_size": 23,
       "status": "pass",
       "scenarios_needed": 0
     },
@@ -630,7 +643,7 @@
       "name": "error_count",
       "threshold": "= 0",
       "value": 0.0,
-      "sample_size": 44,
+      "sample_size": 45,
       "status": "pass",
       "scenarios_needed": 0
     }
@@ -646,8 +659,8 @@
       "refused": 0,
       "errors": 0,
       "correct": 20,
-      "mean_latency_seconds": 14.515,
-      "mean_attempts": 1.0,
+      "mean_latency_seconds": 13.828,
+      "mean_attempts": 1.05,
       "runs": 20
     },
     {
@@ -660,8 +673,8 @@
       "refused": 0,
       "errors": 0,
       "correct": 1,
-      "mean_latency_seconds": 15.471,
-      "mean_attempts": 1.0,
+      "mean_latency_seconds": 29.831,
+      "mean_attempts": 2.0,
       "runs": 1
     },
     {
@@ -674,23 +687,23 @@
       "refused": 0,
       "errors": 0,
       "correct": 1,
-      "mean_latency_seconds": 18.39,
+      "mean_latency_seconds": 16.597,
       "mean_attempts": 1.0,
       "runs": 1
     },
     {
       "scenario_class": "ambiguous",
-      "scenarios": 1,
+      "scenarios": 2,
       "skipped": 0,
       "expected_repair": 0,
-      "expected_refuse": 1,
+      "expected_refuse": 2,
       "repaired": 0,
-      "refused": 1,
+      "refused": 2,
       "errors": 0,
-      "correct": 1,
-      "mean_latency_seconds": 7.613,
+      "correct": 2,
+      "mean_latency_seconds": 4.972,
       "mean_attempts": 0.0,
-      "runs": 1
+      "runs": 2
     },
     {
       "scenario_class": "product_regression",
@@ -702,8 +715,8 @@
       "refused": 20,
       "errors": 0,
       "correct": 20,
-      "mean_latency_seconds": 27.664,
-      "mean_attempts": 2.1,
+      "mean_latency_seconds": 26.411,
+      "mean_attempts": 1.65,
       "runs": 20
     },
     {
@@ -716,7 +729,7 @@
       "refused": 1,
       "errors": 0,
       "correct": 1,
-      "mean_latency_seconds": 30.143,
+      "mean_latency_seconds": 23.891,
       "mean_attempts": 0.0,
       "runs": 1
     }
@@ -733,7 +746,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 16.876,
+      "mean_latency_seconds": 14.177,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -749,7 +762,7 @@
         "likely_product_regression": 1
       },
       "stable": true,
-      "mean_latency_seconds": 19.329,
+      "mean_latency_seconds": 23.412,
       "mean_attempts": 1.0,
       "mean_declined": 1.0
     },
@@ -763,7 +776,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 14.89,
+      "mean_latency_seconds": 11.842,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -779,9 +792,9 @@
         "loop_cap_reached": 1
       },
       "stable": true,
-      "mean_latency_seconds": 36.653,
-      "mean_attempts": 1.0,
-      "mean_declined": 2.0
+      "mean_latency_seconds": 49.041,
+      "mean_attempts": 2.0,
+      "mean_declined": 1.0
     },
     {
       "name": "account-password-drift",
@@ -793,8 +806,8 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 14.225,
-      "mean_attempts": 1.0,
+      "mean_latency_seconds": 21.664,
+      "mean_attempts": 2.0,
       "mean_declined": 0.0
     },
     {
@@ -809,7 +822,7 @@
         "likely_product_regression": 1
       },
       "stable": true,
-      "mean_latency_seconds": 20.012,
+      "mean_latency_seconds": 18.265,
       "mean_attempts": 1.0,
       "mean_declined": 1.0
     },
@@ -823,7 +836,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 14.061,
+      "mean_latency_seconds": 14.068,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -839,7 +852,7 @@
         "likely_product_regression": 1
       },
       "stable": true,
-      "mean_latency_seconds": 19.189,
+      "mean_latency_seconds": 20.309,
       "mean_attempts": 1.0,
       "mean_declined": 1.0
     },
@@ -853,7 +866,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 14.467,
+      "mean_latency_seconds": 16.154,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -866,10 +879,10 @@
         "refuse": 1
       },
       "refusal_reasons": {
-        "guardrail_violation": 1
+        "loop_cap_reached": 1
       },
       "stable": true,
-      "mean_latency_seconds": 29.143,
+      "mean_latency_seconds": 25.852,
       "mean_attempts": 3.0,
       "mean_declined": 0.0
     },
@@ -883,7 +896,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 14.571,
+      "mean_latency_seconds": 14.359,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -899,7 +912,7 @@
         "loop_cap_reached": 1
       },
       "stable": true,
-      "mean_latency_seconds": 40.397,
+      "mean_latency_seconds": 35.349,
       "mean_attempts": 3.0,
       "mean_declined": 0.0
     },
@@ -913,7 +926,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 14.136,
+      "mean_latency_seconds": 11.979,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -926,12 +939,12 @@
         "refuse": 1
       },
       "refusal_reasons": {
-        "guardrail_violation": 1
+        "loop_cap_reached": 1
       },
       "stable": true,
-      "mean_latency_seconds": 19.684,
-      "mean_attempts": 3.0,
-      "mean_declined": 0.0
+      "mean_latency_seconds": 32.98,
+      "mean_attempts": 2.0,
+      "mean_declined": 1.0
     },
     {
       "name": "catalog-sort-drift",
@@ -943,7 +956,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 13.802,
+      "mean_latency_seconds": 12.269,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -956,12 +969,12 @@
         "refuse": 1
       },
       "refusal_reasons": {
-        "guardrail_violation": 1
+        "likely_product_regression": 1
       },
       "stable": true,
-      "mean_latency_seconds": 20.027,
-      "mean_attempts": 3.0,
-      "mean_declined": 0.0
+      "mean_latency_seconds": 22.635,
+      "mean_attempts": 1.0,
+      "mean_declined": 1.0
     },
     {
       "name": "checkout-coupon-drift",
@@ -973,7 +986,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 14.075,
+      "mean_latency_seconds": 12.795,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -989,9 +1002,9 @@
         "loop_cap_reached": 1
       },
       "stable": true,
-      "mean_latency_seconds": 36.357,
-      "mean_attempts": 3.0,
-      "mean_declined": 0.0
+      "mean_latency_seconds": 36.9,
+      "mean_attempts": 2.0,
+      "mean_declined": 1.0
     },
     {
       "name": "checkout-place-order-drift",
@@ -1003,7 +1016,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 13.865,
+      "mean_latency_seconds": 16.178,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -1019,7 +1032,7 @@
         "likely_product_regression": 1
       },
       "stable": true,
-      "mean_latency_seconds": 19.316,
+      "mean_latency_seconds": 20.884,
       "mean_attempts": 1.0,
       "mean_declined": 1.0
     },
@@ -1033,7 +1046,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 13.683,
+      "mean_latency_seconds": 11.981,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -1046,12 +1059,12 @@
         "refuse": 1
       },
       "refusal_reasons": {
-        "guardrail_violation": 1
+        "likely_product_regression": 1
       },
       "stable": true,
-      "mean_latency_seconds": 20.084,
-      "mean_attempts": 3.0,
-      "mean_declined": 0.0
+      "mean_latency_seconds": 20.626,
+      "mean_attempts": 2.0,
+      "mean_declined": 1.0
     },
     {
       "name": "checkout-remove-item-drift",
@@ -1063,7 +1076,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 14.269,
+      "mean_latency_seconds": 14.088,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -1076,12 +1089,12 @@
         "refuse": 1
       },
       "refusal_reasons": {
-        "guardrail_violation": 1
+        "likely_product_regression": 1
       },
       "stable": true,
-      "mean_latency_seconds": 28.187,
-      "mean_attempts": 3.0,
-      "mean_declined": 0.0
+      "mean_latency_seconds": 28.729,
+      "mean_attempts": 2.0,
+      "mean_declined": 1.0
     },
     {
       "name": "classname-rename",
@@ -1093,7 +1106,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 18.966,
+      "mean_latency_seconds": 13.599,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -1109,7 +1122,7 @@
         "likely_product_regression": 1
       },
       "stable": true,
-      "mean_latency_seconds": 19.265,
+      "mean_latency_seconds": 21.321,
       "mean_attempts": 1.0,
       "mean_declined": 1.0
     },
@@ -1123,7 +1136,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 18.39,
+      "mean_latency_seconds": 16.597,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -1136,12 +1149,12 @@
         "refuse": 1
       },
       "refusal_reasons": {
-        "loop_cap_reached": 1
+        "likely_product_regression": 1
       },
       "stable": true,
-      "mean_latency_seconds": 81.566,
-      "mean_attempts": 3.0,
-      "mean_declined": 0.0
+      "mean_latency_seconds": 28.433,
+      "mean_attempts": 1.0,
+      "mean_declined": 1.0
     },
     {
       "name": "id-rename",
@@ -1153,7 +1166,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 13.762,
+      "mean_latency_seconds": 12.532,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -1169,8 +1182,8 @@
         "likely_product_regression": 1
       },
       "stable": true,
-      "mean_latency_seconds": 18.565,
-      "mean_attempts": 1.0,
+      "mean_latency_seconds": 33.506,
+      "mean_attempts": 2.0,
       "mean_declined": 1.0
     },
     {
@@ -1197,8 +1210,8 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 15.471,
-      "mean_attempts": 1.0,
+      "mean_latency_seconds": 29.831,
+      "mean_attempts": 2.0,
       "mean_declined": 0.0
     },
     {
@@ -1210,12 +1223,12 @@
         "refuse": 1
       },
       "refusal_reasons": {
-        "loop_cap_reached": 1
+        "likely_product_regression": 1
       },
       "stable": true,
-      "mean_latency_seconds": 18.597,
-      "mean_attempts": 3.0,
-      "mean_declined": 0.0
+      "mean_latency_seconds": 9.294,
+      "mean_attempts": 0.0,
+      "mean_declined": 1.0
     },
     {
       "name": "settings-delete-drift",
@@ -1227,7 +1240,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 13.947,
+      "mean_latency_seconds": 13.043,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -1243,7 +1256,7 @@
         "guardrail_violation": 1
       },
       "stable": true,
-      "mean_latency_seconds": 19.093,
+      "mean_latency_seconds": 20.923,
       "mean_attempts": 3.0,
       "mean_declined": 0.0
     },
@@ -1257,7 +1270,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 14.258,
+      "mean_latency_seconds": 16.166,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -1273,9 +1286,9 @@
         "loop_cap_reached": 1
       },
       "stable": true,
-      "mean_latency_seconds": 47.733,
-      "mean_attempts": 3.0,
-      "mean_declined": 0.0
+      "mean_latency_seconds": 33.43,
+      "mean_attempts": 2.0,
+      "mean_declined": 1.0
     },
     {
       "name": "settings-save-drift",
@@ -1287,7 +1300,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 13.558,
+      "mean_latency_seconds": 13.441,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -1303,7 +1316,7 @@
         "likely_product_regression": 1
       },
       "stable": true,
-      "mean_latency_seconds": 19.37,
+      "mean_latency_seconds": 19.656,
       "mean_attempts": 1.0,
       "mean_declined": 1.0
     },
@@ -1317,7 +1330,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 13.951,
+      "mean_latency_seconds": 11.694,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -1330,11 +1343,11 @@
         "refuse": 1
       },
       "refusal_reasons": {
-        "likely_product_regression": 1
+        "loop_cap_reached": 1
       },
       "stable": true,
-      "mean_latency_seconds": 20.72,
-      "mean_attempts": 1.0,
+      "mean_latency_seconds": 26.672,
+      "mean_attempts": 2.0,
       "mean_declined": 1.0
     },
     {
@@ -1349,7 +1362,23 @@
         "ambiguous_target": 1
       },
       "stable": true,
-      "mean_latency_seconds": 7.613,
+      "mean_latency_seconds": 6.456,
+      "mean_attempts": 0.0,
+      "mean_declined": 0.0
+    },
+    {
+      "name": "submit-another-added",
+      "scenario_class": "ambiguous",
+      "expected_outcome": "refuse",
+      "runs": 1,
+      "outcomes": {
+        "refuse": 1
+      },
+      "refusal_reasons": {
+        "ambiguous_target": 1
+      },
+      "stable": true,
+      "mean_latency_seconds": 3.488,
       "mean_attempts": 0.0,
       "mean_declined": 0.0
     },
@@ -1363,7 +1392,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 13.762,
+      "mean_latency_seconds": 11.802,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -1377,7 +1406,7 @@
       },
       "refusal_reasons": {},
       "stable": true,
-      "mean_latency_seconds": 15.182,
+      "mean_latency_seconds": 12.735,
       "mean_attempts": 1.0,
       "mean_declined": 0.0
     },
@@ -1393,11 +1422,11 @@
         "insufficient_evidence": 1
       },
       "stable": true,
-      "mean_latency_seconds": 30.143,
+      "mean_latency_seconds": 23.891,
       "mean_attempts": 0.0,
       "mean_declined": 3.0
     }
   ],
-  "total_latency_seconds": 915.21,
+  "total_latency_seconds": 885.046,
   "total_model_cost_usd": null
 }
