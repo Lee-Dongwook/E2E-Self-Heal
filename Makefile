@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help install lint format format-check typecheck check test coverage run clean sync-pins check-pins
+.PHONY: help install lint format format-check typecheck check test coverage run clean sync-pins check-pins product-check
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -23,6 +23,12 @@ typecheck: ## Static type check with pyright
 	uv run pyright
 
 check: lint format-check typecheck ## Lint + format check + typecheck
+
+# Separate from `check` on purpose: the core's checks must keep working without pnpm or the
+# product's dependencies. Mirrors the "Checks" section of product/README.md.
+product-check: ## Check product/ (API: ruff, format, pyright, pytest; web: build)
+	cd product/api && uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest
+	cd product/web && pnpm build
 
 test: ## Run tests with pytest
 	uv run pytest

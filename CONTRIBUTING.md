@@ -25,6 +25,7 @@ to help — there's room for everyone here.
 - [Making your change](#making-your-change)
 - [Before you open a PR](#before-you-open-a-pr)
 - [Opening the pull request](#opening-the-pull-request)
+- [Working on `product/`](#working-on-product)
 - [Project conventions](#project-conventions)
 - [Architecture at a glance](#architecture-at-a-glance)
 - [Where to get help](#where-to-get-help)
@@ -203,6 +204,26 @@ fix: handle empty git diff in preprocessor
 docs: clarify CI wrapper setup
 test: cover ambiguous-selector revert path
 ```
+
+---
+
+## Working on `product/`
+
+`product/` is the web product layer (FastAPI API in `product/api`, React app in `product/web`),
+separate from the core in `app/`. Setup and the run instructions are in
+[`product/README.md`](product/README.md), so they are not repeated here.
+
+To run the same checks as the "Checks" section there, use:
+
+```bash
+make product-check
+```
+
+It needs uv and pnpm, which the core's own `make check` does not, so it is not part of `make check`.
+
+The boundary to keep in mind: no repair logic in `product/`. Diagnosing or patching tests, and
+running Playwright or user code, stays in the core. The product only consumes the core's
+machine-readable output.
 
 ---
 
